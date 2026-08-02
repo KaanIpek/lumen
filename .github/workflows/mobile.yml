@@ -201,13 +201,25 @@ jobs:
         if: steps.keys.outputs.signed == 'true'
         working-directory: mobile/ios/App
         run: |
+          echo "--- before ---"
+          grep -n 'CODE_SIGN_IDENTITY' App.xcodeproj/project.pbxproj || echo "(none)"
+          # Match on the LINE, not on an exact key spelling. The setting appears
+          # as a bare key and as a quoted, SDK-qualified one —
+          #   "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+          # — and a pattern written for the bare form silently skips the other,
+          # which leaves one target still asking for a development profile while
+          # the rest ask for distribution. That mismatch is exactly what Xcode
+          # reports as "conflicting provisioning settings", and it cost a run.
           sed -i '' \
-            -e 's/CODE_SIGN_IDENTITY = "iPhone Developer"/CODE_SIGN_IDENTITY = "Apple Distribution"/g' \
-            -e 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = "Apple Distribution"/g' \
-            -e 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "iPhone Developer"/CODE_SIGN_IDENTITY[sdk=iphoneos*] = "Apple Distribution"/g' \
+            -e '/CODE_SIGN_IDENTITY/ s/"iPhone Developer"/"Apple Distribution"/g' \
+            -e '/CODE_SIGN_IDENTITY/ s/"Apple Development"/"Apple Distribution"/g' \
+            -e '/CODE_SIGN_IDENTITY/ s/= iPhone Developer;/= "Apple Distribution";/g' \
             App.xcodeproj/project.pbxproj
-          echo "identities now in App.xcodeproj:"
-          grep -o 'CODE_SIGN_IDENTITY[^;]*' App.xcodeproj/project.pbxproj | sort -u
+          echo "--- after ---"
+          grep -n 'CODE_SIGN_IDENTITY' App.xcodeproj/project.pbxproj || echo "(none)"
+          if grep -q 'CODE_SIGN_IDENTITY.*Develop' App.xcodeproj/project.pbxproj; then
+            echo "STILL A DEVELOPMENT IDENTITY IN THE PROJECT — the archive will fail"; exit 1
+          fi
 
       # What the generated project actually says about signing. Two runs were
       # spent guessing at this; one printout ends the guessing for every run
