@@ -262,7 +262,15 @@ function api(method, p, body) {
     const iBy = Object.fromEntries((iLocs.data || []).map((l) => [l.attributes.locale, l]));
     for (const [lang, f] of Object.entries(listing)) {
       const locale = LOCALES[lang];
-      const attrs = { name: 'LUMEN', subtitle: f.subtitle, privacyPolicyUrl: 'https://kaanipek.github.io/lumen/privacy.html' };
+      // Take the name from the RECORD, never a constant. `LUMEN` was already
+      // taken on the App Store, so the record carries the documented fallback —
+      // and a hardcoded name here answers Apple with a 409 that reads like a
+      // trademark problem when it is really a stale string in this file.
+      const attrs = {
+        name: app.attributes.name,
+        subtitle: f.subtitle,
+        privacyPolicyUrl: 'https://kaanipek.github.io/lumen/privacy.html',
+      };
       if (iBy[locale]) {
         await api('PATCH', '/v1/appInfoLocalizations/' + iBy[locale].id, {
           data: { type: 'appInfoLocalizations', id: iBy[locale].id, attributes: attrs },
