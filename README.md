@@ -17,6 +17,14 @@ Easy to learn in three seconds. A skill ceiling you'll chase for weeks.
 
 ## ▶ Play it
 
+### **[kaanipek.github.io/lumen](https://kaanipek.github.io/lumen/)**
+
+Nothing to install. On a phone, use "Add to Home Screen" and it plays with the
+network off — the whole game is 600 kB before music, and the service worker
+keeps it.
+
+### Or run it locally
+
 ```bash
 # any static server works — here are two one-liners
 python -m http.server 5178          # then open http://localhost:5178
