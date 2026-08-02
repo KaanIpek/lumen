@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LUMEN — test suite</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 28px; background: #05060f; color: #eaf6ff;
+    font: 14px/1.6 "Rajdhani", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  h1 { font-size: 20px; letter-spacing: .22em; margin: 0 0 4px; color: #4df3ff; }
+  .sub { color: rgba(234,246,255,.5); margin-bottom: 22px; font-size: 13px; }
+  .summary {
+    padding: 14px 18px; border-radius: 12px; font-weight: 700; font-size: 16px;
+    letter-spacing: .08em; margin-bottom: 18px; border: 1px solid;
+  }
+  .summary.good { background: rgba(77,255,160,.08); border-color: rgba(77,255,160,.5); color: #4dffa0; }
+  .summary.bad  { background: rgba(255,80,110,.08); border-color: rgba(255,80,110,.5); color: #ff5c7a; }
+  .row { padding: 5px 10px; border-radius: 7px; font-size: 13px; }
+  .row.pass { color: rgba(234,246,255,.72); }
+  .row.fail { color: #ff8fa3; background: rgba(255,80,110,.08); }
+  canvas { display: none; }
+</style>
+</head>
+<body>
+  <h1>LUMEN — TEST SUITE</h1>
+  <div class="sub">Runs the real game modules: economy, missions, daily, leaderboard, collision, physics, rendering, resize and audio.</div>
+  <div id="out"></div>
+
+  <!-- The game under test (UI/bootstrap are exercised separately, in the app).
+       Loaded with a cache-busting stamp so a test run always measures the code
+       on disk right now, never a stale copy the browser is holding. -->
+  <script>
+  (function () {
+    var v = '?t=' + Date.now();
+    var files = ['../js/audio.js', '../js/game.js', '../js/i18n.js', '../js/cosmetics.js', '../js/modes.js',
+                 '../js/missions.js', '../js/progression.js', '../js/scores.js', '../js/save.js', '../js/steam.js', '../js/native.js', '../js/analytics.js',
+                 '../js/leaderboard.js', '../js/iap.js', '../js/voice.js', '../js/cheats.js', '../js/input.js',
+                 '../js/poll.js', '../js/ui.js', 'tests.js'];
+    files.forEach(function (f) {
+      document.write('<script src="' + f + v + '"><\/script>');
+    });
+  })();
+  </script>
+</body>
+</html>

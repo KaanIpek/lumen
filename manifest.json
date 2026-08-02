@@ -1,0 +1,110 @@
+{
+  "name": "LUMEN",
+  "short_name": "LUMEN",
+  "description": "A one-thumb neon arcade game. Flip gravity, thread the gaps, chase the flow.",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#05060f",
+  "theme_color": "#05060f",
+  "categories": [
+    "games",
+    "entertainment"
+  ],
+  "icons": [
+    {
+      "src": "assets/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "/lumen/",
+  "lang": "en",
+  "dir": "ltr",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "screenshots": [
+    {
+      "src": "assets/screenshot-flow.jpg",
+      "sizes": "1600x900",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Flow state"
+    },
+    {
+      "src": "assets/screenshot-play.jpg",
+      "sizes": "1600x900",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Combo run"
+    },
+    {
+      "src": "assets/screenshot-mobile.jpg",
+      "sizes": "750x1624",
+      "type": "image/jpeg",
+      "label": "On phone"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Daily Challenge",
+      "short_name": "Daily",
+      "url": "./index.html?mode=daily",
+      "icons": [
+        {
+          "src": "assets/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Sprint",
+      "short_name": "Sprint",
+      "url": "./index.html?mode=sprint",
+      "icons": [
+        {
+          "src": "assets/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Zen",
+      "short_name": "Zen",
+      "url": "./index.html?mode=zen",
+      "icons": [
+        {
+          "src": "assets/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

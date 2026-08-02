@@ -1,0 +1,10 @@
+# One line ending everywhere. The project is edited on Windows and built on
+# Linux runners; without this, a checkout can rewrite every file and turn a
+# one-line fix into a whole-file diff.
+* text=auto eol=lf
+
+# Binary — never touch, never diff as text.
+*.png binary
+*.jpg binary
+*.mp3 binary
+*.ico binary

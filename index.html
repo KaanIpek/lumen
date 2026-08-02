@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#05060f" />
+  <meta name="description" content="LUMEN — a one-thumb neon arcade game. Flip gravity, thread the gaps, chase the flow." />
+  <title>LUMEN — flip · thread · flow</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.json?v=260802032605" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta property="og:title" content="LUMEN — flip · thread · flow" />
+  <meta property="og:description" content="A one-thumb neon arcade game. Flip gravity, thread the gaps, chase the flow." />
+  <meta property="og:image" content="assets/screenshot-flow.jpg" />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css?v=260802032605" />
+</head>
+<body>
+  <canvas id="game" role="img" aria-label="LUMEN gameplay" data-i18n-aria="ariaCanvas"></canvas>
+  <!-- the score lives on the canvas, which screen readers cannot see -->
+  <div id="sr-status" class="sr-only" role="status" aria-live="polite"></div>
+
+  <!-- persistent controls -->
+  <div id="topbar" class="ui-interactive">
+    <button id="btn-fs" class="icon-btn" aria-label="Fullscreen" title="Fullscreen (F)" data-i18n-aria="ariaFullscreen" data-i18n-title="titleFullscreen">⛶</button>
+    <button id="btn-settings" class="icon-btn hidden" aria-label="Settings" title="Settings" data-i18n-aria="ariaSettings" data-i18n-title="ariaSettings">⚙</button>
+    <button id="btn-mute" class="icon-btn" aria-label="Toggle sound" title="Sound (M)" data-i18n-aria="ariaSound" data-i18n-title="titleSound">
+      <span class="ico-sound"></span>
+    </button>
+    <button id="btn-pause" class="icon-btn hidden" aria-label="Pause" title="Pause (Esc)" data-i18n-aria="ariaPause" data-i18n-title="titlePause">
+      <span class="ico-pause"></span>
+    </button>
+  </div>
+
+  <!-- ============ MENU ============ -->
+  <section id="screen-menu" class="overlay">
+    <div class="panel menu-panel">
+      <h1 class="logo">LUMEN</h1>
+      <p class="tagline" data-i18n="tagline">flip · thread · flow</p>
+
+      <div class="chip-row">
+        <div class="chip"><span data-i18n="best">BEST</span><b id="menu-best">0</b></div>
+        <div class="chip shard"><span>◆</span><b id="menu-shards">0</b></div>
+      </div>
+      <div class="mini-stats" id="menu-stats">
+        <span><i data-i18n="topCombo">TOP COMBO</i> <b id="menu-combo">0</b></span>
+        <span class="sep">·</span>
+        <span><i data-i18n="runs">RUNS</i> <b id="menu-runs">0</b></span>
+      </div>
+
+      <div class="mode-line" id="menu-mode"></div>
+      <div class="diff-row" id="diff-row">
+        <button class="diffbtn ui-interactive" data-diff="easy" data-i18n="diffEasy">EASY</button>
+        <button class="diffbtn ui-interactive" data-diff="normal" data-i18n="diffNormal">NORMAL</button>
+        <button class="diffbtn ui-interactive" data-diff="hard" data-i18n="diffHard">HARD</button>
+      </div>
+      <button id="btn-play" class="btn btn-primary ui-interactive"><span data-i18n="play">PLAY</span></button>
+      <div class="btn-row">
+        <button id="btn-daily" class="btn btn-ghost ui-interactive">◈ DAILY</button>
+        <button id="btn-shop" class="btn btn-ghost ui-interactive">✦ <span data-i18n="shop">SHOP</span></button>
+      </div>
+      <div class="btn-row">
+        <button id="btn-tutorial" class="btn btn-ghost ui-interactive">🎓 <span data-i18n="howToPlay">HOW TO PLAY</span></button>
+        <button id="btn-scores" class="btn btn-ghost ui-interactive">🏆 <span data-i18n="leaderboard">LEADERBOARD</span></button>
+      </div>
+      <div class="btn-row">
+        <button id="btn-modes" class="btn btn-ghost ui-interactive">◇ <span data-i18n="moreModes">GAME MODES</span></button>
+        <button id="btn-progress" class="btn btn-ghost ui-interactive">★ <span data-i18n="achievements">ACHIEVEMENTS</span></button>
+      </div>
+      <div class="btn-row hidden" id="poll-row">
+        <button id="btn-poll" class="btn btn-ghost ui-interactive wide">🗳 <span data-i18n="nextUpdate">NEXT UPDATE</span></button>
+      </div>
+
+      <div class="missions" id="menu-missions"></div>
+
+      <div class="howto">
+        <div class="howto-row"><kbd>TAP</kbd><kbd>SPACE</kbd><span data-i18n="flipGravity">flip gravity</span></div>
+        <p><span data-i18n="menuBlurb">Thread the gaps. Grab the motes. Chain a combo to tip into</span> <em data-i18n="flow">flow</em>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ GAME OVER ============ -->
+  <section id="screen-gameover" class="overlay hidden">
+    <div class="panel over-panel">
+      <div id="best-badge" class="badge hidden" data-i18n="newBest">NEW BEST!</div>
+      <div id="rank-badge" class="badge rank hidden">TOP 10</div>
+      <h2 id="over-title" class="over-title">RUN OVER</h2>
+
+      <div class="final-score" id="final-score">0</div>
+
+      <div class="stat-row">
+        <div class="stat"><span id="final-best-label">BEST</span><b id="final-best">0</b></div>
+        <div class="stat"><span data-i18n="topCombo">TOP COMBO</span><b id="final-combo">0</b></div>
+      </div>
+
+      <div id="over-quip" class="over-quip hidden"></div>
+
+      <div class="reward-line"><span class="shard">◆</span> <b id="ge-shards">0</b> <span data-i18n="shardsEarned">shards earned</span> <em id="ge-total"></em></div>
+      <div class="ge-missions" id="ge-missions"></div>
+      <div class="next-unlock hidden" id="ge-next"></div>
+
+      <div class="btn-row">
+        <button id="btn-retry" class="btn btn-primary ui-interactive"><span data-i18n="retry">RETRY</span></button>
+      </div>
+      <div class="btn-row">
+        <button id="btn-share" class="btn btn-ghost ui-interactive"><span data-i18n="share">SHARE</span></button>
+        <button id="btn-menu" class="btn btn-ghost ui-interactive"><span data-i18n="menu">MENU</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TUTORIAL COMPLETE ============ -->
+  <section id="screen-tutdone" class="overlay hidden">
+    <div class="panel tutdone-panel">
+      <div class="badge" data-i18n="trainingComplete">TRAINING COMPLETE</div>
+      <h2 class="over-title" data-i18n="youreReady">YOU'RE READY</h2>
+      <div class="tut-recap">
+        <div><b>TAP</b> <span data-i18n="recapTap">flips gravity</span></div>
+        <div><b data-i18n="recapThreadK">THREAD</b> <span data-i18n="recapThread">the neon gaps</span></div>
+        <div><b data-i18n="recapMotesK">MOTES</b> <span data-i18n="recapMotes">build your multiplier</span></div>
+        <div><b data-i18n="recapChainK">16 CHAIN</b> <span data-i18n="recapFlow">triggers</span> <em data-i18n="flowCaps">FLOW</em> <span data-i18n="slowMotion">— slow-motion</span></div>
+      </div>
+      <button id="btn-tut-play" class="btn btn-primary ui-interactive"><span data-i18n="playForReal">PLAY FOR REAL</span></button>
+      <div class="btn-row"><button id="btn-tut-menu" class="btn btn-ghost ui-interactive wide"><span data-i18n="menu">MENU</span></button></div>
+    </div>
+  </section>
+
+  <!-- ============ REVIVE ============ -->
+  <section id="screen-revive" class="overlay hidden">
+    <div class="panel revive-panel">
+      <h2 class="revive-title" data-i18n="continueQ">CONTINUE?</h2>
+      <p class="revive-sub"><span data-i18n="reviveSub">Spend shards to save this run.</span><br><em data-i18n="reviveOnce">One revive per run.</em></p>
+      <div class="revive-score" id="revive-score">0</div>
+      <button id="btn-revive" class="btn btn-revive ui-interactive">◆ <span id="revive-cost">60</span> &nbsp;<span data-i18n="revive">REVIVE</span></button>
+      <button id="btn-giveup" class="btn btn-ghost ui-interactive revive-no"><span data-i18n="endRun">END RUN</span></button>
+    </div>
+  </section>
+
+  <!-- ============ SHOP / CUSTOMIZE ============ -->
+  <section id="screen-shop" class="overlay hidden">
+    <div class="panel shop-panel">
+      <div class="shop-head">
+        <h2 class="shop-title" data-i18n="shop">SHOP</h2>
+        <div class="chip shard"><span>◆</span><b id="shop-shards">0</b></div>
+        <button id="btn-shop-close" class="icon-x ui-interactive" aria-label="Close" data-i18n-aria="ariaClose">✕</button>
+      </div>
+      <div class="shop-tabs">
+        <button id="tab-customize" class="tab active ui-interactive"><span data-i18n="customize">CUSTOMIZE</span></button>
+        <button id="tab-maps" class="tab ui-interactive"><span data-i18n="maps">MAPS</span></button>
+        <button id="tab-items" class="tab ui-interactive"><span data-i18n="items">ITEMS</span></button>
+        <button id="tab-skills" class="tab ui-interactive"><span data-i18n="skills">SKILLS</span></button>
+      </div>
+      <div id="shop-filters" class="shop-filters hidden"></div>
+      <div id="shop-coach" class="shop-coach hidden"></div>
+      <div id="shop-note" class="setting-hint hidden"></div>
+      <div id="shop-grid" class="shop-grid"></div>
+      <button id="btn-restore" class="btn btn-ghost ui-interactive wide restore-btn hidden"><span data-i18n="restorePurchases">RESTORE PURCHASES</span></button>
+    </div>
+  </section>
+
+  <!-- ============ NEXT UPDATE VOTE ============ -->
+  <section id="screen-poll" class="overlay hidden">
+    <div class="panel poll-panel">
+      <div class="shop-head">
+        <h2 class="shop-title" data-i18n="nextUpdate">NEXT UPDATE</h2>
+        <button id="btn-poll-close" class="icon-x ui-interactive" aria-label="Close" data-i18n-aria="ariaClose">✕</button>
+      </div>
+      <p class="poll-intro" data-i18n="pollIntro">You pick what gets built next.</p>
+      <div id="poll-list"></div>
+      <div id="poll-foot" class="poll-foot"></div>
+    </div>
+  </section>
+
+  <!-- ============ GAME MODES ============ -->
+  <section id="screen-modes" class="overlay hidden">
+    <div class="panel modes-panel">
+      <div class="shop-head">
+        <h2 class="shop-title" data-i18n="moreModes">GAME MODES</h2>
+        <button id="btn-modes-close" class="icon-x ui-interactive" aria-label="Close" data-i18n-aria="ariaClose">✕</button>
+      </div>
+      <div id="modes-note" class="setting-hint" data-i18n="modesNote"></div>
+      <div id="modes-list" class="modes-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ CHECKOUT ============ -->
+  <section id="screen-checkout" class="overlay hidden">
+    <div class="panel checkout-panel">
+      <div class="sandbox-tag" id="checkout-tag"></div>
+      <div class="co-swatch" id="checkout-swatch"></div>
+      <h2 class="co-name" id="checkout-name"></h2>
+      <div class="co-price" id="checkout-price"></div>
+      <p class="co-note" id="checkout-note"></p>
+      <button id="btn-checkout-pay" class="btn btn-primary ui-interactive wide"><span data-i18n="confirmPurchase">CONFIRM</span></button>
+      <button id="btn-checkout-cancel" class="btn btn-ghost ui-interactive wide"><span data-i18n="cancel">CANCEL</span></button>
+    </div>
+  </section>
+
+  <!-- ============ ACHIEVEMENTS ============ -->
+  <section id="screen-progress" class="overlay hidden">
+    <div class="panel progress-panel">
+      <div class="shop-head">
+        <h2 class="shop-title" data-i18n="achievements">ACHIEVEMENTS</h2>
+        <div class="chip shard"><span>◆</span><b id="prog-shards">0</b></div>
+        <button id="btn-progress-close" class="icon-x ui-interactive" aria-label="Close" data-i18n-aria="ariaClose">✕</button>
+      </div>
+      <div id="prog-note" class="setting-hint hidden"></div>
+      <div id="prog-body"></div>
+    </div>
+  </section>
+
+  <!-- ============ LEADERBOARD ============ -->
+  <section id="screen-scores" class="overlay hidden">
+    <div class="panel scores-panel">
+      <div class="shop-head">
+        <h2 class="shop-title" data-i18n="leaderboard">LEADERBOARD</h2>
+        <button id="btn-scores-close" class="icon-x ui-interactive" aria-label="Close" data-i18n-aria="ariaClose">✕</button>
+      </div>
+      <div class="shop-tabs">
+        <button id="tab-lb-me" class="tab active ui-interactive"><span data-i18n="lbMine">MY RUNS</span></button>
+        <button id="tab-lb-daily" class="tab ui-interactive"><span data-i18n="lbDaily">DAILY</span></button>
+        <button id="tab-lb-all" class="tab ui-interactive"><span data-i18n="lbAllTime">ALL-TIME</span></button>
+      </div>
+      <ol class="score-list" id="score-list"></ol>
+      <p class="score-empty hidden" id="score-empty" data-i18n="noRuns">No runs yet — go set a record.</p>
+      <div id="lb-note" class="setting-hint hidden"></div>
+      <!-- Without this every score went up as "anon" — the translated `yourName`
+           string existed in all four languages but nothing ever used it, so the
+           board was a list of identical strangers. -->
+      <div id="lb-name-row" class="lb-name-row hidden">
+        <label for="lb-name" data-i18n="yourName">Your name</label>
+        <input id="lb-name" type="text" maxlength="16" autocomplete="off"
+               spellcheck="false" inputmode="text" />
+      </div>
+      <!-- The online boards are fetched once and kept for the session; this is
+           how you ask for a newer copy. Hidden on MY RUNS, which is local. -->
+      <button id="btn-lb-refresh" class="btn btn-ghost ui-interactive hidden">
+        <span data-i18n="lbRefresh">REFRESH</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="screen-settings" class="overlay hidden">
+    <div class="panel settings-panel">
+      <div class="shop-head">
+        <h2 class="shop-title" data-i18n="settings">SETTINGS</h2>
+        <button id="btn-settings-close" class="icon-x ui-interactive" aria-label="Close" data-i18n-aria="ariaClose">✕</button>
+      </div>
+      <div class="settings-list">
+        <div class="set-sec" data-i18n="secAudio">AUDIO</div>
+        <div class="setting"><span data-i18n="music">Music</span><button class="toggle ui-interactive" data-set="music"></button></div>
+        <div class="setting"><span data-i18n="soundFx">Sound FX</span><button class="toggle ui-interactive" data-set="sfx"></button></div>
+
+        <div class="set-sec" data-i18n="secGameplay">GAMEPLAY</div>
+        <div class="setting"><span data-i18n="autoUse">Auto-use collected power-ups</span><button class="toggle ui-interactive" data-set="autouse"></button></div>
+        <div class="setting-hint" data-i18n="autoUseHint">Off means pickups go to your hand and you fire them yourself.</div>
+        <div class="setting"><span data-i18n="chargeFx">Charge effect</span><button class="toggle ui-interactive" data-set="charge"></button></div>
+        <div class="setting-hint" data-i18n="chargeHint"></div>
+        <div class="setting"><span data-i18n="voiceCtl">Voice control</span><button class="toggle ui-interactive" data-set="voice"></button></div>
+        <div class="setting-hint" id="voice-hint" data-i18n="voiceHint">Say "shield", "magnet" or "slow" to use a held item. Needs microphone access.</div>
+        <div class="setting"><span data-i18n="haptics">Haptics</span><button class="toggle ui-interactive" data-set="haptics"></button></div>
+
+        <div class="set-sec" data-i18n="secAccess">ACCESSIBILITY</div>
+        <div class="setting"><span data-i18n="reduceFlashing">Reduce flashing</span><button class="toggle ui-interactive" data-set="flash"></button></div>
+        <div class="setting"><span data-i18n="highContrast">High contrast</span><button class="toggle ui-interactive" data-set="contrast"></button></div>
+        <div class="setting-label sub" data-i18n="colourVision">Colour vision</div>
+        <div class="qrow">
+          <button class="qbtn cbbtn ui-interactive" data-cb="off" data-i18n="cbOff">OFF</button>
+          <button class="qbtn cbbtn ui-interactive" data-cb="deuter">DEUT</button>
+          <button class="qbtn cbbtn ui-interactive" data-cb="prot">PROT</button>
+          <button class="qbtn cbbtn ui-interactive" data-cb="trit">TRIT</button>
+        </div>
+
+        <div class="set-sec" data-i18n="secDisplay">DISPLAY</div>
+        <div class="setting-label sub"><span data-i18n="graphics">Graphics</span> <em id="q-active"></em></div>
+        <div class="qrow">
+          <button class="qbtn ui-interactive" data-q="auto">AUTO</button>
+          <button class="qbtn ui-interactive" data-q="high">HIGH</button>
+          <button class="qbtn ui-interactive" data-q="balanced">MED</button>
+          <button class="qbtn ui-interactive" data-q="low">LOW</button>
+        </div>
+        <div class="setting-hint" data-i18n="graphicsHint">Lower this if the game stutters in fullscreen.</div>
+
+        <div class="set-sec" data-i18n="secLanguage">LANGUAGE</div>
+        <div class="qrow lang">
+          <button class="qbtn langbtn ui-interactive" data-lang="en">ENGLISH</button>
+          <button class="qbtn langbtn ui-interactive" data-lang="tr">TÜRKÇE</button>
+          <button class="qbtn langbtn ui-interactive" data-lang="es">ESPAÑOL</button>
+          <button class="qbtn langbtn ui-interactive" data-lang="zh">中文</button>
+        </div>
+
+        <div class="set-sec" data-i18n="secPrivacy">PRIVACY</div>
+        <div class="setting"><span data-i18n="shareStats">Share anonymous stats</span><button class="toggle ui-interactive" data-set="consent"></button></div>
+        <div class="setting-hint"><span data-i18n="privacyHint">No personal data, ever. Off by default.</span> <a href="privacy.html" target="_blank" rel="noopener" class="privacy-link" data-i18n="privacyPolicy">Privacy policy</a></div>
+      </div>
+      <div class="set-sec" data-i18n="secTransfer">PROGRESS</div>
+      <div class="setting-hint" data-i18n="transferHint"></div>
+      <div class="transfer-row">
+        <button id="btn-save-export" class="btn btn-ghost ui-interactive"><span data-i18n="saveExport">COPY MY CODE</span></button>
+        <button id="btn-save-import" class="btn btn-ghost ui-interactive"><span data-i18n="saveImport">RESTORE</span></button>
+      </div>
+      <textarea id="save-code" class="save-code hidden" readonly rows="3" spellcheck="false"></textarea>
+
+      <button id="btn-reset" class="btn btn-ghost ui-interactive reset-btn"><span data-i18n="resetProgress">RESET PROGRESS</span></button>
+
+      <!-- Which build is actually running. Without this, "is the fix in yet?" is
+           a guess, and a browser holding a stale copy looks exactly like a bug
+           that was never fixed. -->
+      <div id="build-stamp" class="build-stamp"></div>
+    </div>
+  </section>
+
+  <!-- ============ PAUSE ============ -->
+  <section id="screen-pause" class="overlay hidden">
+    <div class="panel pause-panel">
+      <h2 class="pause-title" data-i18n="paused">PAUSED</h2>
+      <div class="btn-row"><button id="btn-resume" class="btn btn-primary ui-interactive"><span data-i18n="resume">RESUME</span></button></div>
+      <div class="btn-row">
+        <button id="btn-restart" class="btn btn-ghost ui-interactive"><span data-i18n="restart">RESTART</span></button>
+        <button id="btn-menu2" class="btn btn-ghost ui-interactive"><span data-i18n="menu">MENU</span></button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="js/audio.js?v=260802032605"></script>
+  <script src="js/game.js?v=260802032605"></script>
+  <script src="js/i18n.js?v=260802032605"></script>
+  <script src="js/cosmetics.js?v=260802032605"></script>
+  <script src="js/modes.js?v=260802032605"></script>
+  <script src="js/missions.js?v=260802032605"></script>
+  <script src="js/analytics.js?v=260802032605"></script>
+  <script src="js/leaderboard.js?v=260802032605"></script>
+  <script src="js/iap.js?v=260802032605"></script>
+  <script src="js/voice.js?v=260802032605"></script>
+  <script src="js/cheats.js?v=260802032605"></script>
+  <script src="js/input.js?v=260802032605"></script>
+  <script src="js/progression.js?v=260802032605"></script>
+  <script src="js/scores.js?v=260802032605"></script>
+  <script src="js/save.js?v=260802032605"></script>
+  <script src="js/steam.js?v=260802032605"></script>
+  <script src="js/native.js?v=260802032605"></script>
+  <script src="js/poll.js?v=260802032605"></script>
+  <script src="js/ui.js?v=260802032605"></script>
+  <!-- Optional local settings (leaderboard project, etc). Deliberately loaded
+       WITHOUT a version stamp and with onerror swallowed: the file is not in the
+       repo, so a build that has no config.js must boot exactly as before rather
+       than log a 404 the player can see. Copy config.example.js to config.js. -->
+  <script src="config.js" onerror="void 0"></script>
+  <script src="js/main.js?v=260802032605"></script>
+</body>
+</html>

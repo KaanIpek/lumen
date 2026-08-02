@@ -1,0 +1,84 @@
+# Publish LUMEN to GitHub Pages.
+#
+# This is the deploy. Push to main and the site is live a minute later at
+#   https://<user>.github.io/<repo>/
+#
+# It publishes `dist/`, not the repository root, so the same nine developer
+# directories that tools/build-web.js already excludes (tests, tools, docs,
+# server, desktop, mobile, landing) stay out of the deployed site instead of
+# being served to players by accident.
+#
+# ONE-TIME SETUP, in the repository's Settings -> Pages:
+#   Source: "GitHub Actions".  That is the whole setting. No branch to pick.
+#
+# WHY THE VERSION BUMP RUNS HERE AND NOT ON YOUR MACHINE
+#   Browsers cache scripts hard, so a release must change every asset URL or a
+#   returning player runs half the old build and half the new one. That used to
+#   depend on a human remembering `node tools/bump-version.js` before every
+#   upload. Doing it on the runner means it cannot be forgotten: every deploy
+#   gets a fresh stamp whether or not anyone remembered. The stamp is a
+#   cache-buster, not a version number, so it does not matter that the value in
+#   the repository differs from the one that shipped.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages needs to mint an id token to deploy; nothing here writes to the repo.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. `cancel-in-progress: false` because a half-finished
+# deploy that gets cancelled can leave the site on a mixed set of files.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Stamp the assets
+        run: node tools/bump-version.js
+
+      # build-web.js is also the gate: it refuses to produce a dist/ when
+      # index.html and sw.js disagree about the version, and it deletes the
+      # output and fails if config.js contains anything that looks like a
+      # service_role or secret key. Both of those are deploy-stopping bugs, so
+      # they belong here rather than in a checklist.
+      - name: Assemble dist/
+        run: node tools/build-web.js
+
+      - name: Check the privacy policy is actually in the build
+        # Apple and Google both require a reachable privacy policy URL, and the
+        # page is easy to lose in a file list. Fail here rather than at review.
+        run: test -s dist/privacy.html && echo "privacy.html present"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Where it went
+        run: |
+          echo "Live at ${{ steps.deployment.outputs.page_url }}"
+          echo "Privacy policy: ${{ steps.deployment.outputs.page_url }}privacy.html"

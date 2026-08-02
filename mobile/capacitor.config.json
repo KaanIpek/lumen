@@ -1,0 +1,33 @@
+{
+  "appId": "com.lumen.game",
+  "appName": "LUMEN",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "backgroundColor": "#05060f",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#05060f",
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#05060f",
+    "scrollEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "backgroundColor": "#05060f",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#05060f",
+      "overlaysWebView": true
+    }
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

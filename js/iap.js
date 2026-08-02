@@ -1,0 +1,178 @@
+/*
+ * LUMEN — in-app purchases
+ * -------------------------------------------------------------
+ * The store can charge in shards (earned) or in real money. This
+ * file is the real-money half.
+ *
+ * IMPORTANT, and stated plainly: no payment processor ships here.
+ * Charging money needs a merchant account, server-side keys and a
+ * receipt-validation endpoint — none of which can live in a client
+ * bundle. What this file provides is the whole flow around that:
+ * catalogue, price formatting, purchase/restore calls, entitlement
+ * granting, and a single `provider` interface to plug a real
+ * processor into (Stripe, Play Billing, StoreKit, Paddle…).
+ *
+ * Until a provider is registered the store shows shard prices only,
+ * so the game never advertises a payment it cannot take. In dev you
+ * can register the mock below to exercise the whole path.
+ *
+ *   LUMEN.IAP.register(LUMEN.IAP.mockProvider())   // dev only
+ *
+ * A real provider must implement:
+ *   isReady()                        -> bool
+ *   purchase(sku, priceUsd)          -> Promise<{ok, receipt?}>   (charges + validates server-side)
+ *   restore()                        -> Promise<string[]>          (skus this user already owns)
+ *   formatPrice?(usd)                -> string                     (localised/regional price)
+ */
+(function () {
+  'use strict';
+  const LUMEN = (window.LUMEN = window.LUMEN || {});
+  const Store = LUMEN.Store;
+
+  const IAP = {
+    provider: null,
+
+    register(p) { this.provider = p || null; },
+    get available() { return !!(this.provider && this.provider.isReady && this.provider.isReady()); },
+    // True while the store is running on the built-in placeholder rather than a
+    // real processor. The UI must say so on every price — a player should never
+    // be unsure whether they were actually charged.
+    get sandbox() { return !!(this.provider && this.provider._sandbox); },
+
+    // Regional formatting is the provider's job when it has one; otherwise show a
+    // plain USD figure rather than pretending to know the player's currency.
+    formatPrice(usd) {
+      if (!usd) return '';
+      if (this.provider && this.provider.formatPrice) {
+        try { return this.provider.formatPrice(usd); } catch (e) { /* fall through */ }
+      }
+      return '$' + usd.toFixed(2);
+    },
+
+    // Buy a cosmetic with real money. Resolves to a plain result the UI can act on
+    // without knowing anything about payments.
+    async purchase(id) {
+      const C = LUMEN.Cosmetics;
+      if (!C) return { ok: false, reason: 'unavailable' };
+      // A SET is a single product that grants several cosmetics, so ownership
+      // and price resolve differently: it is "owned" only once every piece is,
+      // and it only carries a cash price while nothing in it is owned — a fixed
+      // store SKU cannot be discounted per player, and charging the full bundle
+      // for a remainder would be taking money for something already paid for.
+      const set = C.setDef && C.setDef(id);
+      if (set) {
+        const sp = C.setPrice(id);
+        if (!sp || sp.complete) return { ok: false, reason: 'owned' };
+        if (!sp.usd) return { ok: false, reason: 'not_for_sale' };
+        if (!this.available) return { ok: false, reason: 'unavailable' };
+        return this._charge(id, sp.usd, () => C.grantSet(id));
+      }
+      if (C.owned(id)) return { ok: false, reason: 'owned' };
+      const price = C.price(id);
+      if (!price || !price.usd) return { ok: false, reason: 'not_for_sale' };
+      if (!this.available) return { ok: false, reason: 'unavailable' };
+
+      return this._charge(id, price.usd, () => C.grant(id));
+    },
+
+    // The provider call, the analytics either side of it, and the entitlement —
+    // shared by single cosmetics and by sets so a bundle can never drift into a
+    // second, subtly different payment path.
+    async _charge(id, usd, grant) {
+      LUMEN.Analytics && LUMEN.Analytics.track('iap_start', { sku: id, usd });
+      let res;
+      try {
+        res = await this.provider.purchase(id, usd);
+      } catch (e) {
+        res = { ok: false };
+      }
+      if (!res || !res.ok) {
+        LUMEN.Analytics && LUMEN.Analytics.track('iap_cancel', { sku: id });
+        return { ok: false, reason: 'cancelled' };
+      }
+      // Entitlement is recorded locally. With a real provider the receipt is the
+      // source of truth and restore() re-grants on a new device.
+      grant();
+      this._remember(id);
+      LUMEN.Analytics && LUMEN.Analytics.track('iap_complete', { sku: id, usd });
+      return { ok: true };
+    },
+
+    // Re-grant anything this account already paid for.
+    async restore() {
+      if (!this.available || !this.provider.restore) return { ok: false, count: 0 };
+      let skus = [];
+      try { skus = (await this.provider.restore()) || []; } catch (e) { return { ok: false, count: 0 }; }
+      let n = 0;
+      const C = LUMEN.Cosmetics;
+      for (const sku of skus) {
+        // A set SKU is not a cosmetic id, so grant() would find nothing and a
+        // player who paid on one device would restore to an empty inventory on
+        // the next. Sets are re-granted piece by piece.
+        const set = C && C.setDef && C.setDef(sku);
+        if (set) {
+          const before = set.items.filter((it) => C.owned(it)).length;
+          C.grantSet(sku);
+          if (set.items.filter((it) => C.owned(it)).length > before) n++;
+        } else if (C && !C.owned(sku) && C.grant(sku)) n++;
+        this._remember(sku);
+      }
+      return { ok: true, count: n };
+    },
+
+    purchased() { return Store.purchases; },
+    _remember(id) {
+      const p = Store.purchases;
+      if (p.indexOf(id) < 0) { p.push(id); Store.purchases = p; }
+    },
+
+    // ---- development mock ---------------------------------------------------
+    // Simulates the full round trip (including the player cancelling) so the
+    // store UI can be exercised without a merchant account.
+    mockProvider(opts) {
+      opts = opts || {};
+      const bought = [];
+      return {
+        _mock: true,
+        isReady: () => true,
+        formatPrice: (usd) => '$' + usd.toFixed(2),
+        purchase(sku) {
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              if (opts.alwaysCancel) return resolve({ ok: false });
+              bought.push(sku);
+              resolve({ ok: true, receipt: 'mock-' + sku });
+            }, opts.delay || 120);
+          });
+        },
+        restore() { return Promise.resolve(bought.slice()); },
+      };
+    },
+
+    // ---- built-in sandbox checkout -----------------------------------------
+    // Registered by default so the money side of the store is fully present and
+    // playable: prices show, the checkout opens, cancelling works, and a
+    // completed purchase grants and restores exactly as the real thing will.
+    // The only missing piece is the processor, so NOTHING is ever charged and
+    // every surface says "sandbox" out loud. Swap it out with one call:
+    //
+    //   LUMEN.IAP.register(myStripeOrPlayBillingProvider)
+    //
+    sandboxProvider() {
+      return {
+        _sandbox: true,
+        isReady: () => true,
+        formatPrice: (usd) => '$' + usd.toFixed(2),
+        purchase(sku, usd) {
+          const UI = LUMEN.UI;
+          if (UI && UI.confirmPurchase) return UI.confirmPurchase(sku, usd);
+          return Promise.resolve({ ok: false });
+        },
+        restore() { return Promise.resolve(LUMEN.Store ? LUMEN.Store.purchases.slice() : []); },
+      };
+    },
+  };
+
+  LUMEN.IAP = IAP;
+  IAP.register(IAP.sandboxProvider());
+})();

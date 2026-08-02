@@ -1,0 +1,20 @@
+# NOTE: git does not support trailing comments on a pattern line. `dist/ # foo`
+# is one literal pattern that matches nothing, so every comment gets its own line.
+
+# Generated copies of the game. Both are rebuilt by a script, and a second copy
+# in git is a copy that will drift.
+# dist/      <- tools/build-web.js
+# mobile/www <- mobile/sync-web.js
+dist/
+mobile/www/
+
+# Dependencies
+node_modules/
+
+# Generated native projects (Capacitor recreates them on the build runner)
+mobile/android/
+mobile/ios/
+
+# OS noise
+.DS_Store
+Thumbs.db

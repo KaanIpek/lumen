@@ -1,0 +1,916 @@
+/* LUMEN — UI styling ------------------------------------------------------- */
+:root {
+  --bg: #05060f;
+  --cyan: #4df3ff;
+  --magenta: #ff5cf0;
+  --violet: #9a6bff;
+  --gold: #ffd15c;
+  --ink: #eaf6ff;
+  --muted: rgba(234, 246, 255, 0.55);
+  --panel: rgba(14, 18, 40, 0.55);
+  --panel-brd: rgba(120, 200, 255, 0.22);
+  --shadow-cyan: 0 0 24px rgba(77, 243, 255, 0.35);
+  --shadow-mag: 0 0 24px rgba(255, 92, 240, 0.35);
+  --font-display: "Orbitron", "Rajdhani", system-ui, sans-serif;
+  --font-ui: "Rajdhani", system-ui, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; padding: 0; height: 100%; width: 100%;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-ui);
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* NOT touch-action: none here. Blanket-disabling touch gestures on the
+     document also disables SCROLLING, so on a phone nothing below the fold in
+     the shop, settings or the game-over panel could be reached at all — in
+     landscape the game-over panel had no usable buttons. The rule exists to
+     stop double-tap zoom and pull-to-refresh while playing, so it belongs on
+     the canvas, which is the only surface you play on. */
+  -webkit-user-select: none; user-select: none;
+}
+
+#game {
+  position: fixed; inset: 0; display: block;
+  width: 100vw; height: 100vh;
+  z-index: 0;
+  cursor: pointer;
+  /* the playfield, and only the playfield, swallows browser gestures */
+  touch-action: none;
+}
+/* Panels may scroll vertically; horizontal gestures and pinch stay suppressed. */
+.overlay { touch-action: pan-y; }
+.panel { touch-action: pan-y; overflow-y: auto; overscroll-behavior: contain; max-height: 100%; }
+
+/* ---- overlays ---- */
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  /* No backdrop-filter here: the canvas animates behind it, so the browser would
+     re-blur the whole screen every frame — the single biggest cause of UI lag at
+     fullscreen. A slightly stronger tint reads the same and costs nothing. */
+  background: radial-gradient(ellipse at center, rgba(5,6,15,0.62), rgba(5,6,15,0.93));
+  transition: opacity 0.25s ease;
+  animation: overlayIn 0.3s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+/* `.hidden` means hidden — on anything, not just the handful of components that
+   remembered to say so.
+   It was only ever defined per component (.overlay.hidden, .badge.hidden,
+   .icon-btn.hidden, .next-unlock.hidden …), so adding the class to something new
+   silently did NOTHING until somebody wrote yet another selector. Two elements
+   were already caught by exactly that: the menu's beginner hint, and the shop's
+   category filter, which was leaving an empty strip on the Maps, Items and
+   Skills tabs.
+   The toast is the one deliberate exception — it fades out on opacity and has to
+   keep its transition, so hiding it with display would kill the animation. */
+.hidden:not(.toast) { display: none; }
+.overlay.hidden { display: none; }
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+
+.panel {
+  position: relative;
+  width: min(440px, 92vw);
+  padding: clamp(24px, 5vw, 40px);
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--panel-brd);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  /* blur is opt-out: `body.no-blur` (low quality tier) drops it entirely */
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  animation: panelPop 0.34s cubic-bezier(0.2, 1.1, 0.3, 1);
+}
+body.no-blur .panel { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(11,14,32,0.94); }
+body.no-blur .icon-btn { backdrop-filter: none; -webkit-backdrop-filter: none; }
+@keyframes panelPop { from { transform: translateY(18px) scale(0.96); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---- logo / title ---- */
+.logo {
+  font-family: var(--font-display);
+  font-weight: 900;
+  /* The panel stops growing at 440px, so a viewport-scaled logo keeps growing
+     past it: at ~760px wide "LUMEN" wanted 425px inside a 362px column and
+     pushed the whole menu sideways. These numbers are bounded by the panel, not
+     the window. Tracking is part of the width, so it comes down too. */
+  font-size: clamp(40px, 12vw, 68px);
+  letter-spacing: 0.1em;
+  max-width: 100%;
+  margin: 0 0 4px;
+  background: linear-gradient(180deg, #ffffff, var(--cyan) 55%, var(--violet));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px rgba(77,243,255,0.55)) drop-shadow(0 0 40px rgba(154,107,255,0.35));
+  animation: logoGlow 3.5s ease-in-out infinite;
+}
+@keyframes logoGlow {
+  0%, 100% { filter: drop-shadow(0 0 16px rgba(77,243,255,0.45)) drop-shadow(0 0 36px rgba(154,107,255,0.3)); }
+  50% { filter: drop-shadow(0 0 26px rgba(77,243,255,0.7)) drop-shadow(0 0 60px rgba(255,92,240,0.4)); }
+}
+.tagline {
+  font-size: clamp(14px, 3.6vw, 18px);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 22px;
+}
+
+/* ---- best chip ---- */
+.best-chip {
+  display: inline-flex; align-items: baseline; gap: 10px;
+  padding: 8px 18px; margin-bottom: 24px;
+  border: 1px solid var(--panel-brd); border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+}
+.best-chip span { font-size: 12px; letter-spacing: 0.2em; color: var(--muted); }
+.best-chip b { font-family: var(--font-display); font-size: 22px; color: var(--gold); text-shadow: 0 0 14px rgba(255,209,92,0.5); }
+
+.mini-stats { margin: -12px 0 22px; font-size: 12px; letter-spacing: 0.14em; color: var(--muted); }
+.mini-stats b { color: var(--ink); font-family: var(--font-display); font-size: 13px; margin-left: 2px; }
+.mini-stats .sep { margin: 0 8px; opacity: 0.5; }
+
+/* ---- buttons ---- */
+.btn {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  border: none; cursor: pointer;
+  color: #04121a;
+  padding: 15px 30px;
+  border-radius: 14px;
+  font-size: clamp(15px, 3.6vw, 18px);
+  transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.btn:active { transform: scale(0.95); }
+
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, var(--cyan), var(--violet));
+  box-shadow: var(--shadow-cyan), 0 8px 24px rgba(77,243,255,0.25);
+  animation: playPulse 2.4s ease-in-out infinite;
+}
+.btn-primary:hover { filter: brightness(1.08); box-shadow: 0 0 34px rgba(77,243,255,0.6), 0 10px 30px rgba(154,107,255,0.35); }
+@keyframes playPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(77,243,255,0.35), 0 8px 24px rgba(77,243,255,0.2); }
+  50% { box-shadow: 0 0 34px rgba(77,243,255,0.6), 0 8px 30px rgba(154,107,255,0.35); }
+}
+
+.btn-ghost {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  color: var(--ink);
+  border: 1px solid var(--panel-brd);
+  box-shadow: none;
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: var(--cyan); color: #fff; }
+
+.btn-row { display: flex; gap: 12px; margin-top: 12px; }
+/* Halve the row and let the label wrap inside its own button. Without this the
+   buttons size to their text, so a long word in ANY language (ACHIEVEMENTS,
+   BAŞARIMLAR, HABILIDADES) widened the row past the panel and shoved the whole
+   menu sideways. Equal halves can't do that in any translation. */
+.btn-row > .btn {
+  flex: 1 1 0; min-width: 0; padding-left: 12px; padding-right: 12px;
+  /* tighter than a full-width button so a long single word like LEADERBOARD or
+     HABILIDADES still lands on one line instead of breaking mid-word */
+  font-size: clamp(10px, 2.7vw, 13px); letter-spacing: 0.02em; hyphens: none;
+  overflow-wrap: normal; word-break: keep-all;
+}
+
+/* ---- how to play ---- */
+.howto { margin-top: 24px; }
+.howto-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; }
+.howto-row span { color: var(--muted); font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; margin-left: 6px; }
+.howto p { font-size: 14px; line-height: 1.5; color: var(--muted); margin: 4px 0 0; }
+.howto em { color: var(--magenta); font-style: normal; text-shadow: 0 0 12px rgba(255,92,240,0.5); }
+kbd {
+  font-family: var(--font-ui); font-weight: 700; font-size: 12px; letter-spacing: 0.1em;
+  padding: 5px 12px; border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--panel-brd);
+  border-bottom-width: 3px;
+  color: var(--cyan);
+}
+.credit { margin: 22px 0 0; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(234,246,255,0.3); }
+
+/* ---- game over ---- */
+.over-title, .pause-title {
+  font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(22px, 6vw, 30px); letter-spacing: 0.16em;
+  margin: 0 0 6px; color: var(--muted);
+}
+.badge {
+  display: inline-block; margin-bottom: 12px;
+  padding: 7px 18px; border-radius: 999px;
+  font-family: var(--font-display); font-weight: 800; letter-spacing: 0.18em; font-size: 14px;
+  color: #1a0016; background: linear-gradient(135deg, var(--gold), var(--magenta));
+  box-shadow: 0 0 24px rgba(255,209,92,0.6);
+  animation: badgePop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.badge.hidden { display: none; }
+@keyframes badgePop { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.final-score {
+  font-family: var(--font-display); font-weight: 900;
+  font-size: clamp(64px, 20vw, 104px); line-height: 1; margin: 8px 0 18px;
+  background: linear-gradient(180deg, #fff, var(--cyan));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 22px rgba(77,243,255,0.5));
+  animation: scoreCount 0.5s ease;
+}
+@keyframes scoreCount { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.stat-row { display: flex; gap: 12px; margin-bottom: 20px; }
+.stat {
+  flex: 1; padding: 12px; border-radius: 14px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--panel-brd);
+}
+.stat span { display: block; font-size: 11px; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 4px; }
+.stat b { font-family: var(--font-display); font-size: 26px; color: var(--ink); }
+
+/* ---- top bar controls ---- */
+#topbar { position: fixed; top: max(14px, env(safe-area-inset-top)); right: 14px; z-index: 30; display: flex; gap: 10px; }
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 12px; cursor: pointer;
+  background: rgba(14,18,40,0.5); border: 1px solid var(--panel-brd);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, border-color 0.2s, transform 0.1s;
+}
+.icon-btn:hover { background: rgba(30,40,80,0.7); border-color: var(--cyan); }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn.hidden { display: none; }
+
+/* glyphs drawn in CSS so we need no icon files */
+.ico-sound, .ico-pause { display: block; width: 20px; height: 20px; position: relative; }
+.ico-sound::before {
+  content: ""; position: absolute; left: 1px; top: 6px; width: 7px; height: 8px;
+  background: var(--cyan); clip-path: polygon(0 0, 55% 0, 100% -30%, 100% 130%, 55% 100%, 0 100%);
+  box-shadow: 0 0 8px rgba(77,243,255,0.6);
+}
+.ico-sound::after {
+  content: ""; position: absolute; left: 10px; top: 3px; width: 8px; height: 14px;
+  border: 2px solid var(--cyan); border-left: none; border-radius: 0 12px 12px 0;
+  box-shadow: 0 0 8px rgba(77,243,255,0.4);
+}
+#btn-mute.muted .ico-sound::after { opacity: 0.15; }
+#btn-mute.muted .ico-sound::before { background: var(--muted); box-shadow: none; }
+#btn-mute.muted { border-color: rgba(255,92,240,0.4); }
+.ico-pause::before, .ico-pause::after {
+  content: ""; position: absolute; top: 3px; width: 5px; height: 14px; background: var(--cyan);
+  border-radius: 2px; box-shadow: 0 0 8px rgba(77,243,255,0.5);
+}
+.ico-pause::before { left: 4px; } .ico-pause::after { left: 11px; }
+
+/* ---- toast ---- */
+.toast {
+  position: fixed; left: 50%; bottom: 8%; transform: translateX(-50%);
+  z-index: 40; padding: 12px 24px; border-radius: 999px;
+  background: rgba(14,18,40,0.85); border: 1px solid var(--panel-brd);
+  color: var(--cyan); font-weight: 700; letter-spacing: 0.1em; font-size: 14px;
+  box-shadow: var(--shadow-cyan);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.toast.hidden { opacity: 0; transform: translateX(-50%) translateY(12px); pointer-events: none; }
+
+/* ---- meta: chips, missions, shop ---- */
+.panel { max-height: 92vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(120,200,255,.35) transparent; }
+.panel::-webkit-scrollbar { width: 8px; }
+.panel::-webkit-scrollbar-thumb { background: rgba(120,200,255,.3); border-radius: 8px; }
+
+.chip-row { display: flex; gap: 10px; justify-content: center; margin-bottom: 18px; }
+.chip {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  padding: 8px 16px; border: 1px solid var(--panel-brd); border-radius: 999px; background: rgba(255,255,255,.04);
+}
+.chip span { font-size: 12px; letter-spacing: 0.18em; color: var(--muted); }
+.chip b { font-family: var(--font-display); font-size: 20px; color: var(--gold); text-shadow: 0 0 14px rgba(255,209,92,0.5); }
+.chip.shard span { color: var(--gold); font-size: 16px; text-shadow: 0 0 10px rgba(255,209,92,0.6); }
+.chip.shard b { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,.4); }
+
+#btn-daily, #btn-shop { font-size: 14px; padding: 13px 18px; }
+
+/* missions */
+.missions { margin: 20px 0 4px; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.mission {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center;
+  padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid var(--panel-brd);
+}
+.mission.done { border-color: rgba(120,255,180,.4); background: rgba(80,255,160,.06); }
+.mission .m-text { font-size: 14px; font-weight: 600; color: var(--ink); }
+.mission .m-reward { font-size: 12px; font-weight: 700; color: var(--gold); white-space: nowrap; }
+.mission .m-bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+.mission .m-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), var(--violet)); box-shadow: 0 0 8px rgba(77,243,255,.5); }
+.mission.done .m-bar i { background: linear-gradient(90deg, #4dffa0, var(--cyan)); }
+.missions-head { font-family: var(--font-display); font-weight: 700; letter-spacing: .2em; font-size: 12px; color: var(--magenta); text-align: left; margin-top: 4px; }
+
+/* reward line on game over */
+.reward-line { font-size: 15px; color: var(--muted); margin: -6px 0 14px; }
+.reward-line .shard { color: var(--gold); text-shadow: 0 0 10px rgba(255,209,92,.6); }
+.reward-line b { color: var(--ink); font-family: var(--font-display); font-size: 18px; }
+.reward-line em { font-style: normal; opacity: .6; font-size: 13px; margin-left: 4px; }
+.ge-missions { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.ge-mission { font-size: 13px; font-weight: 700; color: #4dffa0; letter-spacing: .04em; animation: badgePop .5s ease; }
+.ge-mission .r { color: var(--gold); }
+
+/* shop */
+.shop-panel { width: min(560px, 95vw); }
+.shop-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.shop-title { font-family: var(--font-display); font-weight: 800; letter-spacing: .12em; font-size: 22px; margin: 0; flex: 1; text-align: left; }
+.icon-x {
+  width: 44px; height: 44px; border-radius: 11px; cursor: pointer; flex: none;
+  background: rgba(255,255,255,.05); border: 1px solid var(--panel-brd); color: var(--ink); font-size: 16px;
+}
+.icon-x:hover { border-color: var(--magenta); color: #fff; }
+.shop-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+.tab {
+  flex: 1; padding: 13px 11px; min-height: 44px; border-radius: 11px; cursor: pointer; font-family: var(--font-display);
+  font-weight: 800; letter-spacing: .1em; font-size: 14px; color: var(--muted);
+  background: rgba(255,255,255,.04); border: 1px solid var(--panel-brd);
+}
+.tab.active { color: #04121a; background: linear-gradient(135deg, var(--cyan), var(--violet)); border-color: transparent; }
+/* minmax(0,…) not 1fr: a bare 1fr refuses to shrink below the card's min-content,
+   so two price buttons side by side silently widen the column and push the whole
+   grid past the panel. */
+.shop-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.shop-card {
+  padding: 14px; border-radius: 16px; background: rgba(255,255,255,.04); border: 1px solid var(--panel-brd);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+}
+.shop-card.equipped { border-color: var(--cyan); box-shadow: 0 0 20px rgba(77,243,255,.25); }
+.shop-card .swatch { width: 54px; height: 54px; border-radius: 50%; position: relative; }
+.shop-card .swatch.trail { border-radius: 8px; width: 72px; height: 30px; }
+.shop-card .c-name { font-family: var(--font-display); font-weight: 700; letter-spacing: .06em; font-size: 14px; }
+.shop-card .c-desc { font-size: 11px; color: var(--muted); line-height: 1.35; min-height: 28px; }
+.over-quip {
+  font-size: 12.5px; line-height: 1.45; font-style: italic;
+  color: color-mix(in srgb, var(--cyan) 55%, var(--muted));
+  margin: -4px 0 14px; min-height: 1.2em;
+}
+.over-quip.hidden { display: none; }
+
+/* A world themed for an occasion, during that occasion. Gold because it is good
+   news — nothing is limited, nothing expires, the price does not move. */
+.shop-card .c-season {
+  align-self: start;
+  font-family: var(--font-display); font-weight: 800;
+  font-size: 9px; letter-spacing: .14em;
+  padding: 3px 8px; border-radius: 999px;
+  color: var(--gold);
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.shop-card .c-flav {
+  font-size: 10.5px; line-height: 1.4; font-style: italic;
+  color: color-mix(in srgb, var(--gold) 62%, var(--muted));
+  opacity: .9; margin-top: -2px;
+}
+.shop-card .c-btn {
+  width: 100%; padding: 9px; border-radius: 10px; cursor: pointer; font-family: var(--font-display);
+  font-weight: 800; letter-spacing: .08em; font-size: 13px; border: none; transition: filter .15s, transform .1s;
+}
+.shop-card .c-btn:active { transform: scale(.95); }
+.c-btn.buy { color: #1a0016; background: linear-gradient(135deg, var(--gold), var(--magenta)); }
+.c-btn.buy.locked { background: rgba(255,255,255,.08); color: var(--muted); cursor: not-allowed; }
+.c-btn.equip { color: var(--ink); background: rgba(255,255,255,.08); border: 1px solid var(--panel-brd); }
+.c-btn.equipped { color: var(--cyan); background: rgba(77,243,255,.1); border: 1px solid var(--cyan); cursor: default; }
+
+/* Flex and grid children default to min-width:auto, which means "never shrink
+   below your own text". On a 375px phone that was enough to shove the shop's
+   close button and the ITEMS tab clean off the screen — the shop could not be
+   closed. Everything that must give way says so explicitly. */
+.shop-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* `overflow:hidden` alone computes text-overflow:clip, which cuts a word in
+   half mid-glyph. Spanish CUSTOMIZE is "PERSONALIZAR" — one unbreakable word —
+   and at 320px it lost the tail of the R to a hard slice rather than an ellipsis. */
+.tab { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shop-card, .c-buys, .c-buys .c-btn { min-width: 0; }
+.shop-card .c-name, .shop-card .c-desc { max-width: 100%; overflow-wrap: anywhere; }
+/* Same rule, the mode cards. A long mode name (Spanish ABANDON HOPE is
+   "PIERDE TODA ESPERANZA", Turkish PRECISION is "HASSASİYET") refused to shrink
+   and pushed the difficulty pill out past the card's own border. */
+.mc-name { min-width: 0; overflow-wrap: anywhere; }
+.mc-tag { flex: none; }
+
+@media (max-width: 430px) {
+  .shop-head { gap: 8px; }
+  /* Tighten the tracking and the shard chip so CUSTOMIZE / PROGRESS still read in
+     full at 375px instead of ellipsing away. */
+  .shop-title { font-size: 18px; letter-spacing: .04em; }
+  .shop-head .chip { padding: 6px 10px; gap: 6px; }
+  .shop-head .chip b { font-size: 17px; }
+  .shop-head .chip.shard span { font-size: 14px; }
+  .shop-tabs { gap: 6px; }
+  .tab { padding: 10px 4px; font-size: 12px; letter-spacing: .03em; }
+  /* stack shards over cash rather than squeezing both onto one line */
+  .c-buys { flex-direction: column; }
+  .item-card .c-buys { flex-direction: row; }
+  .shop-card .c-btn { font-size: 12px; padding: 8px 6px; }
+}
+
+/* One step narrower again. At 320px the Spanish CUSTOMIZE tab is
+   "PERSONALIZAR" — one unbreakable word, 11px wider than its 111px tab — so it
+   was the only label in any language that still had to ellipsise. A point of
+   type and a little tracking buys the 11px and it reads in full. */
+@media (max-width: 340px) {
+  .tab { font-size: 11px; letter-spacing: .01em; padding-left: 2px; padding-right: 2px; }
+}
+
+/* tutorial complete */
+.tutdone-panel { width: min(420px, 94vw); }
+.tut-recap { display: flex; flex-direction: column; gap: 9px; margin: 18px 0 22px; text-align: left; }
+.tut-recap div {
+  padding: 11px 14px; border-radius: 12px; font-size: 14px; color: var(--muted);
+  background: rgba(255,255,255,.04); border: 1px solid var(--panel-brd);
+}
+.tut-recap b { color: var(--cyan); font-family: var(--font-display); font-size: 13px; letter-spacing: .06em; margin-right: 6px; }
+.tut-recap em { font-style: normal; color: var(--magenta); font-weight: 700; }
+
+.next-unlock {
+  display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px; margin-bottom: 14px; border-radius: 12px;
+  background: rgba(255,209,92,.07); border: 1px solid rgba(255,209,92,.28); font-size: 13px;
+}
+.next-unlock.hidden { display: none; }
+.next-unlock .nu-label { color: var(--muted); letter-spacing: .12em; text-transform: uppercase; font-size: 11px; }
+.next-unlock b { font-family: var(--font-display); color: var(--ink); font-size: 14px; }
+.next-unlock .nu-cost { color: var(--gold); font-weight: 700; }
+
+/* store: dual currency, maps, items */
+.c-buys { display: flex; gap: 6px; width: 100%; }
+.c-buys .c-btn { flex: 1; }
+.c-btn.cash { color: #04121a; background: linear-gradient(135deg, #6ee7a8, #4df3ff); }
+.c-btn.earned-btn { font-size: 11px; letter-spacing: .02em; line-height: 1.25; padding: 8px 6px; }
+.shop-card.earned { border-color: rgba(255,209,92,.35); background: rgba(255,209,92,.05); }
+.swatch.map { width: 100%; height: 62px; border-radius: 10px; }
+/* ---- the next-update vote ------------------------------------------------ */
+.poll-panel { width: min(520px, 95vw); }
+.poll-intro { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0 0 16px; }
+#poll-list { display: flex; flex-direction: column; gap: 10px; }
+.poll-opt {
+  display: grid; gap: 4px 10px;
+  grid-template-columns: 1fr auto;
+  text-align: left; cursor: pointer;
+  padding: 12px 14px; border-radius: 12px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.10);
+  min-height: 44px; min-width: 0;
+}
+.poll-opt:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.poll-opt.mine { border-color: color-mix(in srgb, var(--cyan) 55%, transparent);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.po-kind {
+  grid-column: 1 / -1;
+  font-family: var(--font-display); font-weight: 800; font-size: 9px;
+  letter-spacing: .14em; color: var(--gold); opacity: .85;
+}
+.po-name {
+  grid-column: 1 / -1;
+  font-family: var(--font-display); font-weight: 700; font-size: 14px;
+  letter-spacing: .05em; color: var(--ink);
+  min-width: 0; overflow-wrap: anywhere;
+}
+.po-desc {
+  grid-column: 1 / -1;
+  font-size: 12px; line-height: 1.45; color: var(--muted);
+  min-width: 0; overflow-wrap: anywhere;
+}
+/* the tally only exists once you have voted — seeing it first steers the vote */
+.po-bar {
+  grid-column: 1; align-self: center;
+  height: 6px; border-radius: 3px; margin-top: 6px;
+  background: rgba(255,255,255,.10); overflow: hidden;
+}
+.po-bar i { display: block; height: 100%; background: var(--cyan); border-radius: 3px; }
+.po-pct {
+  grid-column: 2; align-self: center; margin-top: 6px;
+  font-family: var(--font-display); font-size: 12px; color: var(--cyan);
+}
+.poll-opt.mine .po-bar i { background: var(--gold); }
+.poll-opt.mine .po-pct { color: var(--gold); }
+.poll-foot { margin-top: 16px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+/* The CUSTOMIZE category filter. Sticky to the top of the scrolling panel so it
+   is reachable from anywhere in a long list — having to scroll back up to change
+   category is the friction this exists to remove. */
+/* ONE row that scrolls sideways, never a wrapping block. At 320px the panel has
+   230px of width for ~470px of chips, so wrapping made this three lines tall —
+   and because it is sticky, those 119px were taken off every screen of the list
+   for as long as you scrolled. A single row costs ~52px and a swipe. */
+.shop-filters {
+  position: sticky; top: -2px; z-index: 3;
+  display: flex; flex-wrap: nowrap; gap: 6px;
+  /* not the default `stretch`: that sized the chips from the row instead of the
+     other way round, and quietly held them at 42px under the 44px tap guideline */
+  align-items: center;
+  margin: -4px 0 14px;
+  padding: 8px 0;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  background: linear-gradient(180deg, var(--panel, #0b1020) 78%, transparent);
+}
+.shop-filters::-webkit-scrollbar { display: none; }
+.shop-filter {
+  display: inline-flex; align-items: center; gap: 6px;
+  flex: 0 0 auto;                 /* never squeeze a label to fit */
+  min-height: 44px; padding: 5px 12px;
+  border-radius: 999px; cursor: pointer;
+  font-family: var(--font-display); font-weight: 700;
+  font-size: 10.5px; letter-spacing: .08em;
+  color: var(--muted);
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.10);
+  white-space: nowrap;
+}
+.shop-filter i { font-style: normal; opacity: .6; font-size: 9.5px; }
+.shop-filter.on {
+  color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 45%, transparent);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+.shop-filter.on i { opacity: .85; }
+.shop-filter:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* A set spans all three slots, so its card spans the grid and states its
+   arithmetic out loud — the saving is checkable, not asserted. */
+.set-card { grid-column: 1 / -1; }
+.set-parts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.set-part {
+  font-size: 10.5px; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px;
+  color: var(--muted); border: 1px solid rgba(255,255,255,.10);
+  min-width: 0; overflow-wrap: anywhere;
+}
+.set-part.have { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, transparent); }
+.set-save {
+  font-size: 11px; line-height: 1.35; color: var(--gold);
+  max-width: 100%; overflow-wrap: anywhere;
+}
+
+/* A signature's swatch is a live canvas looping the effect — a still picture of
+   a motion sells nothing. Sized in CSS while the canvas keeps its own backing
+   resolution, so it stays crisp without a per-card DPR dance. */
+.swatch.sig {
+  width: 100%; height: 62px; border-radius: 10px;
+  background: radial-gradient(circle at 50% 50%, rgba(120,180,255,.10), rgba(4,6,16,.55) 70%);
+  border: 1px solid rgba(255,255,255,.06);
+}
+.shop-grid.items { grid-template-columns: 1fr; }
+.item-card { flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; gap: 12px; }
+.item-card .c-name { flex: 1; min-width: 90px; }
+.item-card .c-desc { flex-basis: 100%; min-height: 0; order: 5; }
+.item-card .c-buys { width: auto; flex: 0 0 auto; }
+.item-glyph {
+  width: 46px; height: 46px; flex: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 20px;
+  color: var(--ic); border: 2px solid var(--ic); background: rgba(8,12,28,.7);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--ic) 45%, transparent);
+}
+.item-have { font-size: 12px; color: var(--muted); }
+.item-have b { color: var(--ink); font-family: var(--font-display); }
+.restore-btn { margin-top: 14px; font-size: 12px; padding: 11px; }
+.restore-btn.hidden { display: none; }
+
+/* achievements page */
+.achv-hero { text-align: center; padding: 6px 0 16px; }
+.ah-num { font-family: var(--font-display); font-weight: 900; font-size: 40px; color: var(--gold); line-height: 1; }
+.ah-num span { font-size: 20px; color: var(--muted); }
+.ah-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; margin: 10px 0 6px; }
+.ah-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--magenta)); }
+.ah-sub { font-size: 12px; color: var(--muted); letter-spacing: .12em; }
+.achv-cat {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-display); font-weight: 700; letter-spacing: .18em; font-size: 11px;
+  color: var(--magenta); margin: 18px 0 8px; padding-bottom: 6px;
+  border-bottom: 1px solid rgba(120,200,255,.14);
+}
+.achv-cat b { color: var(--muted); font-size: 12px; letter-spacing: .06em; }
+.mission.achv .m-text { font-size: 13px; }
+.a-prize { display: block; font-size: 11px; color: var(--gold); margin-top: 3px; letter-spacing: .04em; }
+
+/* settings sections */
+.set-sec {
+  font-family: var(--font-display); font-weight: 700; letter-spacing: .2em; font-size: 11px;
+  color: var(--magenta); margin: 20px 0 4px; padding-bottom: 6px;
+  border-bottom: 1px solid rgba(120,200,255,.14); text-align: left;
+}
+.set-sec:first-child { margin-top: 4px; }
+.setting-label.sub { font-size: 13px; color: var(--muted); margin: 12px 0 8px; }
+.setting.unavailable { opacity: .45; pointer-events: none; }
+.qrow.lang { flex-wrap: wrap; }
+.qrow.lang .qbtn { flex: 1 1 40%; }
+
+/* difficulty selector */
+.diff-row { display: flex; gap: 6px; margin-bottom: 12px; }
+.diffbtn {
+  flex: 1; padding: 12px 4px; min-height: 44px; border-radius: 10px; cursor: pointer;
+  font-family: var(--font-display); font-weight: 800; letter-spacing: .08em; font-size: 12px;
+  color: var(--muted); background: rgba(255,255,255,.05); border: 1px solid var(--panel-brd);
+}
+.diffbtn.active { color: #04121a; background: linear-gradient(135deg, var(--cyan), var(--violet)); border-color: transparent; }
+.diffbtn[data-diff="hard"].active { background: linear-gradient(135deg, #ffd15c, #ff5c6e); color: #1a0008; }
+
+/* progress: achievements + skills */
+.progress-panel { width: min(520px, 95vw); }
+.mission .m-sub { grid-column: 1 / -1; font-size: 11px; color: var(--muted); letter-spacing: .06em; }
+.skill {
+  padding: 14px; border-radius: 14px; margin-bottom: 10px; text-align: left;
+  background: rgba(255,255,255,.04); border: 1px solid var(--panel-brd);
+}
+.skill.maxed { border-color: rgba(255,209,92,.45); background: rgba(255,209,92,.06); }
+.skill .s-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.skill .s-head b { font-family: var(--font-display); font-size: 15px; letter-spacing: .04em; }
+.s-pips { display: flex; gap: 5px; }
+.s-pips i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.16); }
+.s-pips i.on { background: linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow: 0 0 8px rgba(77,243,255,.6); }
+.skill .s-desc { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
+.skill .s-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.skill .s-now { font-size: 12px; color: var(--muted); }
+.skill .s-now b { color: var(--cyan); font-family: var(--font-display); font-size: 13px; }
+.skill .c-btn { width: auto; min-width: 96px; padding: 9px 14px; }
+
+/* revive */
+.revive-panel { width: min(400px, 94vw); }
+.revive-title {
+  font-family: var(--font-display); font-weight: 900; letter-spacing: .1em;
+  font-size: clamp(26px, 7vw, 36px); margin: 0 0 8px;
+  background: linear-gradient(180deg, #fff, var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 18px rgba(255,209,92,.5));
+}
+.revive-sub { color: var(--muted); font-size: 14px; margin: 0 0 14px; line-height: 1.5; }
+.revive-sub em { font-style: normal; opacity: .7; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+.revive-score {
+  font-family: var(--font-display); font-weight: 900; font-size: clamp(44px, 13vw, 64px); line-height: 1; margin-bottom: 18px;
+  background: linear-gradient(180deg, #fff, var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.btn-revive {
+  width: 100%; color: #1a0016;
+  background: linear-gradient(135deg, var(--gold), var(--magenta));
+  box-shadow: 0 0 26px rgba(255,209,92,.45);
+  animation: playPulse 1.6s ease-in-out infinite;
+}
+.btn-revive:hover { filter: brightness(1.08); }
+.revive-no { width: 100%; margin-top: 10px; }
+
+/* leaderboard */
+.scores-panel { width: min(440px, 94vw); }
+.score-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.score-list li {
+  /* `1fr` will not shrink below its content, so a long player name — and other
+     people's names are not ours to control — pushed the score and the combo off
+     the right of the screen entirely. minmax(0, 1fr) lets the name column give
+     way; the name then ellipsises instead of hiding the number it belongs to. */
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; gap: 12px; align-items: center;
+  padding: 11px 14px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid var(--panel-brd);
+}
+.score-list li > * { min-width: 0; }
+.score-list .val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.score-list li.top { border-color: rgba(255,209,92,.5); background: rgba(255,209,92,.07); }
+.score-list .pos { font-family: var(--font-display); font-weight: 800; font-size: 15px; color: var(--muted); text-align: right; }
+.score-list li.top .pos { color: var(--gold); }
+.score-list .val { font-family: var(--font-display); font-weight: 800; font-size: 19px; color: var(--ink); }
+.score-list .cmb { font-size: 12px; color: var(--cyan); letter-spacing: .06em; }
+.score-list .dt { font-size: 11px; color: var(--muted); }
+.score-empty { color: var(--muted); font-size: 14px; padding: 24px 0; }
+.score-empty.hidden { display: none; }
+.badge.rank { background: linear-gradient(135deg, var(--cyan), var(--violet)); color: #04121a; box-shadow: 0 0 22px rgba(77,243,255,.5); }
+.btn-ghost.wide { flex: 1; }
+
+/* settings */
+#btn-settings, #btn-fs { font-size: 19px; color: var(--cyan); line-height: 1; }
+#btn-fs.on { border-color: var(--cyan); background: rgba(77,243,255,.12); }
+.settings-panel { width: min(400px, 94vw); }
+.settings-list { display: flex; flex-direction: column; gap: 4px; }
+.setting {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 6px; border-bottom: 1px solid rgba(120,200,255,.1);
+  font-weight: 600; font-size: 16px; color: var(--ink);
+}
+.toggle {
+  width: 52px; height: 30px; border-radius: 999px; cursor: pointer; position: relative;
+  background: rgba(255,255,255,.1); border: 1px solid var(--panel-brd); transition: background .2s;
+}
+.toggle::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--muted); transition: transform .2s, background .2s;
+}
+.toggle.on { background: linear-gradient(135deg, var(--cyan), var(--violet)); border-color: transparent; }
+.toggle.on::after { transform: translateX(22px); background: #fff; box-shadow: 0 0 10px rgba(255,255,255,.6); }
+/* visually hidden, still announced by screen readers */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.setting-group { margin-top: 16px; }
+.privacy-link { color: var(--cyan); text-decoration: underline; }
+.setting-group .setting { border-bottom: none; padding: 12px 6px 4px; }
+.setting-label { font-weight: 600; font-size: 16px; margin-bottom: 10px; text-align: left; }
+.setting-label em { font-style: normal; font-size: 12px; color: var(--cyan); letter-spacing: .1em; margin-left: 6px; }
+.qrow { display: flex; gap: 6px; }
+.qbtn {
+  flex: 1; padding: 10px 4px; border-radius: 10px; cursor: pointer;
+  font-family: var(--font-display); font-weight: 800; letter-spacing: .06em; font-size: 12px;
+  color: var(--muted); background: rgba(255,255,255,.05); border: 1px solid var(--panel-brd);
+}
+.qbtn.active { color: #04121a; background: linear-gradient(135deg, var(--cyan), var(--violet)); border-color: transparent; }
+.setting-hint { font-size: 11px; color: var(--muted); margin-top: 8px; text-align: left; line-height: 1.4; }
+/* There is no global .hidden in this sheet — every component declares its own.
+   This one was missing, so hints that were supposed to disappear (the shop's
+   per-tab note, most visibly) simply never did. */
+.setting-hint.hidden { display: none; }
+#shop-note { margin: -6px 0 14px; }
+#lb-note { text-align: center; margin-top: 12px; }
+
+/* ---- shop: section headings, coach cards, checkout ---- */
+.shop-sec {
+  grid-column: 1 / -1; text-align: left; margin: 6px 2px 0;
+  font-family: var(--font-display); font-weight: 800; font-size: 12px;
+  letter-spacing: .18em; color: var(--cyan); text-transform: uppercase;
+}
+.shop-grid > .shop-sec:first-child { margin-top: 0; }
+.shop-coach {
+  text-align: left; margin: 0 0 14px; padding: 14px 16px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(77,243,255,.10), rgba(160,120,255,.10));
+  border: 1px solid rgba(77,243,255,.32);
+}
+.shop-coach.hidden { display: none; }
+.coach-t { font-family: var(--font-display); font-weight: 800; letter-spacing: .08em; font-size: 14px; color: var(--cyan); }
+.coach-b { font-size: 12px; line-height: 1.5; color: var(--muted); margin: 6px 0 10px; }
+.coach-x { width: auto; padding: 8px 18px; }
+
+/* ---- animated shop swatches ----
+   A trail is a moving thing; a frozen picture of one is nearly useless for
+   deciding whether you want it. Each preview loops the motion of the real
+   effect. All of it stops dead under prefers-reduced-motion. */
+@keyframes swSpin    { to   { transform: rotate(360deg); } }
+@keyframes swStream  { from { background-position: 0 0; } to { background-position: -200% 0; } }
+@keyframes swBeat    { 0%,100% { filter: brightness(.75); } 50% { filter: brightness(1.5); } }
+@keyframes swFade    { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes swRing    { 0%,100% { transform: scale(.86); opacity: .6; } 50% { transform: scale(1.1); opacity: 1; } }
+@keyframes swThread  { 0%,100% { transform: scaleY(.7); } 50% { transform: scaleY(1.25); } }
+@keyframes swWake    { 0%,100% { transform: scaleY(.75); opacity: .7; } 50% { transform: scaleY(1.15); opacity: 1; } }
+@keyframes swShimmer { 0%,100% { filter: hue-rotate(-16deg); } 50% { filter: hue-rotate(16deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .swatch { animation: none !important; }
+}
+
+/* ---- game modes ---- */
+.modes-panel { width: min(460px, 94vw); }
+.modes-list { display: flex; flex-direction: column; gap: 10px; }
+.mode-card {
+  --mc: var(--cyan);
+  text-align: left; padding: 13px 15px; border-radius: 14px;
+  background: rgba(255,255,255,.035); border: 1px solid var(--panel-brd);
+}
+.mode-card:hover { border-color: color-mix(in srgb, var(--mc) 55%, transparent); background: rgba(255,255,255,.06); }
+.mode-card:active { transform: scale(.985); }
+.mode-card:focus-visible { outline: 2px solid var(--mc); outline-offset: 2px; }
+.mode-card.on { border-color: var(--mc); background: color-mix(in srgb, var(--mc) 10%, transparent); }
+.mc-on { color: var(--mc); font-weight: 900; font-size: 13px; line-height: 1; }
+.mc-top { display: flex; align-items: center; gap: 8px; }
+.mc-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mc); box-shadow: 0 0 10px var(--mc); flex: none; }
+.mc-name { font-family: var(--font-display); font-weight: 800; letter-spacing: .08em; font-size: 14px; color: var(--ink); }
+.mc-tag {
+  margin-left: auto; font-family: var(--font-display); font-weight: 800; font-size: 9px;
+  letter-spacing: .12em; padding: 3px 8px; border-radius: 999px;
+  color: var(--mc); border: 1px solid color-mix(in srgb, var(--mc) 45%, transparent);
+}
+.mc-desc { font-size: 12px; line-height: 1.45; color: var(--muted); margin: 7px 0 9px; }
+.mc-foot { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.mc-best { font-size: 11px; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.mc-best b { font-family: var(--font-display); color: var(--gold); font-size: 13px; margin-left: 4px; }
+.mc-facts { margin-left: auto; font-size: 11px; color: var(--mc); }
+.mc-foot { margin-bottom: 0; }
+/* the menu button carries the selected mode's colour, so the choice is visible
+   without opening the screen */
+.btn.mode-pick { --mc: var(--cyan); border-color: color-mix(in srgb, var(--mc) 45%, transparent); color: var(--mc); }
+
+.checkout-panel { width: min(360px, 92vw); text-align: center; }
+.sandbox-tag {
+  display: inline-block; margin-bottom: 14px; padding: 6px 12px; border-radius: 999px;
+  font-family: var(--font-display); font-weight: 800; font-size: 10px; letter-spacing: .14em;
+  color: var(--gold); background: rgba(255,209,92,.12); border: 1px solid rgba(255,209,92,.45);
+}
+.sandbox-tag.hidden { display: none; }
+.co-swatch { width: 78px; height: 78px; border-radius: 50%; margin: 0 auto 14px; }
+.co-swatch.trail { border-radius: 10px; width: 108px; height: 42px; }
+.co-swatch.map { border-radius: 12px; width: 100%; height: 84px; }
+.co-name { font-family: var(--font-display); font-weight: 800; letter-spacing: .08em; font-size: 20px; margin: 0; }
+.co-price { font-family: var(--font-display); font-weight: 900; font-size: 34px; color: var(--gold); margin: 6px 0 10px; text-shadow: 0 0 18px rgba(255,209,92,.45); }
+.co-note { font-size: 12px; line-height: 1.5; color: var(--muted); margin: 0 0 18px; }
+.checkout-panel .btn { margin-top: 10px; }
+/* the cash button carries the same warning as the checkout, so a price is never
+   mistaken for a live charge */
+.c-btn.cash.sandbox::after { content: ' ⓢ'; opacity: .75; }
+.reset-btn { width: 100%; margin-top: 18px; color: var(--magenta); border-color: rgba(255,92,240,.35); }
+.reset-btn:hover { border-color: var(--magenta); background: rgba(255,92,240,.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; }
+}
+
+/* ---- save transfer ---- */
+.transfer-row { display: flex; gap: 10px; margin: 4px 0 10px; }
+.transfer-row .btn { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 12px 10px; font-size: 12px; letter-spacing: .06em; }
+.save-code {
+  width: 100%; box-sizing: border-box; margin-bottom: 12px; padding: 10px 12px;
+  border-radius: 10px; resize: none; font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px; line-height: 1.5; word-break: break-all;
+  color: var(--ink); background: rgba(0,0,0,.35); border: 1px solid var(--panel-brd);
+}
+.save-code.hidden { display: none; }
+
+/* ---- selected mode line ---- */
+.mode-line {
+  --mc: var(--cyan);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: -8px 0 12px;
+  font-family: var(--font-display); font-weight: 800;
+  font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--mc);
+}
+.mode-line .ml-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mc); box-shadow: 0 0 9px var(--mc); }
+
+/* the daily button names the day's twist under its label */
+.daily-twist {
+  display: block; margin-top: 3px;
+  font-size: 9px; letter-spacing: .14em; font-weight: 800;
+  color: var(--gold); opacity: .85; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Which build is running. Deliberately quiet — it is a diagnostic, not a feature. */
+.build-stamp {
+  margin-top: 14px; text-align: center; font-size: 11px; letter-spacing: .12em;
+  color: rgba(234, 246, 255, 0.32); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  user-select: text;
+}
+
+/* ---------------------------------------------------------------------------
+   TOUCH TARGETS
+   Measured on a 320px screen, not guessed: the settings switches were 30px
+   tall, the quality/language buttons 37px, and RETRY — the most-pressed button
+   in the game — 42px. Apple asks for 44, Google for 48dp. A control you have to
+   aim at is a control you mis-hit on a bus.
+
+   The switch keeps its exact appearance: the visible track stays 30px and an
+   invisible ::before stretches the hit area out to 44. Growing the track itself
+   would have made it look like a slab.
+--------------------------------------------------------------------------- */
+.btn { min-height: 44px; }
+.qbtn { min-height: 44px; }
+.diffbtn { min-height: 44px; }
+.tab { min-height: 44px; }
+.icon-x, .icon-btn { min-width: 44px; min-height: 44px; }
+
+.toggle { position: relative; }
+.toggle::before {
+  content: ""; position: absolute; left: 0; right: 0;
+  top: 50%; height: 44px; transform: translateY(-50%);
+  /* purely a hit area — never paints, never affects layout */
+  background: transparent; pointer-events: auto;
+}
+/* The shop's buy/equip buttons were 32px — these are the controls that spend
+   the player's currency, so a mis-hit is the most annoying mis-hit there is. */
+.c-btn { min-height: 44px; }
+/* The switch was 43px wide once Spanish compressed the row — one pixel short of
+   the target, which is still a miss. */
+.toggle { min-width: 44px; }
+
+/* Leaderboard name. Without this the translated `yourName` string had no home
+   and every score on the board read "anon". */
+.lb-name-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; text-align: left; }
+.lb-name-row.hidden { display: none; }
+.lb-name-row label { font-size: 12px; letter-spacing: .1em; color: var(--muted); white-space: nowrap; }
+.lb-name-row input {
+  flex: 1 1 0; min-width: 0; min-height: 44px; padding: 8px 12px;
+  border-radius: 10px; border: 1px solid var(--panel-brd);
+  background: rgba(255,255,255,.06); color: var(--ink);
+  font-family: var(--font-ui); font-weight: 700; font-size: 15px; letter-spacing: .04em;
+}
+.lb-name-row input:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+/* Four shop tabs in a phone-width panel gave each about 40px — narrower than a
+   fingertip, with the label hard-clipped mid-word in every language including
+   English. Let the row wrap to two-by-two rather than keep dividing one line
+   into slivers; each tab then gets half the panel and its whole label. */
+.shop-tabs { flex-wrap: wrap; }
+.shop-tabs > .tab { flex: 1 1 calc(50% - 4px); min-width: 96px; }
+@media (min-width: 520px) {
+  /* enough room for one row again */
+  .shop-tabs > .tab { flex: 1 1 0; min-width: 0; }
+}
+/* The language row already wraps; the graphics and colour-vision rows did not,
+   so four labels shared one narrow line and each button ended up ~35px wide.
+   Same treatment, same reason. */
+.qrow { flex-wrap: wrap; }
+.qrow > .qbtn { flex: 1 1 calc(50% - 3px); min-width: 88px; }
+@media (min-width: 460px) {
+  .qrow > .qbtn { flex: 1 1 0; min-width: 0; }
+  .qrow.lang .qbtn { flex: 1 1 40%; }
+}
+/* Three difficulties sharing one row still fell a couple of pixels short of a
+   fingertip on the narrowest phones. */
+.diffbtn { min-width: 44px; }

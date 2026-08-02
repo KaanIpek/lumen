@@ -1,0 +1,98 @@
+/*
+ * LUMEN — local configuration
+ * -------------------------------------------------------------
+ * index.html loads this if it exists and boots perfectly well without it, so it
+ * is safe to leave half-filled.
+ *
+ * This file IS committed, unlike the template it came from. That is a decision,
+ * not an oversight: see the last paragraph of this comment. The key below ships
+ * inside every build and is readable by any player, so keeping it out of a
+ * public repository would protect nothing and would only mean the deployed site
+ * boots with no leaderboard. Guard the DATABASE with row-level security — that
+ * is the thing that actually works. Never commit a service_role key.
+ *
+ * WHERE THE TWO VALUES COME FROM
+ *   Supabase dashboard -> your project -> Project Settings -> API
+ *     Project URL     -> supabaseUrl
+ *     anon  public    -> supabaseAnonKey     <- the one labelled "anon", "public"
+ *
+ * DO NOT PASTE HERE
+ *   service_role key       - it ignores every security policy you wrote
+ *   Personal Access Token  - it can create and delete your projects
+ *
+ * Both of those give away control of your account. The anon key does not: it is
+ * meant to be published, and Row Level Security is what actually guards the
+ * table. See docs/LEADERBOARD.md.
+ *
+ * And be clear-eyed about what this file is. It is NOT a hiding place — it ships
+ * inside the web build, the Steam build and the mobile build, and any player can
+ * read it in under a minute. It exists to keep configuration in ONE place you
+ * can edit without touching code. Secrecy was never on the list, which is why
+ * committing it costs nothing and why a service_role key here would be fatal.
+ */
+(function () {
+  'use strict';
+  const LUMEN = (window.LUMEN = window.LUMEN || {});
+
+  LUMEN.CONFIG = {
+
+    // ---------------------------------------------------------------
+    //  PASTE BETWEEN THE QUOTES
+    // ---------------------------------------------------------------
+
+    supabaseUrl: 'https://tkmrtcqbqvksiuhzlgqe.supabase.co',
+    //            ^ e.g.  https://abcdefghijklmnop.supabase.co
+    //              (no trailing slash needed — it is stripped either way)
+
+    supabaseAnonKey: 'sb_publishable_c7XEE_vAyLG4oXujzT4ZRA_uNSRPDBW',
+    //                ^ the long "anon public" key, starts with  eyJ
+
+    // ---------------------------------------------------------------
+
+    // Only if you self-host server/leaderboard-server.js instead.
+    // Leave empty when using Supabase — Supabase wins if both are set.
+    leaderboardEndpoint: '',
+
+    // ---- the next-update vote (optional) ----
+    // Delete this whole block, or leave  empty, and the vote simply does
+    // not exist: no menu button, no screen, no requests.
+    //
+    // Running next month's poll is EDITING THIS OBJECT and re-uploading. No code
+    // change, no release. That is deliberate — a monthly promise you can only
+    // keep by shipping code is a promise you will eventually break.
+    //
+    // Keep every option to something that is a TABLE ENTRY in this codebase —
+    // a mode (js/modes.js), a world or a signature (js/cosmetics.js). Those you
+    // can always build in a month. Multiplayer is a different game.
+    poll: {
+      id: '',                       // <- put your poll id here to open the vote                 // change this and everybody may vote again
+      closes: '2026-09-20',          // YYYY-MM-DD, in the player's own day
+      options: [
+        // name/desc take a plain string, or a { en, tr, es, zh } map.
+        // kind is one of: mode | map | cosmetic
+        {
+          id: 'mirrorworld', kind: 'map',
+          name: { en: 'Mirrorworld', tr: 'Ayna Dünya' },
+          desc: {
+            en: 'A world that reflects the corridor back at you.',
+            tr: 'Koridoru sana geri yansıtan bir dünya.',
+          },
+        },
+        { id: 'pacer', kind: 'mode',
+          name: { en: 'Pacer', tr: 'Tempo' },
+          desc: { en: 'A ghost of your best run flies beside you.',
+                  tr: 'En iyi koşunun hayaleti yanında uçar.' } },
+        { id: 'aurora_set', kind: 'cosmetic',
+          name: { en: 'Aurora set', tr: 'Aurora seti' },
+          desc: { en: 'Orb, trail and signature in one northern-light look.',
+                  tr: 'Kutup ışığı temalı orb, iz ve imza.' } },
+      ],
+    },
+
+    // Where players send IDEAS. Deliberately NOT a text box in the game: a
+    // stranger's free text going straight into a shared database is a
+    // moderation problem and, once shown to other players, your liability.
+    // Collect wherever your community already is; you pick the five.
+    ideasUrl: '',             // e.g. a Discord invite or a form
+  };
+})();

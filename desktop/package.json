@@ -1,0 +1,81 @@
+{
+  "name": "lumen-desktop",
+  "productName": "LUMEN",
+  "version": "1.0.0",
+  "description": "LUMEN — flip · thread · flow. Desktop / Steam build.",
+  "main": "main.js",
+  "author": "LUMEN",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac --universal",
+    "dist:linux": "electron-builder --linux --x64"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "optionalDependencies": {
+    "steamworks.js": "^0.4.0"
+  },
+  "build": {
+    "appId": "com.lumen.game",
+    "productName": "LUMEN",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "steam_appid.txt",
+      "../index.html",
+      "../privacy.html",
+      "../config.js",
+      "../css/**/*",
+      "../js/**/*",
+      "!../js/cheats.js",
+      "../assets/**/*",
+      "!../assets/screenshot-*",
+      "!**/node_modules/*/{test,__tests__,tests,example,examples}/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.games"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Game"
+    }
+  }
+}

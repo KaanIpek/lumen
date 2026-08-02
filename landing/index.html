@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LUMEN — flip · thread · flow</title>
+<meta name="description" content="LUMEN — a one-thumb neon arcade game. Flip gravity, thread the gaps, chain the light into a slow-motion flow." />
+<meta name="theme-color" content="#05060f" />
+<link rel="icon" type="image/png" href="../assets/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#05060f; --cyan:#4df3ff; --magenta:#ff5cf0; --violet:#9a6bff; --gold:#ffd15c;
+  --ink:#eaf6ff; --muted:rgba(234,246,255,.6); --line:rgba(120,200,255,.16);
+  --panel:rgba(14,18,40,.5);
+  --fd:"Orbitron","Rajdhani",system-ui,sans-serif; --fu:"Rajdhani",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--fu);line-height:1.55;
+  overflow-x:hidden;
+  background-image:
+    radial-gradient(1200px 600px at 15% -10%, rgba(77,243,255,.10), transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%, rgba(255,92,240,.10), transparent 55%),
+    radial-gradient(900px 900px at 50% 120%, rgba(154,107,255,.12), transparent 60%);
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+a{color:inherit;text-decoration:none}
+.glow{filter:drop-shadow(0 0 18px rgba(77,243,255,.5))}
+
+/* header */
+header{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);
+  background:linear-gradient(180deg,rgba(5,6,15,.85),rgba(5,6,15,.35));border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+.mark{font-family:var(--fd);font-weight:900;letter-spacing:.22em;font-size:22px;
+  background:linear-gradient(90deg,#fff,var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+.nav .cta{font-family:var(--fd);font-weight:800;letter-spacing:.12em;font-size:14px;
+  padding:10px 20px;border-radius:10px;color:#04121a;background:linear-gradient(135deg,var(--cyan),var(--violet));
+  box-shadow:0 0 20px rgba(77,243,255,.4);transition:transform .12s,box-shadow .2s}
+.nav .cta:hover{transform:translateY(-1px);box-shadow:0 0 30px rgba(77,243,255,.7)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center;padding:70px 0 40px}
+.eyebrow{font-family:var(--fd);letter-spacing:.34em;text-transform:uppercase;font-size:13px;color:var(--cyan);margin-bottom:18px}
+h1.logo{font-family:var(--fd);font-weight:900;font-size:clamp(58px,9vw,104px);line-height:.92;letter-spacing:.08em;
+  background:linear-gradient(180deg,#fff,var(--cyan) 55%,var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 26px rgba(77,243,255,.45)) drop-shadow(0 0 60px rgba(154,107,255,.3))}
+.tag{font-size:clamp(15px,2.4vw,19px);letter-spacing:.3em;text-transform:uppercase;color:var(--muted);margin:8px 0 22px}
+.lede{font-size:18px;color:var(--muted);max-width:46ch;margin-bottom:26px}
+.lede b{color:var(--ink)}
+.btns{display:flex;gap:14px;flex-wrap:wrap}
+.btn{font-family:var(--fd);font-weight:800;letter-spacing:.12em;font-size:16px;padding:15px 30px;border-radius:13px;cursor:pointer;transition:transform .12s,box-shadow .2s,background .2s}
+.btn-primary{color:#04121a;background:linear-gradient(135deg,var(--cyan),var(--violet));box-shadow:0 0 26px rgba(77,243,255,.4);animation:pulse 2.6s ease-in-out infinite}
+.btn-primary:hover{transform:translateY(-2px)}
+.btn-ghost{color:var(--ink);background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.btn-ghost:hover{border-color:var(--cyan);background:rgba(255,255,255,.09)}
+@keyframes pulse{0%,100%{box-shadow:0 0 20px rgba(77,243,255,.35)}50%{box-shadow:0 0 36px rgba(154,107,255,.55)}}
+
+/* device / live game */
+.device{position:relative;justify-self:center;width:100%;max-width:420px;aspect-ratio:9/16;
+  border-radius:30px;padding:12px;background:linear-gradient(160deg,#1a2050,#0a0c1e);
+  border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 60px rgba(77,243,255,.15)}
+.device iframe{width:100%;height:100%;border:0;border-radius:20px;background:#05060f;display:block}
+.device .halo{position:absolute;inset:-30px;border-radius:40px;z-index:-1;
+  background:radial-gradient(circle at 50% 40%,rgba(77,243,255,.25),transparent 60%)}
+.device .badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);z-index:2;
+  font-family:var(--fd);font-weight:800;font-size:11px;letter-spacing:.18em;padding:6px 16px;border-radius:999px;
+  color:#04121a;background:linear-gradient(135deg,var(--gold),var(--magenta));box-shadow:0 0 20px rgba(255,209,92,.5);white-space:nowrap}
+
+/* feature marquee */
+.pills{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:26px 0 60px}
+.pill{display:flex;align-items:center;gap:9px;padding:10px 18px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-weight:600;font-size:14px;color:var(--muted)}
+.pill b{color:var(--ink)}
+
+/* section */
+section.block{padding:60px 0}
+.kicker{font-family:var(--fd);letter-spacing:.28em;text-transform:uppercase;font-size:13px;color:var(--magenta);text-align:center;margin-bottom:10px}
+h2{font-family:var(--fd);font-weight:800;font-size:clamp(28px,4.6vw,42px);text-align:center;letter-spacing:.04em;margin-bottom:12px}
+.sub{text-align:center;color:var(--muted);max-width:60ch;margin:0 auto 40px;font-size:17px}
+
+/* pillars */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:28px;backdrop-filter:blur(8px);transition:transform .2s,border-color .2s}
+.card:hover{transform:translateY(-4px);border-color:rgba(77,243,255,.4)}
+.card .num{font-family:var(--fd);font-weight:900;font-size:30px;background:linear-gradient(135deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:10px}
+.card h3{font-family:var(--fd);font-weight:800;letter-spacing:.04em;font-size:20px;margin-bottom:8px}
+.card p{color:var(--muted);font-size:15px}
+
+/* screenshots */
+.shots{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.shot{border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 16px 40px rgba(0,0,0,.5);position:relative;background:#0a0c1e}
+.shot img{width:100%;display:block;transition:transform .4s}
+.shot:hover img{transform:scale(1.06)}
+.shot span{position:absolute;left:12px;bottom:10px;font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);text-shadow:0 2px 8px #000}
+.shot.tall{grid-row:span 1}
+
+/* feature list */
+.feat{display:grid;grid-template-columns:repeat(2,1fr);gap:16px 34px;max-width:900px;margin:0 auto}
+.feat li{list-style:none;display:flex;gap:14px;align-items:flex-start;font-size:16px}
+.feat .dot{flex:none;width:12px;height:12px;border-radius:50%;margin-top:7px;background:linear-gradient(135deg,var(--cyan),var(--violet));box-shadow:0 0 12px rgba(77,243,255,.7)}
+.feat b{color:var(--ink)} .feat small{display:block;color:var(--muted);font-size:14px}
+
+/* how to play */
+.how{display:flex;gap:18px;justify-content:center;flex-wrap:wrap}
+.how .step{flex:1;min-width:200px;max-width:300px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px}
+.how .ic{font-size:34px;margin-bottom:12px}
+.how h4{font-family:var(--fd);font-weight:800;letter-spacing:.06em;font-size:18px;margin-bottom:6px}
+.how p{color:var(--muted);font-size:14px}
+
+/* cta band */
+.band{margin:40px 0 20px;text-align:center;padding:56px 24px;border-radius:26px;
+  background:linear-gradient(135deg,rgba(77,243,255,.12),rgba(255,92,240,.12));border:1px solid var(--line)}
+.band h2{margin-bottom:18px}
+
+footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--muted);font-size:14px;text-align:center}
+footer code{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:6px;padding:3px 9px;color:var(--cyan);font-size:13px}
+footer .fmark{font-family:var(--fd);font-weight:900;letter-spacing:.2em;color:var(--ink);margin-bottom:8px;display:block}
+
+@media(max-width:860px){
+  .hero{grid-template-columns:1fr;gap:30px;text-align:center;padding:44px 0 20px}
+  .lede{margin-left:auto;margin-right:auto} .btns{justify-content:center}
+  .grid3{grid-template-columns:1fr} .shots{grid-template-columns:repeat(2,1fr)}
+  .feat{grid-template-columns:1fr} .device{max-width:320px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="mark">LUMEN</div>
+    <a class="cta" href="../index.html">▶ PLAY FREE</a>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div>
+      <div class="eyebrow">One-thumb neon arcade</div>
+      <h1 class="logo">LUMEN</h1>
+      <div class="tag">flip · thread · flow</div>
+      <p class="lede">You're a spark of light. <b>Tap to flip gravity</b>, thread the gaps, and chain the glow into a slow-motion <b>flow state</b>. A three-second learn and a skill ceiling you'll chase for weeks.</p>
+      <div class="btns">
+        <a class="btn btn-primary" href="../index.html">▶ PLAY NOW</a>
+        <a class="btn btn-ghost" href="#watch">SEE IT MOVE</a>
+      </div>
+    </div>
+    <div class="device" id="watch">
+      <div class="halo"></div>
+      <div class="badge">LIVE · PLAYABLE</div>
+      <iframe src="../index.html" title="Play LUMEN" loading="lazy"></iframe>
+    </div>
+  </section>
+
+  <!-- PILLS -->
+  <div class="pills">
+    <div class="pill">🎮 <b>One button</b></div>
+    <div class="pill">🌊 <b>Flow state</b> slow-mo</div>
+    <div class="pill">✦ <b>Unlock</b> orb skins</div>
+    <div class="pill">◈ <b>Daily</b> challenge</div>
+    <div class="pill">🎵 <b>Live synth</b> soundtrack</div>
+    <div class="pill">📱 <b>Phone-ready</b></div>
+    <div class="pill">⚡ <b>Zero</b> install</div>
+    <div class="pill">🔥 <b>×12</b> combos</div>
+  </div>
+
+  <!-- WHY IT WORKS -->
+  <section class="block">
+    <div class="kicker">Built to scale</div>
+    <h2>Why it hooks</h2>
+    <p class="sub">LUMEN is engineered on the three pillars every runaway arcade hit shares.</p>
+    <div class="grid3">
+      <div class="card"><div class="num">01</div><h3>Instant to grasp</h3><p>One input. One rule. You're playing before you've finished reading the word "tap". No tutorial, no friction, no barrier.</p></div>
+      <div class="card"><div class="num">02</div><h3>Impossible to quit</h3><p>One-hit death, a fair difficulty ramp, and a high score that's always <em>just</em> out of reach — the "one more run" loop, distilled.</p></div>
+      <div class="card"><div class="num">03</div><h3>Feels incredible</h3><p>Every tap answered with particles, shake, light-trails and a rising synth note. Then flow drops the world into bullet-time. That's the moment people share.</p></div>
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section class="block">
+    <div class="kicker">Every frame moves</div>
+    <h2>Luminous by design</h2>
+    <p class="sub">A deep-space palette that ignites magenta the instant you hit flow — while the hero stays cyan and the reward stays gold, so the read is always clean.</p>
+    <div class="shots">
+      <div class="shot"><img src="../assets/screenshot-flow.jpg" alt="Flow state" loading="lazy"><span>Flow state</span></div>
+      <div class="shot"><img src="../assets/screenshot-play.jpg" alt="Combo threading" loading="lazy"><span>Combo run</span></div>
+      <div class="shot"><img src="../assets/screenshot-gates.jpg" alt="Gate variety" loading="lazy"><span>Gate variety</span></div>
+      <div class="shot"><img src="../assets/screenshot-skins.jpg" alt="Unlockable orb skins" loading="lazy"><span>Unlock skins</span></div>
+      <div class="shot"><img src="../assets/screenshot-revive.jpg" alt="Revive shield" loading="lazy"><span>Revive</span></div>
+      <div class="shot"><img src="../assets/screenshot-mobile.jpg" alt="On mobile" loading="lazy"><span>On phone</span></div>
+    </div>
+  </section>
+
+  <!-- HOW TO PLAY -->
+  <section class="block">
+    <div class="kicker">Three seconds to learn</div>
+    <h2>How to play</h2>
+    <div class="how">
+      <div class="step"><div class="ic">👆</div><h4>1 · FLIP</h4><p>Tap anywhere to flip gravity. That's the whole control scheme.</p></div>
+      <div class="step"><div class="ic">🎯</div><h4>2 · THREAD</h4><p>Time your flips to weave the falling spark through the neon gates.</p></div>
+      <div class="step"><div class="ic">🌊</div><h4>3 · FLOW</h4><p>Chain glowing motes into a combo and tip the world into slow-motion.</p></div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="block">
+    <div class="kicker">Under the hood</div>
+    <h2>Loaded with feel</h2>
+    <ul class="feat">
+      <li><span class="dot"></span><div><b>Flow state bullet-time</b><small>Chain 16 motes to bend time and drench the screen in colour.</small></div></li>
+      <li><span class="dot"></span><div><b>Greed-driven combos</b><small>A decaying ×12 multiplier that rewards diving for the risky mote.</small></div></li>
+      <li><span class="dot"></span><div><b>Fully synthesised audio</b><small>SFX and an adaptive synthwave soundtrack — zero audio files ship.</small></div></li>
+      <li><span class="dot"></span><div><b>Reactive neon art</b><small>Particles, trails, chromatic split, screen shake, hue-shifting space.</small></div></li>
+      <li><span class="dot"></span><div><b>Seven game modes</b><small>Classic, Vortex, Mirror, Sprint, Blackout, Precision and Zen — each with its own record.</small></div></li>
+      <li><span class="dot"></span><div><b>Cosmetics shop</b><small>Earn shards every run; unlock 6 worlds, 25 orb skins &amp; 13 trails. Ad-free, and money buys nothing but looks.</small></div></li>
+      <li><span class="dot"></span><div><b>Earn-only skins</b><small>Four of the best cosmetics have no price at all — achievements are the only way in.</small></div></li>
+      <li><span class="dot"></span><div><b>Items in your hand</b><small>Power-ups wait until you fire them — by button, number key, or just saying “shield”.</small></div></li>
+      <li><span class="dot"></span><div><b>Daily challenge &amp; missions</b><small>The exact same course for everyone each day, a streak to protect, and rotating goals.</small></div></li>
+      <li><span class="dot"></span><div><b>Gate variety</b><small>Static, moving, breathing and twin double-gaps, phased in as you go.</small></div></li>
+      <li><span class="dot"></span><div><b>Leaderboard &amp; revive</b><small>Your ten best runs, and one shard-bought continue to save a hot streak.</small></div></li>
+      <li><span class="dot"></span><div><b>Procedural difficulty</b><small>Fair, readable ramp from a gentle open to moving gates and razor gaps.</small></div></li>
+      <li><span class="dot"></span><div><b>Made for phones</b><small>Touch, haptics, responsive portrait/landscape, installable offline PWA.</small></div></li>
+    </ul>
+  </section>
+
+  <!-- CTA -->
+  <section class="band">
+    <div class="kicker">No download. No wait.</div>
+    <h2>Ready in three seconds</h2>
+    <a class="btn btn-primary" href="../index.html">▶ PLAY LUMEN FREE</a>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="fmark">LUMEN</span>
+    Vanilla JavaScript + Canvas 2D · Web Audio · zero dependencies · runs anywhere.<br>
+    Deploy on itch.io, any static host, or wrap for the app stores.<br><br>
+    <code>python -m http.server</code> &nbsp;or&nbsp; <code>npx serve</code> &nbsp;→&nbsp; open <code>index.html</code>
+  </div>
+</footer>
+
+</body>
+</html>
