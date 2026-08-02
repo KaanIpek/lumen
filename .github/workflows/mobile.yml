@@ -177,6 +177,38 @@ jobs:
           mkdir -p ~/private_keys
           echo "${{ secrets.ASC_KEY_P8_B64 }}" | base64 -d > ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
 
+      # THE fix, and it has to happen in the project file rather than on the
+      # command line.
+      #
+      # `npx cap add ios` writes CODE_SIGN_IDENTITY = "iPhone Developer" into the
+      # Release configuration. With that, automatic signing asks Apple for an
+      # "iOS App Development" profile no matter what the archive command says —
+      # and development profiles are built FROM REGISTERED DEVICES, so an account
+      # with none gets "Your team has no devices from which to generate a
+      # provisioning profile", which reads like a wrong bundle id and is not.
+      #
+      # Passing CODE_SIGN_IDENTITY to xcodebuild instead does not work: a build
+      # setting on the command line applies to EVERY target in the workspace,
+      # including all the CocoaPods ones that must not be signed at all, and Xcode
+      # treats a named identity as MANUAL signing, so it then collides with the
+      # project's automatic style ("automatically signed for development, but a
+      # conflicting code signing identity has been manually specified").
+      #
+      # Editing App.xcodeproj leaves Pods.xcodeproj alone and keeps the style
+      # automatic. App Store distribution profiles need no devices, so this is
+      # also what makes the whole thing work on an account that owns no iPhone.
+      - name: Sign the app for distribution, not development
+        if: steps.keys.outputs.signed == 'true'
+        working-directory: mobile/ios/App
+        run: |
+          sed -i '' \
+            -e 's/CODE_SIGN_IDENTITY = "iPhone Developer"/CODE_SIGN_IDENTITY = "Apple Distribution"/g' \
+            -e 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = "Apple Distribution"/g' \
+            -e 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "iPhone Developer"/CODE_SIGN_IDENTITY[sdk=iphoneos*] = "Apple Distribution"/g' \
+            App.xcodeproj/project.pbxproj
+          echo "identities now in App.xcodeproj:"
+          grep -o 'CODE_SIGN_IDENTITY[^;]*' App.xcodeproj/project.pbxproj | sort -u
+
       # What the generated project actually says about signing. Two runs were
       # spent guessing at this; one printout ends the guessing for every run
       # after. Costs a second and it is in the log when something goes wrong.
@@ -202,25 +234,13 @@ jobs:
             <key>signingStyle</key><string>automatic</string>
           </dict></plist>
           PLIST
-          # Two things about this command are load-bearing, and both were learned
-          # the hard way on this account.
+          # No CODE_SIGN_IDENTITY here on purpose — the step above put it in the
+          # project, which is the only place it can go without colliding with
+          # automatic signing or leaking onto the CocoaPods targets.
           #
-          # 1. `-destination generic/platform=iOS` and NOT `-sdk iphoneos`.
-          #    With -sdk, Xcode does not treat the archive as a distribution
-          #    archive: it asks Apple for an "iOS App Development" profile, those
-          #    are built FROM registered devices, and an account with no devices
-          #    gets "Your team has no devices from which to generate a
-          #    provisioning profile" — which reads like a wrong bundle id and is
-          #    not. A generic iOS destination makes it ask for the App Store
-          #    profile instead, and those need no devices at all.
-          #
-          # 2. Do NOT pass CODE_SIGN_IDENTITY here. Naming an identity on the
-          #    command line is MANUAL signing as far as Xcode is concerned, so it
-          #    collides with the project's automatic style — "App is
-          #    automatically signed for development, but a conflicting code
-          #    signing identity Apple Distribution has been manually specified" —
-          #    and the setting leaks onto every CocoaPods target too, which
-          #    should not be signed at all. Let automatic signing choose.
+          # `-destination generic/platform=iOS` rather than `-sdk iphoneos`: an
+          # archive wants a generic destination, not a concrete device to resolve
+          # against.
           xcodebuild -workspace App.xcworkspace -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
