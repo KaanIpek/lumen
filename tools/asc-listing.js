@@ -180,6 +180,96 @@ function api(method, p, body) {
   });
 }
 
+// ------------------------------------------------------------ screenshots ---
+// Three steps per image, and the middle one does not go to Apple's API host:
+//   1. POST /v1/appScreenshots  reserves a slot and hands back uploadOperations
+//   2. PUT  each operation's url with that byte range (a signed storage URL)
+//   3. PATCH the screenshot with uploaded:true and the file's MD5
+// Skipping step 3 leaves an asset that exists, occupies a slot, and never
+// appears — the failure mode that made this worth doing carefully.
+
+// 1290x2796 lives in the slot App Store Connect labels "6.9-inch", which also
+// takes 6.5" and 6.7" art. Apple's enum for it is still the older 67 name.
+const SHOT_TYPE = 'APP_IPHONE_67';
+const SHOT_FILES = ['apple-67-a.png', 'apple-67-b.png', 'apple-67-c.png'];
+
+function putBytes(op, buf) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(op.url);
+    const slice = buf.slice(op.offset, op.offset + op.length);
+    const headers = {};
+    for (const h of op.requestHeaders || []) headers[h.name] = h.value;
+    headers['Content-Length'] = slice.length;
+    const req = https.request({
+      hostname: u.hostname, path: u.pathname + u.search, method: op.method || 'PUT', headers,
+    }, (res) => {
+      res.resume();
+      res.on('end', () => (res.statusCode < 300 ? resolve()
+        : reject(new Error('upload chunk -> ' + res.statusCode))));
+    });
+    req.on('error', reject);
+    req.write(slice);
+    req.end();
+  });
+}
+
+async function uploadScreenshots(versionId) {
+  console.log('\nScreenshots:');
+  const locs = await api('GET', '/v1/appStoreVersions/' + versionId + '/appStoreVersionLocalizations?limit=50');
+  const en = (locs.data || []).find((l) => l.attributes.locale === 'en-US');
+  if (!en) throw new Error('no en-US localization to attach screenshots to');
+
+  // Reuse the set if one exists; a second set for the same display type is
+  // rejected, and creating one per run would fail every run after the first.
+  const sets = await api('GET', '/v1/appStoreVersionLocalizations/' + en.id + '/appScreenshotSets?limit=20');
+  let set = (sets.data || []).find((s) => s.attributes.screenshotDisplayType === SHOT_TYPE);
+  if (set) {
+    const existing = await api('GET', '/v1/appScreenshotSets/' + set.id + '/appScreenshots?limit=20');
+    if ((existing.data || []).length) {
+      console.log('  ' + existing.data.length + ' already uploaded — leaving them alone.');
+      console.log('  Delete them in App Store Connect first if you want to replace them.');
+      return;
+    }
+  } else {
+    const made = await api('POST', '/v1/appScreenshotSets', {
+      data: {
+        type: 'appScreenshotSets',
+        attributes: { screenshotDisplayType: SHOT_TYPE },
+        relationships: { appStoreVersionLocalization: { data: { type: 'appStoreVersionLocalizations', id: en.id } } },
+      },
+    });
+    set = made.data;
+    console.log('  created a ' + SHOT_TYPE + ' set');
+  }
+
+  for (const name of SHOT_FILES) {
+    const file = path.join(SHOTS, name);
+    const buf = fs.readFileSync(file);
+    const res = await api('POST', '/v1/appScreenshots', {
+      data: {
+        type: 'appScreenshots',
+        attributes: { fileSize: buf.length, fileName: name },
+        relationships: { appScreenshotSet: { data: { type: 'appScreenshotSets', id: set.id } } },
+      },
+    });
+    const shot = res.data;
+    for (const op of shot.attributes.uploadOperations || []) await putBytes(op, buf);
+    // Apple verifies this checksum; a wrong one fails the asset AFTER upload.
+    const md5 = crypto.createHash('md5').update(buf).digest('hex');
+    await api('PATCH', '/v1/appScreenshots/' + shot.id, {
+      data: { type: 'appScreenshots', id: shot.id, attributes: { uploaded: true, sourceFileChecksum: md5 } },
+    });
+    console.log('  uploaded ' + name + ' (' + (buf.length / 1024 / 1024).toFixed(2) + ' MB)');
+  }
+
+  // Apple processes asynchronously, so "uploaded" is not yet "accepted".
+  const after = await api('GET', '/v1/appScreenshotSets/' + set.id + '/appScreenshots?limit=20');
+  for (const s of after.data || []) {
+    const st = (s.attributes.assetDeliveryState || {}).state;
+    console.log('  ' + s.attributes.fileName + ' -> ' + st);
+  }
+}
+
 // -------------------------------------------------------------------- run ---
 
 (async () => {
@@ -289,12 +379,7 @@ function api(method, p, body) {
     }
   }
 
-  if (WITH_SHOTS) {
-    console.log('\nScreenshots are a three-step reservation upload and are deliberately');
-    console.log('not automated here yet: getting them wrong leaves half-uploaded assets');
-    console.log('on the version that you then have to clear by hand. Six drag-and-drops');
-    console.log('from assets/store/ is five minutes and cannot half-fail.');
-  }
+  if (WITH_SHOTS) await uploadScreenshots(editable.id);
 
   console.log('\nDone. Read it back in App Store Connect before you submit —');
   console.log('this script has never been run against a live account.');
