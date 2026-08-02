@@ -197,41 +197,27 @@ jobs:
       # Editing App.xcodeproj leaves Pods.xcodeproj alone and keeps the style
       # automatic. App Store distribution profiles need no devices, so this is
       # also what makes the whole thing work on an account that owns no iPhone.
-      - name: Sign the app for distribution, not development
+      # Take the identity OUT rather than change it. Four runs went into
+      # discovering that, with CODE_SIGN_STYLE = Automatic, naming an identity at
+      # all is what Xcode calls "manually specified":
+      #
+      #   App is automatically signed for development, but a conflicting code
+      #   signing identity Apple Distribution has been manually specified.
+      #
+      # Setting it to the DEVELOPMENT value Capacitor ships is no better — that
+      # makes Xcode ask Apple for a development profile, and those are built from
+      # registered devices, which this account has none of. Both roads end in a
+      # failed archive. The only setting automatic signing is happy with is no
+      # setting, so the lines go.
+      - name: Let automatic signing choose the identity
         if: steps.keys.outputs.signed == 'true'
         working-directory: mobile/ios/App
         run: |
           echo "--- before ---"
           grep -n 'CODE_SIGN_IDENTITY' App.xcodeproj/project.pbxproj || echo "(none)"
-          # Match on the LINE, not on an exact key spelling. The setting appears
-          # as a bare key and as a quoted, SDK-qualified one —
-          #   "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-          # — and a pattern written for the bare form silently skips the other,
-          # which leaves one target still asking for a development profile while
-          # the rest ask for distribution. That mismatch is exactly what Xcode
-          # reports as "conflicting provisioning settings", and it cost a run.
-          sed -i '' \
-            -e '/CODE_SIGN_IDENTITY/ s/"iPhone Developer"/"Apple Distribution"/g' \
-            -e '/CODE_SIGN_IDENTITY/ s/"Apple Development"/"Apple Distribution"/g' \
-            -e '/CODE_SIGN_IDENTITY/ s/= iPhone Developer;/= "Apple Distribution";/g' \
-            App.xcodeproj/project.pbxproj
+          sed -i '' '/CODE_SIGN_IDENTITY/d' App.xcodeproj/project.pbxproj
           echo "--- after ---"
-          grep -n 'CODE_SIGN_IDENTITY' App.xcodeproj/project.pbxproj || echo "(none)"
-          if grep -q 'CODE_SIGN_IDENTITY.*Develop' App.xcodeproj/project.pbxproj; then
-            echo "STILL A DEVELOPMENT IDENTITY IN THE PROJECT — the archive will fail"; exit 1
-          fi
-
-      # What the generated project actually says about signing. Two runs were
-      # spent guessing at this; one printout ends the guessing for every run
-      # after. Costs a second and it is in the log when something goes wrong.
-      - name: What does the project think about signing?
-        if: steps.keys.outputs.signed == 'true'
-        working-directory: mobile/ios/App
-        run: |
-          xcodebuild -workspace App.xcworkspace -scheme App \
-            -configuration Release -showBuildSettings 2>/dev/null \
-            | grep -E 'CODE_SIGN|PROVISIONING|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER' \
-            | sort -u || true
+          grep -n 'CODE_SIGN_IDENTITY' App.xcodeproj/project.pbxproj || echo "(none, which is the point)"
 
       - name: Archive and export a signed .ipa
         if: steps.keys.outputs.signed == 'true'
@@ -244,25 +230,29 @@ jobs:
             <key>method</key><string>app-store</string>
             <key>destination</key><string>export</string>
             <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>stripSwiftSymbols</key><true/>
+            <key>uploadSymbols</key><true/>
           </dict></plist>
           PLIST
-          # No CODE_SIGN_IDENTITY here on purpose — the step above put it in the
-          # project, which is the only place it can go without colliding with
-          # automatic signing or leaking onto the CocoaPods targets.
+          # ARCHIVE UNSIGNED, SIGN ON EXPORT.
           #
-          # `-destination generic/platform=iOS` rather than `-sdk iphoneos`: an
-          # archive wants a generic destination, not a concrete device to resolve
-          # against.
+          # Signing at archive time is what five runs failed at, in two different
+          # ways depending on what the identity said. It is also unnecessary: the
+          # archive is an intermediate, and `-exportArchive` re-signs whatever it
+          # is given. Doing it there means exactly one place asks Apple for a
+          # profile, that place knows from `method: app-store` that it wants a
+          # DISTRIBUTION one, and distribution profiles need no registered
+          # devices — which is the whole reason this can run on an account that
+          # owns no iPhone.
+          #
+          # -destination generic/platform=iOS rather than -sdk iphoneos: an
+          # archive wants a generic destination, not a device to resolve against.
           xcodebuild -workspace App.xcworkspace -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
-            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
-            -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             archive
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
