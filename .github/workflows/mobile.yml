@@ -177,6 +177,18 @@ jobs:
           mkdir -p ~/private_keys
           echo "${{ secrets.ASC_KEY_P8_B64 }}" | base64 -d > ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
 
+      # What the generated project actually says about signing. Two runs were
+      # spent guessing at this; one printout ends the guessing for every run
+      # after. Costs a second and it is in the log when something goes wrong.
+      - name: What does the project think about signing?
+        if: steps.keys.outputs.signed == 'true'
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release -showBuildSettings 2>/dev/null \
+            | grep -E 'CODE_SIGN|PROVISIONING|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER' \
+            | sort -u || true
+
       - name: Archive and export a signed .ipa
         if: steps.keys.outputs.signed == 'true'
         working-directory: mobile/ios/App
