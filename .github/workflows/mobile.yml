@@ -190,23 +190,27 @@ jobs:
             <key>signingStyle</key><string>automatic</string>
           </dict></plist>
           PLIST
-          # CODE_SIGN_IDENTITY is the line that matters, and it is not optional.
-          # Capacitor generates the project with the DEVELOPMENT identity, so an
-          # archive without this asks Apple for an "iOS App Development" profile
-          # — and those are built from registered devices. On an account with no
-          # devices registered, Apple answers:
+          # Two things about this command are load-bearing, and both were learned
+          # the hard way on this account.
           #
-          #   Your team has no devices from which to generate a provisioning
-          #   profile. No profiles for 'com.lumen.game' were found.
+          # 1. `-destination generic/platform=iOS` and NOT `-sdk iphoneos`.
+          #    With -sdk, Xcode does not treat the archive as a distribution
+          #    archive: it asks Apple for an "iOS App Development" profile, those
+          #    are built FROM registered devices, and an account with no devices
+          #    gets "Your team has no devices from which to generate a
+          #    provisioning profile" — which reads like a wrong bundle id and is
+          #    not. A generic iOS destination makes it ask for the App Store
+          #    profile instead, and those need no devices at all.
           #
-          # which reads like the bundle id is wrong. It is not: it is asking for
-          # the wrong KIND of profile. App Store distribution profiles need no
-          # devices at all, so naming the distribution identity makes
-          # -allowProvisioningUpdates create the right one and the error goes.
-          #
-          # -destination keeps it off hunting for a concrete attached device.
+          # 2. Do NOT pass CODE_SIGN_IDENTITY here. Naming an identity on the
+          #    command line is MANUAL signing as far as Xcode is concerned, so it
+          #    collides with the project's automatic style — "App is
+          #    automatically signed for development, but a conflicting code
+          #    signing identity Apple Distribution has been manually specified" —
+          #    and the setting leaks onto every CocoaPods target too, which
+          #    should not be signed at all. Let automatic signing choose.
           xcodebuild -workspace App.xcworkspace -scheme App \
-            -configuration Release -sdk iphoneos \
+            -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
             -allowProvisioningUpdates \
@@ -215,8 +219,6 @@ jobs:
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
             CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
             archive
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
