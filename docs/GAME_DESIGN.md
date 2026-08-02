@@ -92,7 +92,10 @@ Feel is the product. Implemented:
 
 ## 5. Audio direction
 
-Everything is synthesised live (Web Audio) — **no sample files ship.**
+Every **sound effect** is synthesised live (Web Audio), and so is the adaptive
+arrangement that thickens with your chain. The **six world themes** are recorded
+tracks, generated locally with Stable Audio 3 (see `NOTICE`); a world without one
+falls back to the sequencer, so the game is never silent because of a missing file.
 - **SFX:** flip blip, combo-pitched collect (climbs a pentatonic ladder), crash
   (noise + descending saw + sub thump), flow chord, UI, new-best fanfare.
 - **Music:** a 124-BPM synthwave sequencer over an Am–F–C–G loop with synth

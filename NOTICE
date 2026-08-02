@@ -1,0 +1,51 @@
+LUMEN — third-party notices
+===========================
+
+The game's own code has no dependencies. This file exists for the one thing in
+the build that came from somewhere else: the music.
+
+--------------------------------------------------------------------------
+Music — the six world themes
+--------------------------------------------------------------------------
+
+  assets/music/deepfield.mp3
+  assets/music/emberfall.mp3
+  assets/music/monolith.mp3
+  assets/music/moss.mp3
+  assets/music/solaris.mp3
+  assets/music/tidal.mp3
+
+Generated locally with Stable Audio 3 (stabilityai/stable-audio-3-medium-base).
+Nothing was uploaded and no third-party service was used to make them.
+
+  This Stability AI Model is licensed under the Stability AI Community License,
+  Copyright (c) Stability AI Ltd. All Rights Reserved.
+
+  Powered by Stability AI.
+
+The model bundles a Gemma-derived text encoder (t5gemma-b-b-ul2), redistributed
+under the Gemma Terms of Use:
+
+  Gemma is provided under and subject to the Gemma Terms of Use found at
+  ai.google.dev/gemma/terms
+
+The full Community License text is at https://stability.ai/community-license.
+
+What that licence means for this game, in plain terms:
+
+  - The audio files themselves are OURS. Section IV(c)(iii) of the Community
+    License assigns ownership of a model's outputs to the person who generated
+    them, so shipping and selling these tracks is ours to do.
+  - The attribution above is required whenever the game is distributed, which is
+    why "Powered by Stability AI" is also on the Settings screen and in the
+    README, not only in this file.
+  - Commercial use is free while annual revenue stays under USD $1,000,000, but
+    it requires REGISTERING at https://stability.ai/community-license. LUMEN
+    sells cosmetics, so it is a commercial use. Register before you take money.
+  - Above $1M in annual revenue the grant terminates and an enterprise licence
+    is required. That is a good problem to have; it is not a silent one.
+
+Everything else you hear — every sound effect, and the adaptive layers that come
+and go with your combo — is synthesised at runtime by the Web Audio API and is
+not covered by any of the above. A world with no recorded track, or one whose
+file fails to load, falls back to that engine and still plays.

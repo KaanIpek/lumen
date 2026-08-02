@@ -1,7 +1,9 @@
 /*
  * LUMEN — Audio Engine
  * -------------------------------------------------------------
- * Fully synthesized. No sample files. Everything (SFX + music)
+ * Every SFX and every adaptive layer is synthesized here. The six world
+ * themes are the one exception: recorded tracks loaded by useTrack() (see
+ * NOTICE), with this engine as the fallback when one is missing. Everything
  * is generated at runtime with the Web Audio API so the whole
  * game ships as a few tiny text files.
  *

@@ -16,9 +16,16 @@ const path = require('path');
 const SRC = path.join(__dirname, '..');
 const OUT = path.join(__dirname, 'www');
 
-const COPY = ['index.html', 'privacy.html', 'manifest.json', 'config.js', 'css', 'js', 'assets'];
+// NOTICE travels with the app: the music licence wants the attribution inside
+// every copy that is distributed, and an app on a store is a copy.
+const COPY = ['index.html', 'privacy.html', 'manifest.json', 'config.js', 'NOTICE', 'css', 'js', 'assets'];
 const SKIP_FILES = new Set(['sw.js', 'cheats.js']);
-const SKIP_ASSET = /^screenshot-/;   // store listings use these, the app doesn't
+// Store-listing material, never app content. `store/` alone is 25 MB of 1290x2796
+// App Store screenshots — it was going INSIDE the shipped app, which is 25 MB of
+// download that no player ever sees, on the platform where download size costs
+// the most installs. `icon-1024*` are the marketing icons; the launcher icons
+// Capacitor generates are separate.
+const SKIP_ASSET = /^(screenshot-|store$|icon-1024)/;
 
 function copy(src, dst) {
   const st = fs.statSync(src);

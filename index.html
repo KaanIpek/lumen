@@ -8,7 +8,7 @@
   <title>LUMEN — flip · thread · flow</title>
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
-  <link rel="manifest" href="manifest.json?v=260802034835" />
+  <link rel="manifest" href="manifest.json?v=260802050005" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta property="og:title" content="LUMEN — flip · thread · flow" />
@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=260802034835" />
+  <link rel="stylesheet" href="css/style.css?v=260802050005" />
 </head>
 <body>
   <canvas id="game" role="img" aria-label="LUMEN gameplay" data-i18n-aria="ariaCanvas"></canvas>
@@ -310,6 +310,22 @@
 
       <button id="btn-reset" class="btn btn-ghost ui-interactive reset-btn"><span data-i18n="resetProgress">RESET PROGRESS</span></button>
 
+      <!-- CREDITS — required, not decorative.
+           The six world themes are Stable Audio 3 output. Stability's Community
+           License asks, in section IV(a)(iii), that a product using their
+           materials "prominently display 'Powered by Stability AI' on a related
+           website, user interface, blogpost, about page, or product
+           documentation". This is that display, and NOTICE + README carry the
+           written notice from IV(a)(ii). The brand line stays English in every
+           locale because it is an attribution, not copy.
+           We own the audio itself — section IV(c)(iii), ownership of outputs. -->
+      <div class="set-sec" data-i18n="secCredits">CREDITS</div>
+      <div class="setting-hint credits">
+        <span data-i18n="creditsMusic">The six world themes were generated locally with Stable Audio 3.</span>
+        <strong class="credit-brand">Powered by Stability AI.</strong>
+        <span class="credit-notice">This Stability AI Model is licensed under the Stability AI Community License, Copyright &copy; Stability AI Ltd. All Rights Reserved.</span>
+      </div>
+
       <!-- Which build is actually running. Without this, "is the fix in yet?" is
            a guess, and a browser holding a stale copy looks exactly like a bug
            that was never fixed. -->
@@ -331,30 +347,30 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="js/audio.js?v=260802034835"></script>
-  <script src="js/game.js?v=260802034835"></script>
-  <script src="js/i18n.js?v=260802034835"></script>
-  <script src="js/cosmetics.js?v=260802034835"></script>
-  <script src="js/modes.js?v=260802034835"></script>
-  <script src="js/missions.js?v=260802034835"></script>
-  <script src="js/analytics.js?v=260802034835"></script>
-  <script src="js/leaderboard.js?v=260802034835"></script>
-  <script src="js/iap.js?v=260802034835"></script>
-  <script src="js/voice.js?v=260802034835"></script>
-  <script src="js/cheats.js?v=260802034835"></script>
-  <script src="js/input.js?v=260802034835"></script>
-  <script src="js/progression.js?v=260802034835"></script>
-  <script src="js/scores.js?v=260802034835"></script>
-  <script src="js/save.js?v=260802034835"></script>
-  <script src="js/steam.js?v=260802034835"></script>
-  <script src="js/native.js?v=260802034835"></script>
-  <script src="js/poll.js?v=260802034835"></script>
-  <script src="js/ui.js?v=260802034835"></script>
+  <script src="js/audio.js?v=260802050005"></script>
+  <script src="js/game.js?v=260802050005"></script>
+  <script src="js/i18n.js?v=260802050005"></script>
+  <script src="js/cosmetics.js?v=260802050005"></script>
+  <script src="js/modes.js?v=260802050005"></script>
+  <script src="js/missions.js?v=260802050005"></script>
+  <script src="js/analytics.js?v=260802050005"></script>
+  <script src="js/leaderboard.js?v=260802050005"></script>
+  <script src="js/iap.js?v=260802050005"></script>
+  <script src="js/voice.js?v=260802050005"></script>
+  <script src="js/cheats.js?v=260802050005"></script>
+  <script src="js/input.js?v=260802050005"></script>
+  <script src="js/progression.js?v=260802050005"></script>
+  <script src="js/scores.js?v=260802050005"></script>
+  <script src="js/save.js?v=260802050005"></script>
+  <script src="js/steam.js?v=260802050005"></script>
+  <script src="js/native.js?v=260802050005"></script>
+  <script src="js/poll.js?v=260802050005"></script>
+  <script src="js/ui.js?v=260802050005"></script>
   <!-- Optional local settings (leaderboard project, etc). Deliberately loaded
        WITHOUT a version stamp and with onerror swallowed: the file is not in the
        repo, so a build that has no config.js must boot exactly as before rather
        than log a 404 the player can see. Copy config.example.js to config.js. -->
   <script src="config.js" onerror="void 0"></script>
-  <script src="js/main.js?v=260802034835"></script>
+  <script src="js/main.js?v=260802050005"></script>
 </body>
 </html>

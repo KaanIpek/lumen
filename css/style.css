@@ -723,6 +723,13 @@ kbd {
 #shop-note { margin: -6px 0 14px; }
 #lb-note { text-align: center; margin-top: 12px; }
 
+/* Credits. The brand line is the part the licence actually asks for, so it gets
+   the readable colour; the legal notice sits under it, quieter but present —
+   quiet is allowed, hidden is not. */
+.credits { margin-bottom: 14px; }
+.credits .credit-brand { display: block; margin-top: 4px; color: var(--ink); font-weight: 600; letter-spacing: .04em; }
+.credits .credit-notice { display: block; margin-top: 4px; font-size: 10px; opacity: .72; }
+
 /* ---- shop: section headings, coach cards, checkout ---- */
 .shop-sec {
   grid-column: 1 / -1; text-align: left; margin: 6px 2px 0;

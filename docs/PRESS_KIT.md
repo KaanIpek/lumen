@@ -11,7 +11,9 @@
 - **Input:** One button — tap / click / space · optional gamepad · optional voice
 - **Players:** Single-player
 - **Engine:** Vanilla JavaScript + Canvas 2D (no dependencies)
-- **Audio:** 100% synthesised at runtime (Web Audio API — no sample files)
+- **Audio:** Every sound effect and the adaptive layers are synthesised at
+  runtime (Web Audio API); the six world themes are recorded tracks generated
+  locally with Stable Audio 3 — *Powered by Stability AI*
 - **Session length:** 20–90 seconds
 - **Languages:** English, Türkçe, Español, 中文
 
@@ -62,7 +64,7 @@ one-more-run arcade.
 - Daily Challenge: the same course for every player, every day, with a streak —
   and immune to every upgrade, item and difficulty setting
 - Easy / Normal / Hard, so it meets you where you are
-- Reactive neon art + fully synthesised adaptive soundtrack
+- Reactive neon art + an adaptive soundtrack that answers the run
 - Procedural difficulty, share-image cards, offline play
 - Built for phones: touch, haptics, responsive, installable
 - Accessibility: colour-vision presets, high contrast, reduce-flashing,

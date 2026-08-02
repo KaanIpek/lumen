@@ -78,8 +78,11 @@ stories. Stories create shares.
   twin double-gaps, phased in as difficulty ramps
 - 🎨 **Reactive neon art** — deep-space palette that ignites magenta in flow,
   particle bursts, light trails, chromatic aberration, screen shake
-- 🎵 **Fully synthesised adaptive audio** — SFX *and* a layered synthwave
-  soundtrack generated live in the Web Audio API. No audio files ship at all.
+- 🎵 **Adaptive audio** — every sound effect, and the layers that thicken as you
+  heat up, are generated live in the Web Audio API. Each of the six worlds also
+  has its own recorded theme, made locally with Stable Audio 3 and fetched
+  lazily, so the first screen never waits on it — and if one never arrives the
+  live sequencer covers for it. *Powered by Stability AI*
 - ✦ **Cosmetics shop** — **25 orb skins**, **13 trail styles**, **11 worlds**,
   and **8 signatures**: what your flip, your flow and your death look like.
   **4 sets** buy a whole look at once and never charge for a piece you own.
@@ -189,7 +192,12 @@ stories. Stories create shares.
 ## Tech
 
 - **Vanilla JavaScript + Canvas 2D.** No framework, no build step, no packages.
-- **Web Audio API** for every sound, synthesised at runtime.
+- **Web Audio API** for every sound effect and for the adaptive layers that
+  come and go with your combo — all synthesised at runtime, no samples.
+- **Six world themes** generated locally with Stable Audio 3, fetched lazily so
+  the first screen never waits on them. A world with no track, or one that
+  fails to load, falls back to the live sequencer and still plays.
+  *Powered by Stability AI* — see [NOTICE](NOTICE).
 - Four small files of game code + one stylesheet. The entire game is a few
   tens of KB of text. It loads instantly and runs on a potato.
 

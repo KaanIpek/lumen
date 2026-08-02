@@ -2,22 +2,52 @@
 
 ## What ships today
 
-Nothing. There is not one audio file in this project, and that is deliberate:
-every note you hear is generated at runtime by the Web Audio API.
+Two layers, and the split matters.
 
-That buys three things a folder of MP3s cannot:
+**Synthesised, always.** Every sound effect, and the adaptive arrangement that
+thickens as your chain climbs and drops away the moment it breaks, is generated
+at runtime by the Web Audio API. That is about 4 KB of source and it reacts to
+the run frame by frame, which no recording can.
 
-- **No licensing risk at all.** There is nothing here anyone else owns, so there
-  is nothing to clear for Steam, Google Play or the App Store.
-- **It reacts.** A recording cannot speed up when the corridor does, thicken when
-  your chain climbs, or thin out the moment it breaks. The generated score does
-  all three, every frame.
-- **It weighs nothing.** Six full pieces cost about 4 KB of source.
+**Recorded, per world.** Each of the six worlds also has a full theme in
+`assets/music/` — about 4.5 MB of MP3 in total. These are **fetched lazily**:
+the game boots and plays on the synthesised engine, and a track takes over when
+it lands. So the first screen never waits on 4.5 MB, and a world whose file is
+missing or fails to load simply keeps playing the live sequencer. There is no
+state in which the game is silent because of a missing asset.
+
+### Where the recorded tracks came from
+
+They were generated **locally** with **Stable Audio 3**, in `D:\cowork\StableAudio`:
+
+| | |
+| --- | --- |
+| Generator | `generate.py` — one prompt per world, tempo and key stated |
+| Model | `models/sa3-medium` (`stabilityai/stable-audio-3-medium-base`, 9.2 GB) |
+| Renders | `out/<world>/full.wav`, 45 s each, seed 7 |
+| Prompts used | `out/prompts.json` |
+| Shipped as | `assets/music/<world>.mp3` (LAME 3.100, VBR) |
+
+Nothing was uploaded and no service was paid. **We own the audio** — the
+Stability AI Community License assigns output ownership to whoever generated it.
+
+Two obligations come with that, and both are already met in the repo except the
+one that needs your account:
+
+- **Attribution.** "Powered by Stability AI" appears on the Settings screen, in
+  `NOTICE`, and in the README. Do not remove it.
+- **Registration.** Commercial use is free under USD $1M annual revenue *but
+  requires registering* at <https://stability.ai/community-license>. LUMEN sells
+  cosmetics, so it is commercial. **This is a to-do, not a done.**
+
+The model also bundles a Gemma-derived text encoder, redistributed under the
+[Gemma Terms of Use](https://ai.google.dev/gemma/terms). See `NOTICE`.
 
 ## Six worlds, six pieces
 
 Each map has its own composition — not one track transposed six ways. Different
 chords, different tempo, different drum pattern, different instrument voices.
+The synthesised fallback for each world is written to the same brief.
 
 | World | Tempo | Feel |
 | --- | --- | --- |
@@ -28,8 +58,9 @@ chords, different tempo, different drum pattern, different instrument voices.
 | Monolith | 92 | Vast and cold, open fifths, heavy slow kick |
 | Solaris | 132 | Tense and bright, unsettled, busy hats |
 
-They are defined in `SONGS` at the top of `js/audio.js`. Editing one is editing
-an array of chords — you do not need to touch the sequencer.
+The synthesised versions are defined in `SONGS` at the top of `js/audio.js`.
+Editing one is editing an array of chords — you do not need to touch the
+sequencer.
 
 ## How it answers the run
 
