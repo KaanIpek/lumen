@@ -18,3 +18,13 @@ mobile/ios/
 # OS noise
 .DS_Store
 Thumbs.db
+
+# The commercial notes stay on disk. The repository is public so that GitHub
+# Pages can serve the game for free and the iOS build can use a free macOS
+# runner — not to publish the business thinking. The game's own code is readable
+# in devtools on the live site either way, so nothing is gained by hiding that;
+# these two are different in kind.
+#   LAUNCH.md        the ads decision and its reasoning, revenue argument
+#   STORE_LISTING.md the store copy, in four languages, before it is submitted
+docs/LAUNCH.md
+docs/STORE_LISTING.md
