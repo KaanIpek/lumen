@@ -109,11 +109,34 @@ jobs:
           if-no-files-found: warn
 
   ios:
-    runs-on: macos-14        # the rented Mac
+    # macos-latest, not a pinned image. Apple raises the minimum SDK every year
+    # and rejects the upload — not the build — when you fall behind, so pinning
+    # buys reproducibility today and a dead pipeline in twelve months.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
+
+      # Runner images ship several Xcodes and default to an older one. macos-14
+      # defaulted to 15.4, whose iOS 17.5 SDK App Store Connect now refuses:
+      #
+      #   Validation failed (409) SDK version issue. This app was built with the
+      #   iOS 17.5 SDK. All iOS and iPadOS apps must be built with the iOS 26 SDK
+      #   or later.
+      #
+      # That check happens at UPLOAD, so the archive succeeds, the export
+      # succeeds, and ten minutes later it fails on a rule that had nothing to do
+      # with the build. Pick the newest Xcode present and say which one, so the
+      # log answers "what SDK was this?" without anyone guessing.
+      - name: Use the newest Xcode on this runner
+        run: |
+          ls -d /Applications/Xcode*.app
+          NEWEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "selecting $NEWEST"
+          sudo xcode-select -s "$NEWEST/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos
 
       # `steps` is scoped to ONE job, so this cannot borrow the android job's
       # check — without its own copy every `if:` below would compare against an
