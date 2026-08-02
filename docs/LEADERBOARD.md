@@ -37,6 +37,14 @@ create table public.scores (
 
   -- plausibility, enforced by the database rather than by trust
   constraint name_len   check (char_length(name) between 1 and 16),
+  -- A display name is the one thing one player can show another, so it is the
+  -- one thing that can be used to say something vile to a stranger. Letters,
+  -- digits, space and . _ - only: that keeps ırmak and 深蓝 and drops symbols,
+  -- direction-overrides (U+202E), zero-width joiners and lookalike glyphs.
+  -- The game cleans the same way before it posts, but the game is not the only
+  -- thing that can post — the publishable key is public by design, so a name
+  -- rule that lives only in JavaScript is a rule that does not exist.
+  constraint name_chars check (name ~ '^[\p{L}\p{N} ._-]+$'),
   constraint score_sane check (score between 0 and 5000000),
   constraint combo_sane check (combo between 0 and 5000),
   constraint board_ok   check (board in ('daily', 'alltime')),
@@ -161,6 +169,32 @@ And when someone posts 4,999,999:
 ```sql
 delete from public.scores where id = 1234;
 ```
+
+### Already have a table? Add the name rule to it
+
+`name_chars` arrived after the first tables were created. Adding it to a live
+table needs the existing rows cleaned first, or the constraint refuses to
+validate:
+
+```sql
+-- see what would be affected before changing anything
+select id, name from public.scores where name !~ '^[\p{L}\p{N} ._-]+$';
+
+-- strip the disallowed characters; anything left empty becomes 'anon'
+update public.scores
+   set name = coalesce(nullif(btrim(regexp_replace(name, '[^\p{L}\p{N} ._-]', '', 'g')), ''), 'anon')
+ where name !~ '^[\p{L}\p{N} ._-]+$';
+
+alter table public.scores
+  add constraint name_chars check (name ~ '^[\p{L}\p{N} ._-]+$');
+```
+
+This is the check that lets you answer Apple's user-generated-content question
+honestly. A 16-character display name with no messaging, no profiles and no
+images is the mildest form of it there is — but "mildest" is not "none", and
+what makes the answer true is that the database, not the client, decides what a
+name may contain. Keep the delete-a-row snippet above to hand regardless: a
+filter stops symbols, not every word someone can spell with letters.
 
 ## If you want to make cheating harder later
 

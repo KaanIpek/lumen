@@ -2405,6 +2405,53 @@
     assert(LUMEN.Leaderboard.playerName.length <= 16, 'name is clamped');
   });
 
+  test('Leaderboard: a name cannot carry anything but letters, digits and . _ -', () => {
+    // The display name is the only thing one player can show another, so it is
+    // the only thing that can be used to say something vile to a stranger — in a
+    // game Apple rates 4+. This used to be `slice(0, 16)` on the shipping path
+    // and nothing else, so every symbol, direction-override and zero-width
+    // character went straight onto the board.
+    //
+    // The same rule is a CHECK constraint on the table (docs/LEADERBOARD.md),
+    // because the publishable key is public by design: a rule enforced only in
+    // JavaScript is a rule that anyone with curl can ignore. This asserts the
+    // client agrees with the database, so the two can never drift into a state
+    // where the game posts names the table then rejects.
+    const clean = LUMEN.Leaderboard.cleanName.bind(LUMEN.Leaderboard);
+    const allowed = /^[\p{L}\p{N} ._-]*$/u;      // exactly the SQL constraint
+
+    // things that must SURVIVE — a filter that eats real names is a bug too
+    eq(clean('ırmak'), 'ırmak', 'Turkish letters live');
+    eq(clean('深蓝'), '深蓝', 'Chinese lives');
+    eq(clean('José_92'), 'José_92', 'accents, digits and underscore live');
+    eq(clean('  spaced   out  '), 'spaced out', 'runs of whitespace collapse');
+
+    // things that must NOT
+    const hostile = [
+      'bad‮reversed',      // right-to-left override: renders as its mirror
+      'zero​width',        // zero-width space: two "identical" names
+      '<script>alert(1)',
+      'http://example.com',
+      '💩poop',       // emoji
+      'ＡＢＣ',                  // fullwidth lookalikes, normalised by NFKC
+      '!!!@#$%^&*()',
+    ];
+    for (const h of hostile) {
+      const out = clean(h);
+      assert(allowed.test(out), 'cleaned name is table-legal: ' + JSON.stringify(out));
+      assert(out.length <= 16, 'still bounded: ' + JSON.stringify(out));
+    }
+    eq(clean('!!!@#$%^&*()'), '', 'a name of pure symbols empties out');
+    eq(clean(null), '', 'null is a name too, as far as an attacker is concerned');
+
+    // and the submit path must clean AGAIN — a name can reach Store from an
+    // imported save code, which never goes through the setter.
+    freshStorage();
+    if (LUMEN.Store) LUMEN.Store.playerName = 'evil‮💩';
+    const sent = clean(LUMEN.Leaderboard.playerName) || 'anon';
+    assert(allowed.test(sent) && sent.length > 0, 'submit falls back to a legal name');
+  });
+
   // ---- audio ---------------------------------------------------------------
   // The name list is READ OUT OF THE SOURCE rather than written here.
   //

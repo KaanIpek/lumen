@@ -69,7 +69,27 @@
 
     get enabled() { return !!this.endpoint || !!this._sb; },
     get playerName() { return (Store && Store.playerName) || ''; },
-    set playerName(v) { if (Store) Store.playerName = String(v || '').slice(0, 16); },
+    set playerName(v) { if (Store) Store.playerName = Leaderboard.cleanName(v); },
+
+    // A display name is the only thing in this game one player can show another,
+    // which makes it the only thing that can be used to say something horrible
+    // to a stranger. The reference server in server/ has always cleaned it; the
+    // Supabase path, which is what actually ships, did not — it only cut the
+    // string to 16 characters, so every symbol, every direction-override, every
+    // zero-width character and every lookalike went straight onto a board that a
+    // child playing a 4+ game reads.
+    //
+    // Letters, digits, space and . _ - only. Unicode-aware, so ırmak and 深蓝 are
+    // names and U+202E is not. The same rule is a CHECK constraint on the table
+    // (docs/LEADERBOARD.md) because anything enforced only here is enforced
+    // nowhere: the publishable key lets anyone POST whatever they like.
+    cleanName(v) {
+      let s = String(v == null ? '' : v);
+      try { s = s.normalize('NFKC'); } catch (e) { /* ancient engine; carry on */ }
+      try { s = s.replace(/[^\p{L}\p{N} ._-]/gu, ''); }
+      catch (e) { s = s.replace(/[^A-Za-z0-9 ._-]/g, ''); }   // no \p support
+      return s.replace(/\s+/g, ' ').trim().slice(0, 16);
+    },
 
     _fetch(path, opts) {
       if (!this.endpoint) return Promise.reject(new Error('no endpoint'));
@@ -169,11 +189,14 @@
     },
 
     submit(score, combo, board) {
-      const name = this.playerName || 'anon';
+      // Clean again at the boundary rather than trusting the setter. A name can
+      // reach Store from an imported save code or a hand-edited localStorage,
+      // and neither goes through the setter.
+      const name = this.cleanName(this.playerName) || 'anon';
       const day = LUMEN.Daily ? LUMEN.Daily.todayStr() : '';
       const b = board === 'daily' ? 'daily' : 'alltime';
       const row = {
-        name: String(name).slice(0, 16),
+        name,
         score: Math.floor(score),
         combo: Math.floor(combo || 0),
         board: b,
