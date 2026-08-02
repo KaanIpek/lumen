@@ -2171,7 +2171,12 @@
         // A bounty every ~18-30s, never in the first few seconds. Rare enough to
         // be an event, common enough that you learn to want one.
         this.bountyTimer -= gdt;
-        if (this.bountyTimer <= 0) { this.spawnBounty(); this.bountyTimer = this.rrand(18, 30); }
+        // A refused bounty means "no safe column right now", not "no bounty this
+        // minute" — retry in a moment rather than spending the whole interval on
+        // a spawn that never happened. A daily run reports success without
+        // spawning, so it consumes exactly the same rrand it always did and the
+        // shared course stays identical.
+        if (this.bountyTimer <= 0) { this.bountyTimer = this.spawnBounty() ? this.rrand(18, 30) : 0.2; }
         if (this.trapsOn) {
           this.trapTimer -= gdt;
           if (this.trapTimer <= 0) {
@@ -2684,17 +2689,41 @@
     // sine wave across the corridor, so it is never simply "on the way" — you
     // have to decide to go and get it, which is the same greed the whole combo
     // system runs on, just louder.
+    // Returns false when there was nowhere safe to put it, so the caller can try
+    // again shortly instead of writing the whole 18-30s wait off.
     spawnBounty() {
-      if (this.daily) return;                      // the shared course stays identical
+      if (this.daily) return true;                 // the shared course stays identical
       const r = this.player.r * 1.0;
       const mid = this.playTop + this.playH * 0.5;
-      const x = this.W + this.obstacleW * 2;
+      // Sit strictly LEFT of the line every gate is born on (W + obstacleW), for
+      // the same reason spawnFreeMote does: motes and gates scroll at one speed,
+      // so a horizontal offset set at birth is set for good, and from here we
+      // only ever travel further left.
+      //
+      // This used to spawn at W + obstacleW * 2 — to the RIGHT of that line. So
+      // the bounty drifted ACROSS it, and any gate born during the ~0.4s crossing
+      // was born INSIDE the bounty. After that the two were welded together at a
+      // fixed offset, and the bounty spent its whole visible life weaving over
+      // that gate's face, dipping in and out of solid bar. Measured on a parked
+      // immortal probe: 24 bounties produced 1032 frames of a collectable sitting
+      // inside a wall, all of it on screen. It is the double-value pickup, which
+      // makes it the most tempting thing in the game to chase into a hazard.
+      //
+      // A bounty cannot get out of this the way a free mote does, by sitting in
+      // a gap: it weaves across a third of the corridor and visits every band.
+      // The only workable guarantee is that it never shares a column with a gate.
+      const lead = this.scrollSpeed / 24;
+      const x = Math.min(this.W + 20, this.W + this.obstacleW - r - lead);
+      const margin = r * 0.6;
+      for (const ob of this.obstacles) {
+        if (x + r + margin >= ob.x && x - r - margin <= ob.x + ob.w) return false;
+      }
       const amp = this.playH * this.rrand(0.22, 0.34);
       // A bounty does not sit still — it weaves across most of the corridor, so
       // it can arrive at a trap that was nowhere near it when it spawned. It was
       // the one collectable checked against nothing at all, and it was weaving
       // into mines. Reserve the whole sweep, not the point it starts from.
-      if (this.trapCovers(x, mid, r, amp)) return;  // another is along in 18-30s
+      if (this.trapCovers(x, mid, r, amp)) return false;
       this.motes.push({
         x, y: mid, r,
         taken: false, pulse: this.rrand(0, TAU), ob: null, gap: null,
@@ -2704,6 +2733,7 @@
         spd: this.rrand(1.1, 1.8),
         phase: this.rrand(0, TAU),
       });
+      return true;
     }
 
     collectMote(m) {

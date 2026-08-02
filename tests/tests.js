@@ -2111,6 +2111,60 @@
     eq(bad, 0, 'no pickup ever overlapped a hazard' + (worst ? ' (first at ' + worst + ')' : ''));
   });
 
+  test('Fairness: a bounty never shares a column with a gate', () => {
+    // The test above cannot reach this. It parks the player, so the run dies
+    // every few seconds, and a bounty only arrives after 18-30 SECONDS of
+    // survival — so in that test the timer never once ran out and the most
+    // tempting collectable in the game was checked by nothing. Making the probe
+    // immortal is the whole point of this one.
+    //
+    // What it caught: spawnBounty placed the mote at W + obstacleW*2, to the
+    // RIGHT of the line gates are born on. So it drifted ACROSS that line, and a
+    // gate born during the crossing was born inside it. Motes and gates scroll
+    // at one speed, so that offset then held for good and the bounty spent its
+    // visible life weaving over a solid bar — 1032 on-screen frames of it across
+    // 24 bounties, worst on 390x844, the commonest phone there is.
+    //
+    // The assertion is horizontal separation, not "is it in a gap", because a
+    // bounty weaves across a third of the corridor and therefore visits every
+    // band eventually. Sharing a column with a gate is the thing that must never
+    // happen; everything else follows from it.
+    freshStorage();
+    const SIZES = [[390, 844], [360, 640], [1280, 720]];
+    let shared = 0, inSolidCount = 0, bounties = 0, worst = null;
+    const seen = new Set();
+    for (let run = 0; run < SIZES.length; run++) {
+      const g = newGame(SIZES[run][0], SIZES[run][1]);
+      g.start(); g.revived = true;
+      for (let i = 0; i < 6000; i++) {
+        g.player.y = g.playTop + g.playH * 0.5; g.player.vy = 0;
+        g.invuln = 1;                       // immortal: a bounty needs a long run
+        g.update(1 / 60);
+        for (const m of g.motes) {
+          if (!m.bounty || m.pulled) continue;
+          if (!seen.has(m)) { seen.add(m); bounties++; }
+          if (m.x + m.r <= 0) continue;     // past the left edge, same as above
+          for (const ob of g.obstacles) {
+            if (m.x + m.r < ob.x || m.x - m.r > ob.x + ob.w) continue;
+            shared++; worst = worst || SIZES[run].join('x');
+            let open = false;
+            for (const gap of ob.gaps) {
+              if (m.y > gap.y - gap.h * 0.5 && m.y < gap.y + gap.h * 0.5) { open = true; break; }
+            }
+            if (!open) inSolidCount++;
+          }
+        }
+        if (g.state !== 'play') g.start();
+      }
+      g.toMenu();
+    }
+    // If no bounty ever spawned the rest of this proves nothing, so say so.
+    eq(bounties >= 6, true, 'the probe actually produced bounties — got ' + bounties);
+    eq(inSolidCount, 0, 'no bounty was ever inside a bar' + (worst ? ' (first at ' + worst + ')' : ''));
+    eq(shared, 0, 'no bounty ever shared a column with a gate'
+      + (worst ? ' (first at ' + worst + ')' : ''));
+  });
+
   test('Fairness: every gate keeps finite, passable geometry for a whole run', () => {
     // The bug this guards: layoutObstacle forgot to copy movePhase/moveSpeed onto
     // the obstacle, so moving and pulsing gates animated against `undefined` and
