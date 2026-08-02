@@ -52,6 +52,19 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
 
+      # `secrets` is NOT a context you may use in an `if:`. Writing
+      # `if: ${{ secrets.FOO != '' }}` does not evaluate to false — it makes the
+      # whole FILE invalid, and GitHub reports that as a run with zero jobs and
+      # no obvious error. Read a secret into a step's env, where it IS allowed,
+      # and gate the later steps on that step's output instead.
+      - name: Do we have signing secrets?
+        id: keys
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then echo "signed=true" >> "$GITHUB_OUTPUT"
+          else echo "signed=false" >> "$GITHUB_OUTPUT"; fi
+
       - name: Stamp assets and copy the game into the shell
         run: |
           node tools/bump-version.js
@@ -65,11 +78,11 @@ jobs:
           npx cap sync android
 
       - name: Restore the upload key
-        if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+        if: steps.keys.outputs.signed == 'true'
         run: echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > mobile/android/upload.jks
 
       - name: Build the release bundle (.aab — what Play wants)
-        if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+        if: steps.keys.outputs.signed == 'true'
         working-directory: mobile/android
         env:
           KS_PASS:   ${{ secrets.ANDROID_KEYSTORE_PASS }}
@@ -83,7 +96,7 @@ jobs:
             -Pandroid.injected.signing.key.password="$KEY_PASS"
 
       - name: Build an unsigned APK instead (no secrets yet)
-        if: ${{ secrets.ANDROID_KEYSTORE_B64 == '' }}
+        if: steps.keys.outputs.signed == 'false'
         working-directory: mobile/android
         run: ./gradlew assembleDebug
 
@@ -101,6 +114,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
+
+      # `steps` is scoped to ONE job, so this cannot borrow the android job's
+      # check — without its own copy every `if:` below would compare against an
+      # empty string, match neither branch, and skip the entire iOS job in
+      # silence. Same reason as there: secrets are not allowed in an `if:`.
+      - name: Do we have signing secrets?
+        id: keys
+        env:
+          P8: ${{ secrets.ASC_KEY_P8_B64 }}
+        run: |
+          if [ -n "$P8" ]; then echo "signed=true" >> "$GITHUB_OUTPUT"
+          else echo "signed=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Stamp assets and copy the game into the shell
         run: |
@@ -138,7 +163,7 @@ jobs:
       # WITHOUT signing. That still proves the project compiles, which is most
       # of what an early run is for.
       - name: Compile only (no signing secrets yet)
-        if: ${{ secrets.ASC_KEY_P8_B64 == '' }}
+        if: steps.keys.outputs.signed == 'false'
         working-directory: mobile/ios/App
         run: |
           xcodebuild -workspace App.xcworkspace -scheme App \
@@ -147,13 +172,13 @@ jobs:
             build
 
       - name: Restore the App Store Connect API key
-        if: ${{ secrets.ASC_KEY_P8_B64 != '' }}
+        if: steps.keys.outputs.signed == 'true'
         run: |
           mkdir -p ~/private_keys
           echo "${{ secrets.ASC_KEY_P8_B64 }}" | base64 -d > ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
 
       - name: Archive and export a signed .ipa
-        if: ${{ secrets.ASC_KEY_P8_B64 != '' }}
+        if: steps.keys.outputs.signed == 'true'
         working-directory: mobile/ios/App
         run: |
           cat > ExportOptions.plist <<'PLIST'
@@ -193,7 +218,7 @@ jobs:
       # silently ships a build to TestFlight is how the wrong thing reaches
       # testers; download the .ipa, look at it, then run this on purpose.
       - name: Upload to TestFlight
-        if: ${{ github.event_name == 'workflow_dispatch' && secrets.ASC_KEY_P8_B64 != '' }}
+        if: github.event_name == 'workflow_dispatch' && steps.keys.outputs.signed == 'true'
         run: |
           xcrun altool --upload-app -f "$RUNNER_TEMP"/export/*.ipa -t ios \
             --apiKey ${{ secrets.ASC_KEY_ID }} --apiIssuer ${{ secrets.ASC_ISSUER_ID }}
