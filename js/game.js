@@ -797,7 +797,7 @@
       this.timeScaleTarget = 1;
       this.hueBase = 190;
       this.flow = 0;          // 0..1 smoothed flow amount
-      this.CROSS_TIME = 0.72; // seconds to fall wall-to-wall (higher = floatier / more forgiving)
+      this.CROSS_TIME = 0.78; // seconds to fall wall-to-wall (higher = floatier / more forgiving)
       this.modalOpen = false; // true while a menu-level modal (shop) is open
       this._bind();
       this.resize();

@@ -230,6 +230,15 @@ kbd {
 
 /* ---- top bar controls ---- */
 #topbar { position: fixed; top: max(14px, env(safe-area-inset-top)); right: 14px; z-index: 30; display: flex; gap: 10px; }
+/* The corner buttons are drawn small on purpose; a thumb is not small. The
+   canvas underneath takes pointerdown, so a tap landing even slightly outside
+   one of these does not miss quietly — it flips gravity instead, and the button
+   feels like it needs three tries before it opens. The visible size is
+   unchanged; only the target grows, which is the part a finger actually meets. */
+#topbar .icon-btn { position: relative; }
+#topbar .icon-btn::after {
+  content: ''; position: absolute; left: -10px; right: -10px; top: -10px; bottom: -10px;
+}
 .icon-btn {
   width: 44px; height: 44px; border-radius: 12px; cursor: pointer;
   background: rgba(14,18,40,0.5); border: 1px solid var(--panel-brd);

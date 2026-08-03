@@ -234,6 +234,13 @@ jobs:
             || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
           /usr/libexec/PlistBuddy -c "Add :UIRequiresFullScreen bool true" Info.plist \
             || /usr/libexec/PlistBuddy -c "Set :UIRequiresFullScreen true" Info.plist
+          # iOS TERMINATES an app that reaches for the microphone with no usage
+          # string, and review rejects it. Voice control is opt-in and off by
+          # default, but "off by default" is not "absent": the moment a player
+          # turns it on, an app without these two keys dies on the spot.
+          MIC="Voice control lets you fire a held item by saying its name. The microphone is used only while that switch is on, and this app records nothing and sends nothing anywhere."
+          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string $MIC" Info.plist             || /usr/libexec/PlistBuddy -c "Set :NSMicrophoneUsageDescription $MIC" Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSSpeechRecognitionUsageDescription string $MIC" Info.plist             || /usr/libexec/PlistBuddy -c "Set :NSSpeechRecognitionUsageDescription $MIC" Info.plist
           /usr/libexec/PlistBuddy -c "Print" Info.plist | grep -E "NonExempt|FullScreen"
 
       # Without the API key there is nothing to sign with, so build the app
