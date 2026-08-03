@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>LUMEN — icon</title>
+<style>body{margin:0;background:#222;display:flex;gap:20px;align-items:flex-start;padding:20px;font:13px system-ui;color:#ccc}
+canvas{background:#000}#small{image-rendering:auto}</style>
+<!--
+  The app icon, drawn rather than painted.
+
+  It has one job: say what the game is at 40 pixels. The version it replaces was
+  a soft cyan blur beside two cropped pink capsules — no motion, no flip, no gap
+  to thread, and blur is the first thing that dies when an icon gets small.
+
+  So the TRAIL is the subject, not the orb. It falls from the top left, bottoms
+  out, flips, and rises through the gap between two gates — which is the whole
+  game in one gesture. The orb is only the bright head at the end of it.
+
+  Rules this follows, all of them learned from the icon it replaces:
+    - Shape before glow. Every element reads as a silhouette first.
+    - Nothing important within ~10% of the edge; Apple masks to a squircle.
+    - Three colours, the game's own: cyan is you, magenta kills, gold rewards.
+    - No text. No gradient meshes. No drop shadows on small elements.
+-->
+<canvas id="c" width="1024" height="1024" style="width:512px;height:512px"></canvas>
+<div>
+  <p>60px (home screen)</p><canvas id="small" width="60" height="60" style="width:60px;height:60px"></canvas>
+  <p>40px</p><canvas id="tiny" width="40" height="40" style="width:40px;height:40px"></canvas>
+  <p><button id="save">save</button> <span id="msg"></span></p>
+</div>
+<script>
+const S = 1024;
+const c = document.getElementById('c'), x = c.getContext('2d');
+
+const CYAN = '#4df3ff', MAG = '#ff2fd0', GOLD = '#ffd15c', BG = '#05060f';
+
+// The flight path is a V, not a swoosh, and the difference is the whole point:
+// a curve says "something moved", a V says "it fell, and then it went the other
+// way". That reversal IS the game. Two quadratics meeting at the turn, so the
+// corner stays sharp enough to read at 40px.
+const A0 = [110, 215], A1 = [235, 700], A2 = [430, 856];   // the dive
+const B0 = [430, 856], B1 = [640, 800], B2 = [858, 268];   // the climb
+function quad(p0, p1, p2, t) {
+  const u = 1 - t;
+  return [u*u*p0[0] + 2*u*t*p1[0] + t*t*p2[0],
+          u*u*p0[1] + 2*u*t*p1[1] + t*t*p2[1]];
+}
+function at(t) {
+  return t < 0.42 ? quad(A0, A1, A2, t / 0.42)
+                  : quad(B0, B1, B2, (t - 0.42) / 0.58);
+}
+
+// The corridor, not a gate. The game's playfield HAS a wall top and bottom and
+// you fly the length of it — so this is both the truer picture and the more
+// legible one. A vertical gate had to be crossed diagonally, which forced a gap
+// so wide the bars drifted into the corners and stopped reading as danger at
+// all. Two horizontal walls frame the whole square instead, and the dive that
+// nearly grazes the floor supplies the tension the gap used to.
+const WALL = 76;
+function wallClearance() {
+  let lo = 1e9, hi = -1e9;
+  for (let i = 0; i <= 600; i++) {
+    const [, py] = at(i / 600);
+    lo = Math.min(lo, py); hi = Math.max(hi, py);
+  }
+  return [lo - 62, S - WALL - (hi + 55)];   // top: orb radius; bottom: trail half
+}
+
+function draw() {
+  x.clearRect(0, 0, S, S);
+  x.fillStyle = BG; x.fillRect(0, 0, S, S);
+
+  // a faint lift behind the action so the corners fall away
+  const g = x.createRadialGradient(S*0.5, S*0.52, 0, S*0.5, S*0.52, S*0.7);
+  g.addColorStop(0, 'rgba(34,74,132,0.68)'); g.addColorStop(0.6, 'rgba(14,26,58,0.45)'); g.addColorStop(1, 'rgba(5,6,15,0)');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+
+  // ---- the corridor -----------------------------------------------------
+  // Each wall is a gradient into its lit inner edge, not a flat band with a
+  // white stripe on it. Flat magenta at this size reads as plastic, and a hard
+  // white line reads as a third colour the game does not have.
+  const wall = (y0, dir) => {
+    const g2 = x.createLinearGradient(0, y0, 0, y0 + dir * WALL);
+    g2.addColorStop(0, '#c4109c');
+    g2.addColorStop(0.72, MAG);
+    g2.addColorStop(1, '#ff8ae6');
+    x.fillStyle = g2;
+    x.fillRect(0, Math.min(y0, y0 + dir * WALL), S, WALL);
+  };
+  x.save();
+  x.shadowColor = MAG; x.shadowBlur = 58;
+  wall(0, 1);
+  wall(S, -1);
+  x.restore();
+
+  // ---- trail ------------------------------------------------------------
+  // One filled ribbon, not a run of stroked segments. Stroking each segment
+  // separately with a round cap leaves visible beads wherever the trail is thin,
+  // and the tail is exactly where it is thinnest. A polygon tapers smoothly and
+  // takes a single glow pass.
+  //
+  // Thin at the tail, fat at the head: that is what makes it read as DIRECTION,
+  // which is the thing the icon it replaces had none of.
+  const N = 220;
+  const half = (t) => 11 + 42 * Math.pow(t, 1.5);
+  const left = [], right = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, e = 0.0015;
+    const [px, py] = at(t);
+    const [qx, qy] = at(Math.min(1, t + e));
+    const dx = qx - px, dy = qy - py, len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len, h = half(t);
+    left.push([px + nx * h, py + ny * h]);
+    right.push([px - nx * h, py - ny * h]);
+  }
+  x.save();
+  x.shadowColor = CYAN; x.shadowBlur = 40;
+  const tg = x.createLinearGradient(A0[0], A0[1], B2[0], B2[1]);
+  tg.addColorStop(0, 'rgba(77,243,255,0.42)');
+  tg.addColorStop(0.55, 'rgba(77,243,255,0.80)');
+  tg.addColorStop(1, 'rgba(150,250,255,1)');
+  x.fillStyle = tg;
+  x.beginPath();
+  x.moveTo(left[0][0], left[0][1]);
+  for (const [px, py] of left) x.lineTo(px, py);
+  for (let i = right.length - 1; i >= 0; i--) x.lineTo(right[i][0], right[i][1]);
+  x.closePath(); x.fill();
+  // The core. Real neon is a bright filament inside a coloured halo, and it is
+  // also what keeps the shape crisp when the whole thing is 40 pixels wide.
+  x.shadowBlur = 0;
+  const cg = x.createLinearGradient(A0[0], A0[1], B2[0], B2[1]);
+  cg.addColorStop(0, 'rgba(210,255,255,0)');
+  cg.addColorStop(0.5, 'rgba(220,255,255,0.45)');
+  cg.addColorStop(1, 'rgba(255,255,255,0.95)');
+  x.fillStyle = cg;
+  x.beginPath();
+  const inner = (t) => half(t) * 0.34;
+  const li = [], ri = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, e = 0.0015;
+    const [px, py] = at(t), [qx, qy] = at(Math.min(1, t + e));
+    const dx = qx - px, dy = qy - py, len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len, h = inner(t);
+    li.push([px + nx * h, py + ny * h]); ri.push([px - nx * h, py - ny * h]);
+  }
+  x.moveTo(li[0][0], li[0][1]);
+  for (const [px, py] of li) x.lineTo(px, py);
+  for (let i = ri.length - 1; i >= 0; i--) x.lineTo(ri[i][0], ri[i][1]);
+  x.closePath(); x.fill();
+  x.restore();
+
+  // ---- the orb, at the head of the trail --------------------------------
+  const [hx, hy] = at(0.995);
+  x.save();
+  x.shadowColor = CYAN; x.shadowBlur = 90;
+  x.fillStyle = CYAN; x.beginPath(); x.arc(hx, hy, 68, 0, 7); x.fill();
+  x.shadowBlur = 0;
+  x.fillStyle = '#b6f7ff'; x.beginPath(); x.arc(hx, hy, 50, 0, 7); x.fill();
+  x.fillStyle = '#ffffff'; x.beginPath(); x.arc(hx, hy, 30, 0, 7); x.fill();
+  x.restore();
+
+  // ---- the reward, sitting in the gap -----------------------------------
+  x.save();
+  x.shadowColor = GOLD; x.shadowBlur = 40;
+  x.fillStyle = GOLD; x.beginPath(); x.arc(A2[0] + 18, A2[1] - 10, 34, 0, 7); x.fill();
+  x.restore();
+
+  for (const id of ['small', 'tiny']) {
+    const s = document.getElementById(id), sx = s.getContext('2d');
+    sx.clearRect(0, 0, s.width, s.height);
+    sx.drawImage(c, 0, 0, s.width, s.height);
+  }
+}
+draw();
+
+document.getElementById('save').onclick = () => post();
+function post(name, el) {
+  const src = el || c;
+  return fetch('http://localhost:5181/', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || 'icon-1024.png', data: src.toDataURL('image/png') }),
+  }).then(() => document.getElementById('msg').textContent = 'saved');
+}
+// A tile of the icon at the sizes it is actually seen at. An icon judged only at
+// 1024 is an icon judged at a size no user ever sees it.
+window.__contact = (name) => {
+  const t = document.createElement('canvas'); t.width = 460; t.height = 140;
+  const tx = t.getContext('2d');
+  tx.fillStyle = '#3a3a3c'; tx.fillRect(0, 0, t.width, t.height);
+  let px = 16;
+  for (const size of [120, 76, 60, 40, 29]) {
+    tx.save();
+    tx.beginPath(); tx.roundRect(px, 16, size, size, size * 0.225); tx.clip();
+    tx.drawImage(c, px, 16, size, size);
+    tx.restore();
+    px += size + 14;
+  }
+  return post(name, t);
+};
+window.__post = post;
+
+// Every size the project actually ships, rendered from the same 1024 draw.
+//
+// The maskable ones are NOT the same picture: Android may crop a maskable icon
+// to a circle, and anything outside the central 80% can be cut. The orb sits
+// near the top right, so at full bleed it would lose its edge. Those get the
+// whole composition scaled into the safe zone instead, on the wall colour so
+// the crop has something to bite on.
+window.__exportAll = async () => {
+  const plain = [1024, 512, 384, 256, 192, 180, 152, 144, 128, 96, 72, 48];
+  const out = [];
+  const scaled = (size, inset, bg) => {
+    const t = document.createElement('canvas'); t.width = t.height = size;
+    const tx = t.getContext('2d');
+    if (bg) { tx.fillStyle = bg; tx.fillRect(0, 0, size, size); }
+    const d = Math.round(size * inset), o = Math.round((size - d) / 2);
+    tx.drawImage(c, o, o, d, d);
+    return t;
+  };
+  for (const n of plain) out.push(['icon-' + n + '.png', scaled(n, 1, null)]);
+  out.push(['apple-touch-icon.png', scaled(180, 1, null)]);
+  out.push(['favicon.png', scaled(64, 1, null)]);
+  out.push(['icon-maskable-512.png', scaled(512, 0.78, '#05060f')]);
+  out.push(['icon-maskable-192.png', scaled(192, 0.78, '#05060f')]);
+  for (const [name, el] of out) await post(name, el);
+  return out.map(([n]) => n);
+};
+</script>

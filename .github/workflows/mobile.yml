@@ -162,6 +162,34 @@ jobs:
           npx cap add ios || echo "ios project already present"
           npx cap sync ios
 
+      # The app icon. `npx cap add ios` does NOT take the web icons — it leaves
+      # Capacitor's placeholder in the asset catalog, so build 1 went to
+      # TestFlight wearing a stranger's icon and nobody would have noticed until
+      # it was on a home screen.
+      #
+      # Xcode wants one 1024 image and a Contents.json, and it must have NO alpha
+      # channel; assets/icon-1024-ios.png is the flattened copy that
+      # tools/make-ios-icon.js produces for exactly this.
+      - name: Install the app icon
+        working-directory: mobile/ios/App/App/Assets.xcassets/AppIcon.appiconset
+        run: |
+          rm -f *.png
+          cp "$GITHUB_WORKSPACE/assets/icon-1024-ios.png" AppIcon-512@2x.png
+          cat > Contents.json <<'JSON'
+          {
+            "images" : [
+              {
+                "filename" : "AppIcon-512@2x.png",
+                "idiom" : "universal",
+                "platform" : "ios",
+                "size" : "1024x1024"
+              }
+            ],
+            "info" : { "author" : "xcode", "version" : 1 }
+          }
+          JSON
+          ls -l
+
       # Two Info.plist facts, set here because the iOS project is generated on
       # this runner and does not exist in the repository.
       #
