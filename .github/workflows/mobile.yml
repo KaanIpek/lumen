@@ -190,6 +190,32 @@ jobs:
           JSON
           ls -l
 
+      # The launch image. `cap add ios` ships a placeholder here too, and nobody
+      # replaced it — so the app opened on a stale picture unrelated to the icon
+      # on the home screen, which is the first thing a player sees and the last
+      # thing anyone thinks to check.
+      #
+      # It is a flat #05060f, the same colour as the menu that follows, so the
+      # launch reads as the app appearing rather than two screens arguing.
+      - name: Install the launch image
+        working-directory: mobile/ios/App/App/Assets.xcassets/Splash.imageset
+        run: |
+          rm -f *.png
+          for n in splash-2732x2732.png splash-2732x2732-1.png splash-2732x2732-2.png; do
+            cp "$GITHUB_WORKSPACE/assets/splash-2732.png" "$n"
+          done
+          cat > Contents.json <<'JSON'
+          {
+            "images" : [
+              { "filename" : "splash-2732x2732.png",   "idiom" : "universal", "scale" : "1x" },
+              { "filename" : "splash-2732x2732-1.png", "idiom" : "universal", "scale" : "2x" },
+              { "filename" : "splash-2732x2732-2.png", "idiom" : "universal", "scale" : "3x" }
+            ],
+            "info" : { "author" : "xcode", "version" : 1 }
+          }
+          JSON
+          ls -l
+
       # Two Info.plist facts, set here because the iOS project is generated on
       # this runner and does not exist in the repository.
       #

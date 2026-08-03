@@ -756,6 +756,29 @@
   // ---- main game -----------------------------------------------------------
   const State = { MENU: 'menu', PLAY: 'play', PAUSE: 'pause', DEAD: 'dead' };
 
+  // Reads a CSS environment inset into a number. Cached: the value cannot change
+  // without an orientation change, and every resize would otherwise force layout.
+  let _insetEl = null, _insetCache = {};
+  function readInset(side) {
+    if (_insetCache[side] != null) return _insetCache[side];
+    try {
+      if (!_insetEl) {
+        _insetEl = document.createElement('div');
+        _insetEl.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;'
+          + 'padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
+        document.body.appendChild(_insetEl);
+      }
+      const cs = getComputedStyle(_insetEl);
+      _insetCache.top = parseFloat(cs.paddingTop) || 0;
+      _insetCache.bottom = parseFloat(cs.paddingBottom) || 0;
+    } catch (e) { _insetCache = { top: 0, bottom: 0 }; }
+    return _insetCache[side] || 0;
+  }
+  // An orientation change moves the notch; nothing else does.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('orientationchange', () => { _insetCache = {}; });
+  }
+
   class Game {
     constructor(canvas) {
       this.canvas = canvas;
@@ -810,8 +833,17 @@
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const prevW = this.W, prevTop = this.playTop, prevH = this.playH;
       this.W = w; this.H = h;
-      this.playTop = h * 0.085;
-      this.playBottom = h * 0.945;
+      // The overlays in index.html respect env(safe-area-inset-*). The CANVAS
+      // never did — and the score is drawn on the canvas, at H * 0.018, which on
+      // a 844px screen is 15px from the top: underneath the notch. Half the
+      // number was simply not there, and no amount of CSS was going to reach it.
+      //
+      // env() is not available to canvas maths, so measure it: a probe element
+      // whose padding IS the inset, read back through getComputedStyle.
+      this.safeTop = readInset('top');
+      this.safeBottom = readInset('bottom');
+      this.playTop = this.safeTop + h * 0.085;
+      this.playBottom = h * 0.945 - this.safeBottom * 0.5;
       this.playH = this.playBottom - this.playTop;
       this.bg.resize(w, h);
       this._vigKey = null; // vignette sprites are size-specific
@@ -3717,7 +3749,7 @@
       ctx.font = `800 ${big}px "Rajdhani", system-ui, sans-serif`;
       ctx.fillStyle = '#fff';
       ctx.shadowColor = this.orbColor(1); ctx.shadowBlur = 16;
-      ctx.fillText(String(score), W / 2, H * 0.018);
+      ctx.fillText(String(score), W / 2, (this.safeTop || 0) + H * 0.018);
 
       // The multiplier, said out loud. It is the reason the number climbs faster
       // here than in Classic, and a player should not have to work that out.
