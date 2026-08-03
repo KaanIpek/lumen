@@ -764,8 +764,19 @@
             : T('setSave', { was: p.listed.toLocaleString(), save: p.saving.toLocaleString() });
 
         const sigId = s.items.find((id) => C.category(id) === 'signatures');
+        // A set is an orb, a trail and a signature — so the preview has to be
+        // able to say which orb. It used to take the colour from whatever skin
+        // the PLAYER had equipped, once, for every card on the page: Kindling,
+        // Nightfall and Spectra all rendered in the same cyan, because that is
+        // the default orb's hue. The card said "ember" and drew blue.
+        const orbId = s.items.find((id) => C.category(id) === 'orbs');
+        const sk = orbId && C.SKINS.find((k) => k.id === orbId);
+        const skinAttr = sk
+          ? ' data-hue="' + sk.hue + '" data-sat="' + (sk.sat == null ? 100 : sk.sat)
+            + '" data-light="' + (sk.light == null ? 60 : sk.light) + '" data-orb="' + esc(orbId) + '"'
+          : '';
         card.innerHTML =
-          (sigId ? '<canvas class="swatch sig" width="168" height="76" data-sig="' + sigId + '"></canvas>' : '')
+          (sigId ? '<canvas class="swatch sig" data-sig="' + sigId + '"' + skinAttr + '></canvas>' : '')
           + '<div class="c-name">' + esc(C.name(s.id)) + '</div>'
           + '<div class="set-parts">' + parts + '</div>'
           + '<div class="c-desc">' + esc(C.desc(s.id)) + '</div>'
@@ -788,16 +799,37 @@
       const cvs = [...document.querySelectorAll('canvas[data-sig]')];
       if (!cvs.length) return;
       const C = LUMEN.Cosmetics;
-      const hue = (() => {
+      // The equipped skin is the right colour for a signature sold on its own —
+      // that IS what you would see. It is the wrong colour for a set, which
+      // carries its own orb; those canvases say so on themselves.
+      const equipped = (() => {
         const sk = C.skinDef();
-        return sk && sk.hue != null ? sk.hue : 188;
+        return sk && sk.hue != null
+          ? { h: sk.hue, s: sk.sat == null ? 95 : sk.sat, l: sk.light == null ? 62 : sk.light }
+          : { h: 188, s: 95, l: 62 };
       })();
-      const col = `hsl(${hue} 95% 62%)`;
+      const colourOf = (cv) => {
+        const h = cv.getAttribute('data-hue');
+        if (h == null) return equipped;
+        return { h: +h, s: +(cv.getAttribute('data-sat') || 95), l: +(cv.getAttribute('data-light') || 62) };
+      };
+      // Give each canvas a backing store that matches the box it is drawn in.
+      // It used to be a fixed 168x76 stretched across a full-width card — six
+      // times up on a phone, which is why the preview looked soft and far away.
+      // The comment in the stylesheet claimed this stayed crisp. It did not.
+      const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+      for (const cv of cvs) {
+        const r = cv.getBoundingClientRect();
+        const w = Math.max(120, Math.round(r.width)), h = Math.max(48, Math.round(r.height));
+        cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+        cv.__css = { w, h, dpr };
+      }
       // Cheap fake of the game's ring/burst maths: no pooling needed for eight
       // small canvases, and it keeps the preview code out of the hot game path.
       const state = cvs.map((cv) => ({
         cv, ctx: cv.getContext('2d'), def: C.SIGNATURES.find((s) => s.id === cv.getAttribute('data-sig')),
         t: Math.random() * 2.6, rings: [], dots: [],
+        c: colourOf(cv), orb: cv.getAttribute('data-orb'),
       }));
       const BEAT = 2.6;
       const fire = (st, moment) => {
@@ -808,7 +840,9 @@
           const n = Math.max(1, m.ring.n || 1);
           for (let i = 0; i < n; i++) {
             st.rings.push({ s: m.ring, age: -(i * (m.ring.delay || 0)), unit,
-              col: m.ring.hue != null && !m.ring.white ? `hsl(${m.ring.hue} 95% 66%)` : col });
+              col: m.ring.hue != null && !m.ring.white
+                ? `hsl(${m.ring.hue} 95% 66%)`
+                : `hsl(${st.c.h} ${st.c.s}% ${st.c.l}%)` });
           }
         }
         if (m.burst) {
@@ -835,10 +869,24 @@
             if (prev < at && st.t >= at) fire(st, moment);
           }
           const { ctx, cv } = st;
-          const w = cv.width, h = cv.height, cx = w * 0.5, cy = h * 0.5;
+          const box = cv.__css || { w: cv.width, h: cv.height, dpr: 1 };
+          const w = box.w, h = box.h, cx = w * 0.5, cy = h * 0.5;
+          ctx.setTransform(box.dpr, 0, 0, box.dpr, 0, 0);
           ctx.clearRect(0, 0, w, h);
           ctx.save();
           ctx.translate(cx, cy);
+          // The orb the set actually contains, drawn where the effect fires
+          // from. Without it the card sold three things and pictured one.
+          if (st.orb) {
+            const base = `hsl(${st.c.h} ${st.c.s}% ${st.c.l}%)`;
+            ctx.save();
+            ctx.globalAlpha = 0.9; ctx.shadowColor = base; ctx.shadowBlur = 16;
+            ctx.fillStyle = base; ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+            ctx.fillStyle = `hsl(${st.c.h} ${Math.max(0, st.c.s - 25)}% ${Math.min(97, st.c.l + 30)}%)`;
+            ctx.beginPath(); ctx.arc(0, 0, 4.2, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+          }
           for (let i = st.rings.length - 1; i >= 0; i--) {
             const r = st.rings[i];
             r.age += dt;
@@ -867,12 +915,12 @@
             d.vy += d.grav * dt; d.vx *= k; d.vy *= k;
             d.x += d.vx * dt; d.y += d.vy * dt;
             ctx.globalAlpha = (1 - d.age / d.life) * 0.85;
-            ctx.fillStyle = col;
+            ctx.fillStyle = `hsl(${st.c.h} ${st.c.s}% ${st.c.l}%)`;
             ctx.beginPath(); ctx.arc(d.x, d.y, d.size * (1 - d.age / d.life), 0, Math.PI * 2); ctx.fill();
           }
           // the orb itself, so the scale of the effect is legible
           ctx.globalAlpha = 0.95;
-          ctx.fillStyle = col;
+          ctx.fillStyle = `hsl(${st.c.h} ${st.c.s}% ${st.c.l}%)`;
           ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         }
@@ -1328,6 +1376,24 @@
 
     // ---- settings --------------------------------------------------------
     openSettings() { this.showScreen('settings'); this.renderSettings(); },
+
+    // Switching language re-runs i18n.apply(), which rewrites every element
+    // carrying data-i18n. That covers the markup in index.html and nothing else
+    // — and the shop, the achievements, the modes list, the leaderboard and the
+    // settings rows are all built in JavaScript from T() at the moment they are
+    // opened. So a screen that was open when the language changed kept the old
+    // one until you left and came back, which is exactly what it looks like when
+    // a translation is missing. Nothing was missing; nothing had been redrawn.
+    relocalize() {
+      switch (this.currentScreen) {
+        case 'shop':     this.renderShop(); this.updateTabs(); break;
+        case 'modes':    this.renderModes(); break;
+        case 'progress': this.renderProgress && this.renderProgress(); break;
+        case 'scores':   this.setBoard(this.boardTab || 'me'); break;
+        case 'settings': this.renderSettings(); break;
+        case 'menu':     this.refreshMenu && this.refreshMenu(); break;
+      }
+    },
     renderSettings() {
       if (!this._ready) return;
       this.showBuildStamp();

@@ -817,7 +817,7 @@
       this._vigKey = null; // vignette sprites are size-specific
       if (this.player) {
         this.player.x = w * 0.30;
-        this.player.baseR = clamp(h * 0.017, 10, 19);
+        this.player.baseR = this.orbR;
         this.player.r = this.player.baseR;
         // keep the orb at the same relative height (e.g. iOS URL bar collapsing mid-run)
         if (prevH > 0) {
@@ -935,7 +935,7 @@
         vy: 0,
         dir: 1,                    // gravity direction: +1 down / -1 up
         r: clamp(this.H * 0.017, 10, 19),
-        baseR: clamp(this.H * 0.017, 10, 19),
+        baseR: this.orbR,
         sx: 1, sy: 1,              // squash scale
         trail: [],
         alive: true,
@@ -1067,7 +1067,33 @@
       if (!this.playH) return 0;
       return (2 * 0.82 * 1.35 * this.maxR) / (0.62 * this.playH);
     }
-    get obstacleW() { return clamp(this.H * 0.028, 16, 30); }
+    // Everything HORIZONTAL scales with W: scrollSpeed is W * 0.62 / reaction, so
+    // the distance between gates does too. Everything PHYSICAL scaled with H. On a
+    // wide screen those two agree and nobody notices. On a phone held upright they
+    // do not — H is large and W is small, so the orb and the bars grow at the same
+    // moment the corridor between gates shrinks.
+    //
+    // Measured, 390x844 against 1280x720: the TIMING is identical, a gate every
+    // 1.55s on both. But the orb covered 20.6% of the space between gates instead
+    // of 5.4%, and each bar ate 17% of it instead of 4%. That is the "too zoomed
+    // in" a player feels and cannot name, and why the same game reads as cramped
+    // in the hand and airy on a desk.
+    //
+    // Capping the reference at a multiple of W stops physical size from following
+    // the long axis once a screen has stopped being wide.
+    //
+    // The GAP is deliberately not scaled with this. Shrinking it too would hold
+    // the orb-to-gap ratio but shrink the margin the player actually aims at, and
+    // since crossing the playfield always takes CROSS_TIME, a smaller margin is a
+    // narrower time window — it would make a phone HARDER. A phone should not be.
+    get scaleRef() { return Math.min(this.H, this.W * 1.5); }
+    // The orb's size lived in TWO places — resize() and the player literal in
+    // start() — computing the same expression. They drifted the moment one was
+    // edited: the cap below was added to resize, start() overwrote it a frame
+    // later, and the measurement said nothing had changed. One getter, two
+    // readers.
+    get orbR() { return clamp(this.scaleRef * 0.017, 9, 19); }
+    get obstacleW() { return clamp(this.scaleRef * 0.028, 14, 30); }
 
     // ---- input -----------------------------------------------------------
     _bind() {

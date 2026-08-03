@@ -1911,6 +1911,10 @@
       if (Store) Store.lang = this.lang;
       document.documentElement.setAttribute('lang', this.lang);
       this.apply();
+      // apply() only touches data-i18n markup. Anything a screen drew for itself
+      // has to be drawn again, or the language change stops at the edge of
+      // index.html and every generated list keeps the old words.
+      if (LUMEN.UI && LUMEN.UI.relocalize) LUMEN.UI.relocalize();
     },
     t(key, vars) {
       const dict = STRINGS[this.lang] || STRINGS.en;

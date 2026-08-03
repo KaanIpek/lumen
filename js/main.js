@@ -164,6 +164,26 @@
     askPersist();
     window.addEventListener('pointerdown', askPersist, { once: true });
 
+  // Unlock the audio context on the FIRST touch anywhere, whatever it lands on.
+  //
+  // Every place that starts a sound already calls Audio.unlock(), but each of
+  // them is a specific control — PLAY, the mute button, a shop tap. A first
+  // gesture that misses all of them (a scroll, a tap on the background, a swipe
+  // on the attract demo) leaves iOS holding the context suspended, and the game
+  // then looks silent until something else happens to be pressed. A player who
+  // finds their sound by wandering into Settings has already decided the game is
+  // broken.
+  //
+  // Safari only honours resume() from inside a gesture's own call stack, hence a
+  // real listener rather than anything deferred. Runs once and costs nothing.
+  const firstTouchAudio = () => {
+    try { LUMEN.Audio && LUMEN.Audio.init && LUMEN.Audio.init(); } catch (e) {}
+    try { LUMEN.Audio && LUMEN.Audio.unlock && LUMEN.Audio.unlock(); } catch (e) {}
+  };
+  for (const ev of ['pointerdown', 'touchstart', 'keydown']) {
+    window.addEventListener(ev, firstTouchAudio, { once: true, capture: true });
+  }
+
     // Register the service worker for offline / installable PWA (http(s) only).
     //
     // NOT on localhost. The worker caches by exact URL, so during development it
