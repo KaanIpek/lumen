@@ -81,6 +81,9 @@
     if (!c || !LUMEN.Leaderboard) return;
     if (c.supabaseUrl && c.supabaseAnonKey) {
       LUMEN.Leaderboard.useSupabase(c.supabaseUrl, c.supabaseAnonKey);
+      // Before the board, so a stored session is already refreshing by the time
+      // anything wants to submit under it.
+      if (LUMEN.Auth) LUMEN.Auth.init();
     } else if (c.leaderboardEndpoint) {
       LUMEN.Leaderboard.endpoint = c.leaderboardEndpoint;
     }

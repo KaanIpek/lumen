@@ -46,11 +46,17 @@
       const s = this._sb;
       const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const t = setTimeout(() => ctl && ctl.abort(), this.timeoutMs);
+      // Signed in, the request is made AS that user, so row-level security can
+      // attribute the row to auth.uid() rather than trusting a name field that
+      // anyone can type. Signed out it falls back to the publishable key, which
+      // is what every player had before accounts existed.
+      const A = LUMEN.Auth;
+      const asUser = A && A.token ? { Authorization: 'Bearer ' + A.token } : null;
       const headers = Object.assign({
         apikey: s.key,
         Authorization: 'Bearer ' + s.key,
         'Content-Type': 'application/json',
-      }, (opts && opts.headers) || {});
+      }, asUser || {}, (opts && opts.headers) || {});
       return fetch(s.url + '/rest/v1' + path, Object.assign({ signal: ctl && ctl.signal }, opts, { headers }))
         .then((r) => {
           if (!r.ok) throw new Error('http ' + r.status);
