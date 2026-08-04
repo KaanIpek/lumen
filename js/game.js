@@ -782,6 +782,25 @@
     } catch (e) { return 0; }
   }
 
+  // The top inset to actually draw below — measured, but floored to what a tall
+  // phone needs whether or not the measurement agrees.
+  //
+  // Removing the cache above was necessary and still not sufficient: a WKWebView
+  // does not always have viewport-fit resolved when the game first sizes itself,
+  // and until it does env(safe-area-inset-top) reports 0 underneath a Dynamic
+  // Island that is very much there. Three builds in a row "fixed" this and the
+  // score kept coming back clipped, because every fix trusted that zero.
+  //
+  // A reading can be wrong in only one direction here, so stop trusting it in
+  // that direction: on a portrait phone-shaped viewport take the worst case as a
+  // floor (~59pt on the tallest islands, 47 on older notches; H*0.072 clears
+  // both with slack). Landscape and desktop keep the measurement, where it is
+  // both correct and the only thing that knows about an inset at all.
+  function safeTopFor(W, H) {
+    const measured = readInset('top');
+    return H > W * 1.7 ? Math.max(measured, H * 0.072) : measured;
+  }
+
   class Game {
     constructor(canvas) {
       this.canvas = canvas;
@@ -843,7 +862,7 @@
       //
       // env() is not available to canvas maths, so measure it: a probe element
       // whose padding IS the inset, read back through getComputedStyle.
-      this.safeTop = readInset('top');
+      this.safeTop = safeTopFor(w, h);
       this.safeBottom = readInset('bottom');
       this.playTop = this.safeTop + h * 0.085;
       this.playBottom = h * 0.945 - this.safeBottom * 0.5;
@@ -3352,7 +3371,7 @@
       if (!V || !V.listening) return;
       const { W, H } = this;
       const r = clamp(H * 0.008, 4, 7);
-      const x = W - clamp(W * 0.05, 16, 46), y = H * 0.05;
+      const x = W - clamp(W * 0.05, 16, 46), y = (this.safeTop || 0) + H * 0.03;
       const pulse = 0.55 + 0.45 * Math.sin(this.elapsed * 4);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -3749,10 +3768,14 @@
       ctx.textBaseline = 'top';
       // score
       const big = clamp(H * 0.06, 30, 58);
+      // One origin for the whole top row. The score used to offset by safeTop
+      // while the multiplier and the best line did not, so even a correct inset
+      // only unclipped one of the three.
+      const top = (this.safeTop || 0) + H * 0.022;
       ctx.font = `800 ${big}px "Rajdhani", system-ui, sans-serif`;
       ctx.fillStyle = '#fff';
       ctx.shadowColor = this.orbColor(1); ctx.shadowBlur = 16;
-      ctx.fillText(String(score), W / 2, (this.safeTop || 0) + H * 0.018);
+      ctx.fillText(String(score), W / 2, top);
 
       // The multiplier, said out loud. It is the reason the number climbs faster
       // here than in Classic, and a player should not have to work that out.
@@ -3764,7 +3787,7 @@
         ctx.fillStyle = 'rgba(255,209,92,0.85)';
         ctx.shadowColor = 'rgba(255,209,92,0.5)'; ctx.shadowBlur = 8;
         ctx.fillText('×' + mul.toFixed(2).replace(/\.?0+$/, ''),
-          W / 2 + ctx.measureText(String(score)).width * 0.5 + big * 0.55, H * 0.018 + big * 0.32);
+          W / 2 + ctx.measureText(String(score)).width * 0.5 + big * 0.55, top + big * 0.32);
         ctx.textAlign = 'center';
       }
 
@@ -3772,14 +3795,14 @@
       ctx.font = `600 ${clamp(H * 0.02, 12, 18)}px "Rajdhani", system-ui, sans-serif`;
       ctx.shadowBlur = 0;
       ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.fillText((this.daily ? T('dailyBest') : T('best')) + ' ' + this.bestHere, W / 2, H * 0.018 + big + 2);
+      ctx.fillText((this.daily ? T('dailyBest') : T('best')) + ' ' + this.bestHere, W / 2, top + big + 2);
 
       // combo (right side)
       if (this.combo > 1) {
         const mult = this.comboMult();
         ctx.textAlign = 'right';
         const cx = W - clamp(W * 0.04, 14, 40);
-        const cy = H * 0.03;
+        const cy = (this.safeTop || 0) + H * 0.02;
         const csz = clamp(H * 0.045, 24, 44) * (1 + Math.min(0.5, this.combo * 0.02));
         const col = this.flowActive ? 'hsl(300 100% 72%)' : this.moteColor();
         ctx.font = `800 ${csz}px "Rajdhani", system-ui, sans-serif`;

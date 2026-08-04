@@ -84,26 +84,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   JWT = token();
 
-  // Apple processes for a few minutes after the upload returns. Assigning a
-  // build that is still PROCESSING is rejected, so wait for it — but bounded,
-  // because a CI job that hangs forever is worse than one that says so.
-  let build = null;
-  for (let i = 0; i < 40; i++) {                       // ~20 minutes
-    const r = await api('GET', '/v1/apps/' + APP_ID + '/builds?limit=10');
-    const sorted = [...(r.data || [])].sort(
-      (a, b) => new Date(b.attributes.uploadedDate) - new Date(a.attributes.uploadedDate));
-    build = sorted[0];
-    if (!build) throw new Error('no builds on the app record at all');
-    const state = build.attributes.processingState;
-    console.log('build ' + build.attributes.version + ': ' + state);
-    if (state === 'VALID') break;
-    if (state === 'FAILED' || state === 'INVALID') throw new Error('build ' + state);
-    await sleep(30000);
-  }
-  if (build.attributes.processingState !== 'VALID') {
-    throw new Error('still processing after 20 minutes — assign it by hand');
-  }
-
+  // Resolve the group FIRST, because what it already offers is how we recognise
+  // the build that was just uploaded.
   let groups = await api('GET', '/v1/apps/' + APP_ID + '/betaGroups?limit=20');
   let group = (groups.data || []).find((g) => g.attributes.name === GROUP)
     || (groups.data || []).find((g) => g.attributes.isInternalGroup);
@@ -116,11 +98,41 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     console.log('created the ' + GROUP + ' group');
   }
 
-  const already = await api('GET', '/v1/betaGroups/' + group.id + '/builds?limit=20');
-  if ((already.data || []).some((b) => b.id === build.id)) {
-    console.log('already assigned; nothing to do');
-    return;
+  const already = await api('GET', '/v1/betaGroups/' + group.id + '/builds?limit=50');
+  const assigned = new Set((already.data || []).map((b) => b.id));
+
+  // Now wait for a build the group does NOT already have.
+  //
+  // Sorting by uploadedDate was necessary and still not enough: this runs
+  // seconds after altool returns, and Apple has not always created the record
+  // yet. "Newest" was therefore the PREVIOUS build — already assigned — so the
+  // script printed "nothing to do" and exited 0. The step went green, the phone
+  // kept offering the old build, and the person who found out was the tester.
+  //
+  // Membership is the signal that cannot lie: a build that was just uploaded is
+  // by definition not in the group yet. And if nothing new ever shows up, say so
+  // with a non-zero exit — a silent success is worse than a red step, because
+  // only one of the two gets looked at.
+  let build = null;
+  for (let i = 0; i < 40; i++) {                       // ~20 minutes
+    const r = await api('GET', '/v1/apps/' + APP_ID + '/builds?limit=20');
+    build = [...(r.data || [])]
+      .filter((b) => !assigned.has(b.id))
+      .sort((a, b) => new Date(b.attributes.uploadedDate) - new Date(a.attributes.uploadedDate))[0] || null;
+    if (!build) {
+      console.log('the upload has not appeared in App Store Connect yet');
+    } else {
+      const state = build.attributes.processingState;
+      console.log('build ' + build.attributes.version + ': ' + state);
+      if (state === 'VALID') break;
+      if (state === 'FAILED' || state === 'INVALID') throw new Error('build ' + state);
+    }
+    await sleep(30000);
   }
+  if (!build || build.attributes.processingState !== 'VALID') {
+    throw new Error('no new build reached VALID within 20 minutes — assign it by hand');
+  }
+
   await api('POST', '/v1/betaGroups/' + group.id + '/relationships/builds',
             { data: [{ type: 'builds', id: build.id }] });
 
