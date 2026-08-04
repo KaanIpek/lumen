@@ -144,14 +144,15 @@
       onTap($('tab-lb-daily'), () => { this.click(); this.setBoard('daily'); });
       onTap($('tab-lb-all'), () => { this.click(); this.setBoard('all'); });
       onTap($('btn-lb-refresh'), () => { this.click(); this.refreshBoard(); });
+      onTap($('btn-lb-name'), () => { this.click(); this.saveName(); });
       const nameInput = $('lb-name');
       if (nameInput) {
         nameInput.value = (LUMEN.Leaderboard && LUMEN.Leaderboard.playerName) || '';
-        nameInput.addEventListener('input', () => {
-          if (LUMEN.Leaderboard) LUMEN.Leaderboard.playerName = nameInput.value;
-        });
         // typing here must never reach the game's window-level key handler
-        nameInput.addEventListener('keydown', (e) => e.stopPropagation());
+        nameInput.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') { e.preventDefault(); this.saveName(); }
+        });
       }
 
       // revive
@@ -1252,6 +1253,9 @@
       const onlineTab = tab !== 'me' && !!LB && LB.enabled;
       if (refresh) refresh.classList.toggle('hidden', !onlineTab);
       if (nameRow) nameRow.classList.toggle('hidden', !onlineTab);
+      const nameInput = $('lb-name');
+      if (nameInput && LB) nameInput.value = LB.playerName || '';
+      this.updateNameHint();
       if (tab === 'me') {
         note.classList.add('hidden');
         return this.renderScores();
@@ -1276,6 +1280,36 @@
         note.textContent = T('lbLoading');
       }
       this.loadOnlineScores(scope, false);
+    },
+
+    // Saving a name is not filing it away for later — it is the act of asking to
+    // be on the board. The old field did only the first half: it stored a string
+    // and waited for some future personal best, so a player who had already set
+    // theirs typed a name, saw nothing change, and was right to call it broken.
+    saveName() {
+      const LB = LUMEN.Leaderboard;
+      const input = $('lb-name');
+      if (!LB || !input) return;
+      const name = LB.cleanName(input.value);
+      input.value = name;                       // show what was actually accepted
+      if (!name) { this.toast(T('lbNameEmpty')); return; }
+      LB.playerName = name;
+      LB.flushPending().then((sent) => {
+        this.toast(sent.length ? T('lbNameSent', { n: name }) : T('lbNameSaved', { n: name }));
+        if (sent.length && this.boardTab !== 'me') this.refreshBoard();
+        this.updateNameHint();
+      }).catch(() => { this.toast(T('lbNameSaved', { n: name })); this.updateNameHint(); });
+    },
+
+    // Say why the board does not have you on it yet, rather than leaving an
+    // empty field to be interpreted.
+    updateNameHint() {
+      const hint = $('lb-name-hint');
+      if (!hint) return;
+      const LB = LUMEN.Leaderboard;
+      const held = Object.keys((Store && Store.pendingBest) || {}).length > 0;
+      const show = this.boardTab !== 'me' && !!LB && LB.enabled && (!LB.named || held);
+      hint.classList.toggle('hidden', !show);
     },
 
     // The online boards are fetched once per session. This is the one control
@@ -1319,12 +1353,17 @@
       list.innerHTML = '';
       const empty = $('score-empty');
       if (empty) empty.classList.toggle('hidden', rows.length > 0);
+      // "Why isn't my name here?" is the first question anyone asks a board, and
+      // twenty rows of strangers is a slow way to answer it.
+      const mine = (LUMEN.Leaderboard && LUMEN.Leaderboard.cleanName(LUMEN.Leaderboard.playerName) || '').toLowerCase();
       rows.forEach((e, i) => {
         const li = document.createElement('li');
-        if (i === 0) li.className = 'top';
+        const isMe = mine && String(e.name || '').toLowerCase() === mine;
+        li.className = (i === 0 ? 'top' : '') + (isMe ? ' you' : '');
         // textContent, not innerHTML — names come from other people
         const pos = document.createElement('span'); pos.className = 'pos'; pos.textContent = i + 1;
-        const nm = document.createElement('span'); nm.className = 'val'; nm.textContent = e.name;
+        const nm = document.createElement('span'); nm.className = 'val';
+        nm.textContent = e.name + (isMe ? ' (' + T('lbYou') + ')' : '');
         const sc = document.createElement('span'); sc.className = 'cmb'; sc.textContent = Number(e.score).toLocaleString();
         const cb = document.createElement('span'); cb.className = 'dt'; cb.textContent = '×' + (e.combo || 0);
         li.append(pos, nm, sc, cb);
@@ -1352,11 +1391,22 @@
           el.textContent = text;
           return el;
         };
+        // Which game this score came from. Without it a Sprint run sitting above
+        // a Classic one looks like a bug rather than a different question — and
+        // that ambiguity is the whole reason these rows used to be thrown away.
+        const m = e.m || 'classic';
+        const modeName = m === 'daily' ? T('lbDaily')
+          : (LUMEN.Modes && LUMEN.Modes.name ? LUMEN.Modes.name(m) : m);
+        // Stacked into the existing last column rather than added as a fifth
+        // one: five columns fit a desktop and crush a phone.
+        const when = document.createElement('span');
+        when.className = 'dt';
+        when.append(span('mode', String(modeName || '')), span('day', String(e.d || '')));
         li.append(
           span('pos', String(i + 1)),
           span('val', Number(e.s).toLocaleString()),
           span('cmb', 'x' + (Number(e.c) || 0)),
-          span('dt', String(e.d || ''))
+          when
         );
         list.appendChild(li);
       });

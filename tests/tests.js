@@ -1452,7 +1452,14 @@
     eq(L.Store.best, classicBest, 'a huge Sprint score does NOT overwrite the Classic best');
     assert(L.Modes.best('sprint') > 0, 'Sprint keeps its own');
     eq(L.Modes.best('vortex'), 0, 'and modes do not share records');
-    eq(L.Scores.list().length, 1, 'the local top-10 is Classic only');
+    // MY RUNS is a personal history, so it holds both runs — what stays
+    // Classic-only is the RANKING, because a rank across two different games
+    // means nothing. Filing only Classic here is what made the screen look
+    // broken: six modes and the daily wrote nothing at all.
+    eq(L.Scores.list().length, 2, 'MY RUNS keeps every ranked run');
+    eq(L.Scores.list().map((e) => e.m).sort().join(','), 'classic,sprint', 'each row knows its mode');
+    eq(L.Scores.list('classic').length, 1, 'but a Classic ranking sees only Classic');
+    eq(L.Scores.rankOf(1000, 'classic'), 1, 'so the Classic run still ranks first in Classic');
     L.Modes.setCurrent('classic');
   });
 
@@ -3864,6 +3871,10 @@
     try {
       L.Modes.setCurrent('classic');
       L.Store.difficulty = 'normal';
+      // A best is only SENT once there is a name on it — see the hold test
+      // below. Without this the board fills with "anon" rows that no player can
+      // ever reclaim, which is exactly what happened on the live board.
+      L.Store.playerName = 'tester';
       const run = (raw) => {
         const g = newGame();
         g.start();
@@ -3879,6 +3890,54 @@
       eq(L.Store.scores.length, 4, 'but every run is kept on the device');
     } finally {
       LB.submitQuietly = realSubmit;
+      L.Modes.setCurrent('classic');
+    }
+  });
+
+  // There are no accounts here, so a row belongs to whoever typed the name on
+  // it — which makes "anon" permanent. A best set before the player has ever
+  // opened the leaderboard screen must WAIT for a name rather than go up under
+  // one shared with every other silent player. The live board's top three rows
+  // were all "anon" for exactly this reason.
+  test('A nameless best is held, then sent the moment a name exists', async () => {
+    freshStorage();
+    const LB = L.Leaderboard;
+    const realSubmit = LB.submit;
+    const realSb = LB._sb;
+    const sent = [];
+    LB.submit = (s, c, b) => { sent.push({ score: s, board: b }); return Promise.resolve(null); };
+    LB._sb = { url: 'https://test.invalid', key: 'k' };      // so `enabled` is true
+    try {
+      L.Store.playerName = '';
+      L.Modes.setCurrent('classic');
+      const run = (raw) => { const g = newGame(); g.start(); g.score = raw; g.finalizeRun(); g.toMenu(); };
+
+      run(700);
+      eq(sent.length, 0, 'nothing goes up while the player is nameless');
+      eq(L.Store.pendingBest.alltime.score, 700, 'the best is held instead');
+
+      run(1500);
+      eq(sent.length, 0, 'still nothing');
+      eq(L.Store.pendingBest.alltime.score, 1500, 'and only the better of them is held');
+      eq(Object.keys(L.Store.pendingBest).length, 1, 'one entry per board, not one per run');
+
+      L.Store.playerName = 'kaan';
+      const boards = await LB.flushPending();
+      eq(boards.join(','), 'alltime', 'naming yourself sends what was held');
+      eq(sent.length, 1, 'exactly once');
+      eq(sent[0].score, 1500, 'and it is the best run, not the first');
+      eq(Object.keys(L.Store.pendingBest).length, 0, 'the queue is then empty');
+
+      // A failed submit must keep its entry, or the run is lost in silence.
+      LB.submit = () => Promise.reject(new Error('offline'));
+      LB.hold(2000, 5, 'alltime');
+      const none = await LB.flushPending();
+      eq(none.length, 0, 'a failed send reports nothing sent');
+      eq(L.Store.pendingBest.alltime.score, 2000, 'and the run is still queued for next time');
+    } finally {
+      LB.submit = realSubmit;
+      LB._sb = realSb;
+      L.Store.playerName = '';
       L.Modes.setCurrent('classic');
     }
   });

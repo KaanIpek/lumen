@@ -123,6 +123,15 @@
     set pollVote(v) { this._write('lumen_pollvote', String(v || '')); },
     get playerName() { return this._read('lumen_name', ''); },
     set playerName(v) { this._write('lumen_name', v); },
+    // Bests that have no name to go up under yet, keyed by board.
+    get pendingBest() {
+      try { return JSON.parse(this._read('lumen_pending', '') || '{}') || {}; }
+      catch (e) { return {}; }
+    },
+    set pendingBest(v) {
+      const keys = v && typeof v === 'object' ? Object.keys(v) : [];
+      this._write('lumen_pending', keys.length ? JSON.stringify(v) : '');
+    },
     get difficulty() { return this._read('lumen_diff', 'normal'); },
     set difficulty(v) { this._write('lumen_diff', v); },
     get colorblind() { return this._read('lumen_cb', 'off'); },
@@ -1783,7 +1792,7 @@
       // keeps its own record instead, because a Sprint score and a Precision score
       // are answers to different questions and mixing them means nothing.
       const isClassic = modeId === 'classic';
-      const rankBefore = !this.daily && isClassic && LUMEN.Scores ? LUMEN.Scores.rankOf(s) : 0;
+      const rankBefore = !this.daily && isClassic && LUMEN.Scores ? LUMEN.Scores.rankOf(s, 'classic') : 0;
       // Read the OLD record before anything below overwrites it. This used to be
       // read afterwards, so on a new best prevBest === score and the game-over
       // line "you doubled your record" (score > prevBest * 2) could never fire
@@ -1798,9 +1807,19 @@
       } else if (isClassic) {
         isBest = s > Store.best;
         if (isBest) Store.best = s;
-        if (LUMEN.Scores) LUMEN.Scores.record(s, this.bestComboRun);
       } else {
         isBest = ranked && LUMEN.Modes ? LUMEN.Modes.recordBest(modeId, s) : false;
+      }
+
+      // MY RUNS is the player's own history, so it gets EVERY ranked run.
+      //
+      // This used to sit inside the Classic branch above, which meant six of the
+      // seven modes and the whole daily wrote nothing at all: you could play for
+      // an hour, open the board, and find it empty. The mode travels with the row
+      // so the list can say which game each score came from — which was the real
+      // reason to keep them apart, and it does not require throwing them away.
+      if (ranked && LUMEN.Scores) {
+        LUMEN.Scores.record(s, this.bestComboRun, this.daily ? 'daily' : modeId);
       }
 
       if (LUMEN.Analytics) {
@@ -1817,8 +1836,16 @@
         // into one player's diary — twenty mediocre runs from whoever played
         // most, burying better scores from everyone else. A leaderboard is a
         // list of bests, so only send a run that is one.
+        // …and only under a name the player chose. A score sent before anyone
+        // has opened the leaderboard screen goes up as "anon", and nothing can
+        // rename it afterwards: there are no accounts, so the row belongs to
+        // whoever typed it. The top of the live board was three "anon" entries
+        // for exactly this reason. A nameless best is HELD instead, and goes up
+        // the moment there is a name to put on it.
         if (LUMEN.Leaderboard && isBest) {
-          LUMEN.Leaderboard.submitQuietly(s, this.bestComboRun, this.daily ? 'daily' : 'alltime');
+          const board = this.daily ? 'daily' : 'alltime';
+          if (LUMEN.Leaderboard.named) LUMEN.Leaderboard.submitQuietly(s, this.bestComboRun, board);
+          else LUMEN.Leaderboard.hold(s, this.bestComboRun, board);
         }
         // …and the same rule for Steam's boards, when running inside that build
         if (LUMEN.Steam) LUMEN.Steam.submitScore(s, this.daily ? 'daily' : 'alltime');

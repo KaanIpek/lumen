@@ -221,6 +221,54 @@
       if (!this.enabled || !(score > 0)) return;
       this.submit(score, combo, board).catch(() => {});
     },
+
+    // ---- holding a best until it has a name -------------------------------
+    // There are no accounts here, so a row belongs to whoever typed the name on
+    // it — which makes "anon" permanent. A player who set a personal best before
+    // ever opening this screen had that best filed under a name shared with
+    // every other silent player, and no later edit could reclaim it.
+    //
+    // So a nameless best waits. `hold` keeps the best per board (the daily's is
+    // stamped with its day, because a daily board closes), and `flushPending`
+    // sends it the moment a name exists.
+    get named() { return !!this.cleanName(this.playerName); },
+
+    hold(score, combo, board) {
+      if (!Store || !(score > 0)) return;
+      const b = board === 'daily' ? 'daily' : 'alltime';
+      const day = b === 'daily' ? (LUMEN.Daily ? LUMEN.Daily.todayStr() : '') : '';
+      const all = Store.pendingBest;
+      const cur = all[b];
+      // Only the better run is worth keeping — and a new day's daily replaces
+      // yesterday's regardless of score, because they are different boards.
+      if (cur && cur.day === day && cur.score >= score) return;
+      all[b] = { score: Math.floor(score), combo: Math.floor(combo || 0), day };
+      Store.pendingBest = all;
+    },
+
+    // Returns the boards that actually went up, so the caller can say something
+    // true rather than something hopeful.
+    flushPending() {
+      const all = (Store && Store.pendingBest) || {};
+      const boards = Object.keys(all);
+      if (!boards.length || !this.enabled || !this.named) return Promise.resolve([]);
+      const today = LUMEN.Daily ? LUMEN.Daily.todayStr() : '';
+      const jobs = boards.map((b) => {
+        const p = all[b];
+        if (!p || !(p.score > 0)) return Promise.resolve(null);
+        if (b === 'daily' && p.day !== today) return Promise.resolve(null);  // that board has closed
+        return this.submit(p.score, p.combo, b).then(() => b).catch(() => null);
+      });
+      return Promise.all(jobs).then((done) => {
+        // Drop only what was sent. A failed submit keeps its entry so the next
+        // attempt still has it; a stale daily is dropped either way.
+        const left = Object.assign({}, all);
+        done.filter(Boolean).forEach((b) => delete left[b]);
+        if (left.daily && left.daily.day !== today) delete left.daily;
+        Store.pendingBest = left;
+        return done.filter(Boolean);
+      });
+    },
   };
 
   LUMEN.Leaderboard = Leaderboard;

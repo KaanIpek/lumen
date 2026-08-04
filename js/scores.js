@@ -32,16 +32,29 @@
       c: Math.max(0, Math.floor(+e.c) || 0),
       d: String(e.d == null ? '' : e.d).slice(0, 10),
       t: Math.max(0, Math.floor(+e.t) || 0),
+      m: String(e.m == null ? '' : e.m).slice(0, 16),
     }));
+
+  // Rows saved before this file knew about modes have no `m`. They were only
+  // ever written by Classic, so that is what they are — guessing anything else
+  // would relabel a player's own history.
+  const modeOf = (e) => e.m || 'classic';
 
   const Scores = {
     MAX: SHOW,      // kept: other modules read this
     SHOW,
     KEEP,
 
-    // best first — this is a board, not a log
-    list() {
-      return clean(Store.scores).sort((a, b) => b.s - a.s).slice(0, SHOW);
+    // best first — this is a board, not a log.
+    //
+    // `mode` filters to one game. MY RUNS passes nothing, because a player's own
+    // history is every run they played; ranking passes 'classic', because a
+    // Sprint score and a Classic score answer different questions and a rank
+    // across both means nothing.
+    list(mode) {
+      const all = clean(Store.scores);
+      const rows = mode ? all.filter((e) => modeOf(e) === mode) : all;
+      return rows.sort((a, b) => b.s - a.s).slice(0, SHOW);
     },
 
     // everything still stored, newest first
@@ -50,16 +63,16 @@
     },
 
     // Where a score WOULD place (1-based) on the shown board, or 0 if it misses.
-    rankOf(score) {
-      const l = this.list();
+    rankOf(score, mode) {
+      const l = this.list(mode);
       let rank = 1;
       for (const e of l) { if (e.s > score) rank++; }
       return rank <= SHOW ? rank : 0;
     },
 
-    record(score, combo) {
+    record(score, combo, mode) {
       if (!(score > 0)) return 0;
-      const rank = this.rankOf(score);
+      const rank = this.rankOf(score, mode);
       const d = new Date();
       const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       // "Newest" has to be an ordering we can trust. The wall clock is not one:
@@ -69,7 +82,8 @@
       const prev = clean(Store.scores);
       let newest = 0;
       for (const e of prev) if ((e.t || 0) > newest) newest = e.t || 0;
-      const entry = { s: Math.floor(score), c: combo || 0, d: stamp, t: Math.max(Date.now(), newest + 1) };
+      const entry = { s: Math.floor(score), c: combo || 0, d: stamp,
+                      t: Math.max(Date.now(), newest + 1), m: String(mode || 'classic') };
 
       const all = prev.concat([entry]);
       // the one run to protect, whatever else happens
