@@ -190,8 +190,18 @@ function api(method, p, body) {
 
 // 1290x2796 lives in the slot App Store Connect labels "6.9-inch", which also
 // takes 6.5" and 6.7" art. Apple's enum for it is still the older 67 name.
-const SHOT_TYPE = 'APP_IPHONE_67';
-const SHOT_FILES = ['apple-67-a.png', 'apple-67-b.png', 'apple-67-c.png'];
+//
+// Two sets, because the app ships for iPhone AND iPad and Apple requires
+// artwork for each device family it is offered on. A single-set uploader was
+// fine while this was an iPhone-only build and became a submission blocker the
+// moment iPad went back in.
+const SHOT_SETS = [
+  { type: 'APP_IPHONE_67',
+    files: ['apple-67-a.png', 'apple-67-b.png', 'apple-67-c.png'] },
+  // 2048x2732 is the 12.9"/13" iPad slot.
+  { type: 'APP_IPAD_PRO_3GEN_129',
+    files: ['apple-ipad13-a.png', 'apple-ipad13-b.png', 'apple-ipad13-c.png'] },
+];
 
 function putBytes(op, buf) {
   return new Promise((resolve, reject) => {
@@ -218,6 +228,12 @@ async function uploadScreenshots(versionId) {
   const locs = await api('GET', '/v1/appStoreVersions/' + versionId + '/appStoreVersionLocalizations?limit=50');
   const en = (locs.data || []).find((l) => l.attributes.locale === 'en-US');
   if (!en) throw new Error('no en-US localization to attach screenshots to');
+  for (const spec of SHOT_SETS) await uploadOneSet(en, spec);
+}
+
+async function uploadOneSet(en, spec) {
+  const SHOT_TYPE = spec.type, SHOT_FILES = spec.files;
+  console.log('  ' + SHOT_TYPE + ':');
 
   // Reuse the set if one exists; a second set for the same display type is
   // rejected, and creating one per run would fail every run after the first.
