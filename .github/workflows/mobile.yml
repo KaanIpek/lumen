@@ -332,10 +332,23 @@ jobs:
           #
           # -destination generic/platform=iOS rather than -sdk iphoneos: an
           # archive wants a generic destination, not a device to resolve against.
+          # iPhone only, on purpose. Capacitor's template targets "1,2" — iPhone
+          # AND iPad — by default, and nothing here ever decided otherwise.
+          #
+          # It is not a free extra platform. The orb's radius is capped at 19px,
+          # so on a 393px-wide iPhone it is 5% of the screen and on a 2048px iPad
+          # it is 0.9%: the same speck, five and a half times smaller, in a
+          # corridor that has spread out to fill 13 inches. A generated iPad
+          # screenshot is what made this obvious — it looks empty, because it is.
+          #
+          # Shipping that would also oblige us to supply iPad screenshots showing
+          # it. One line is the honest answer until the game is actually tuned
+          # for a tablet.
           xcodebuild -workspace App.xcworkspace -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
+            TARGETED_DEVICE_FAMILY=1 \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             archive
           xcodebuild -exportArchive \
