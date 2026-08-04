@@ -847,7 +847,7 @@
       // NaN) — fall back through the document, then to a sane default, and let a
       // later resize correct it once the real viewport exists.
       const d = document.documentElement;
-      const w = forceW || window.innerWidth || (d && d.clientWidth) || this.W || 360;
+      let w = forceW || window.innerWidth || (d && d.clientWidth) || this.W || 360;
       const h = forceH || window.innerHeight || (d && d.clientHeight) || this.H || 640;
       // Cap the backing-store resolution. A 4K fullscreen canvas at dpr 2 is 14.7M
       // pixels; every full-screen pass pays for all of them. For a glow-heavy neon
@@ -863,7 +863,27 @@
       this.canvas.style.height = h + 'px';
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const prevW = this.W, prevTop = this.playTop, prevH = this.playH;
-      this.W = w; this.H = h;
+      // ---- the stage ---------------------------------------------------------
+      // A wide screen gets a phone-shaped COLUMN, not a corridor stretched to
+      // fill it. The backdrop still covers the glass; the game does not.
+      //
+      // Letting the playfield take the whole width looks like device support and
+      // is not: the orb's radius comes from min(H, W*1.5) capped at 19px, which
+      // on both iPads hits the cap, so the orb shrinks from 5.1% of the width to
+      // 3.7%, and to 2.5% in landscape. Scaling the orb up instead is worse —
+      // the openings are a fraction of a play HEIGHT that a landscape tablet
+      // does not have, so the gap falls from 11.4 orb-diameters to 4.4 and the
+      // game silently becomes a different, much harder one.
+      //
+      // Fixing the aspect fixes both at once: every device draws the same game
+      // at the same proportions, and the only thing that changes is how much sky
+      // is visible beside it. 0.62 is a shade wider than an iPhone's 0.46 so a
+      // phone is never letterboxed — on a phone stageX is 0 and nothing moves.
+      this.viewW = w;
+      const sw = Math.min(w, h * 0.62);
+      this.stageX = Math.round((w - sw) / 2);
+      this.W = sw; this.H = h;
+      w = sw;
       // The overlays in index.html respect env(safe-area-inset-*). The CANVAS
       // never did — and the score is drawn on the canvas, at H * 0.018, which on
       // a 844px screen is 15px from the top: underneath the notch. Half the
@@ -876,7 +896,7 @@
       this.playTop = this.safeTop + h * 0.085;
       this.playBottom = h * 0.945 - this.safeBottom * 0.5;
       this.playH = this.playBottom - this.playTop;
-      this.bg.resize(w, h);
+      this.bg.resize(this.viewW, h);   // the sky fills the glass, not the column
       this._vigKey = null; // vignette sprites are size-specific
       if (this.player) {
         this.player.x = w * 0.30;
@@ -1155,8 +1175,14 @@
     // edited: the cap below was added to resize, start() overwrote it a frame
     // later, and the measurement said nothing had changed. One getter, two
     // readers.
-    get orbR() { return clamp(this.scaleRef * 0.017, 9, 19); }
-    get obstacleW() { return clamp(this.scaleRef * 0.028, 14, 30); }
+    // The upper clamps existed for phones, where nothing ever approached them.
+    // A 13-inch tablet does: at 19px the orb came out 4.5% of the stage instead
+    // of the 5.1% every other device gets, and the pillars 3.5% instead of 4.2%
+    // — a cap meant to stop a phone looking silly was quietly shrinking the game
+    // on the one screen with room for it. Raised until no real device sits on
+    // them; the lower clamps, which do real work on a small phone, are untouched.
+    get orbR() { return clamp(this.scaleRef * 0.017, 9, 24); }
+    get obstacleW() { return clamp(this.scaleRef * 0.028, 14, 38); }
 
     // ---- input -----------------------------------------------------------
     _bind() {
@@ -1559,7 +1585,10 @@
       if (LUMEN.Cosmetics) {
         LUMEN.Cosmetics.setPreview(LUMEN.Cosmetics.inSeason());
         this.resolveMode();               // re-read the world through the preview
-        this.bg.resize(this.W, this.H);   // and rebake the sky in its colours
+        // viewW, not W. W is the play COLUMN, and baking the sky at that width
+        // left a hard vertical seam down a tablet: tinted sky beside bare navy,
+        // which reads as a rendering fault rather than a letterbox.
+        this.bg.resize(this.viewW, this.H);   // and rebake the sky in its colours
       }
       this.state = State.PLAY;
     }
@@ -2972,7 +3001,14 @@
       const { W, H } = this;
       const hue = lerp(this.hueBase, 305, this.flow);
 
+      // The backdrop is painted across the whole canvas and OUTSIDE the stage
+      // transform, so on a tablet the sky reaches both edges while the corridor
+      // stays a phone-shaped column in the middle. On a phone stageX is 0 and
+      // this is exactly what it always was.
+      this.bg.draw(ctx, hue, this.flow);
+
       ctx.save();
+      if (this.stageX) ctx.translate(this.stageX, 0);
       // screen shake (skipped when "reduce flashing" is on)
       if (this.shake > 0.3 && !calmVisuals()) {
         const s = this.shake;
@@ -2999,7 +3035,6 @@
         ctx.translate(-W * 0.5, -H * 0.5);
       }
 
-      this.bg.draw(ctx, hue, this.flow);
       this.drawWalls(ctx, hue);
       this.drawObstacles(ctx);
       this.drawTraps(ctx);
@@ -3133,6 +3168,16 @@
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(0, this.playTop); ctx.lineTo(W, this.playTop); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, this.playBottom); ctx.lineTo(W, this.playBottom); ctx.stroke();
+      // On a tablet the corridor is a column with sky either side. Closing the
+      // rectangle makes that a frame instead of a crop — without these two
+      // strokes the play area just stops, and a boundary with no edge reads as a
+      // drawing fault. On a phone stageX is 0 and they sit off-screen, unseen.
+      if (this.stageX) {
+        ctx.strokeStyle = `hsla(${h} 92% 72% / ${a * 0.55})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(0.5, this.playTop); ctx.lineTo(0.5, this.playBottom); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(W - 0.5, this.playTop); ctx.lineTo(W - 0.5, this.playBottom); ctx.stroke();
+      }
       ctx.restore();
     }
 
