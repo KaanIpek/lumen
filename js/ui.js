@@ -80,6 +80,8 @@
         poll: $('screen-poll'),
       };
 
+      this.installBackButtons();
+
       onTap($('btn-play'), () => {
         this.click();
         // PLAY plays. The tutorial has its own button and its own purpose —
@@ -1384,6 +1386,40 @@
     // opened. So a screen that was open when the language changed kept the old
     // one until you left and came back, which is exactly what it looks like when
     // a translation is missing. Nothing was missing; nothing had been redrawn.
+    // Give every panel that can be closed a back button, top-left and sticky.
+    //
+    // Derived from the ✕ rather than hand-written into six headers: a screen
+    // added later gets one for free, and one that loses its ✕ loses its back
+    // button too, instead of keeping a control that closes nothing. The ✕ stays
+    // put and keeps its handler — this presses it — so the close path itself is
+    // untouched and there is nothing new to keep in sync.
+    installBackButtons() {
+      document.querySelectorAll('.overlay .panel').forEach((panel) => {
+        const x = panel.querySelector('.icon-x');
+        if (!x || panel.classList.contains('has-back')) return;
+        const bar = document.createElement('div');
+        bar.className = 'panel-back';
+        const b = document.createElement('button');
+        b.className = 'btn-back ui-interactive';
+        b.type = 'button';
+        b.setAttribute('aria-label', x.getAttribute('aria-label') || 'Back');
+        b.setAttribute('data-i18n-aria', 'ariaClose');
+        // The arrow is decorative; the word next to it is what gets translated,
+        // and a screen reader should hear one label, not "left arrow BACK".
+        const arw = document.createElement('span');
+        arw.className = 'arw'; arw.setAttribute('aria-hidden', 'true');
+        arw.textContent = '←';
+        const label = document.createElement('span');
+        label.setAttribute('data-i18n', 'back');
+        label.textContent = T('back');
+        b.append(arw, label);
+        onTap(b, () => x.click());
+        bar.appendChild(b);
+        panel.insertBefore(bar, panel.firstChild);
+        panel.classList.add('has-back');
+      });
+    },
+
     relocalize() {
       switch (this.currentScreen) {
         case 'shop':     this.renderShop(); this.updateTabs(); break;

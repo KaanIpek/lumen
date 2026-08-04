@@ -70,9 +70,10 @@ html, body {
 @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
 
 .panel {
+  --panel-pad: clamp(24px, 5vw, 40px);
   position: relative;
   width: min(440px, 92vw);
-  padding: clamp(24px, 5vw, 40px);
+  padding: var(--panel-pad);
   text-align: center;
   background: var(--panel);
   border: 1px solid var(--panel-brd);
@@ -331,6 +332,45 @@ kbd {
   background: rgba(255,255,255,.05); border: 1px solid var(--panel-brd); color: var(--ink); font-size: 16px;
 }
 .icon-x:hover { border-color: var(--magenta); color: #fff; }
+
+/* ---- the way out of a panel ----------------------------------------------
+   Every screen closed from a ✕ in its top-RIGHT corner — which is directly
+   underneath the fixed mute and fullscreen buttons. Two unrelated controls
+   sharing one thumb-width, and a few pixels decide which one you get. It also
+   scrolled away with the content, so leaving a long shop meant scrolling back
+   up to find the exit first.
+
+   So: top-LEFT, out from under the corner the system already owns, and stuck
+   in view. The .panel IS the scroll container, so `sticky` here rides down the
+   page with you. The ✕ keeps its handler and stays in the DOM — this button
+   presses it — so nothing about closing changed except where you reach. */
+.panel-back {
+  /* The negative top matters. A sticky element does not stick to the scroll
+     container's edge — it sticks inside its PADDING, so `top: 0` parked the bar
+     24px down and left a strip above it that cards scrolled through in full
+     view. The offset cancels the panel's padding, exactly like the margin
+     below it, so stuck and unstuck are the same place. */
+  position: sticky; top: calc(-1 * var(--panel-pad)); z-index: 6;
+  margin: calc(-1 * var(--panel-pad)) calc(-1 * var(--panel-pad)) 6px;
+  padding: 10px var(--panel-pad) 12px;
+  text-align: left;
+  border-radius: 24px 24px 0 0;
+  /* Opaque where the button sits, fading out below, so content scrolling
+     underneath slides away instead of colliding with it. */
+  background: linear-gradient(to bottom, rgba(11,14,32,0.97) 80%, rgba(11,14,32,0));
+}
+.btn-back {
+  display: inline-flex; align-items: center; gap: 9px;
+  min-height: 44px; padding: 0 16px 0 13px; cursor: pointer;
+  border-radius: 12px; background: rgba(255,255,255,.05);
+  border: 1px solid var(--panel-brd); color: var(--ink);
+  font-family: var(--font-display); font-weight: 700;
+  font-size: 13px; letter-spacing: .09em;
+  transition: border-color .2s, color .2s, background .2s;
+}
+.btn-back:hover { border-color: var(--magenta); color: #fff; background: rgba(255,255,255,.08); }
+.btn-back .arw { font-size: 18px; line-height: 1; margin-top: -1px; }
+.panel.has-back .icon-x { display: none; }
 .shop-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
 .tab {
   flex: 1; padding: 13px 11px; min-height: 44px; border-radius: 11px; cursor: pointer; font-family: var(--font-display);
