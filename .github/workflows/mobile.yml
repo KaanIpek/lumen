@@ -345,11 +345,19 @@ jobs:
           # a much harder one. The playfield is a phone-shaped column now
           # (js/game.js, resize), so every device draws the orb at 5.1% of the
           # stage and the openings at the same 9-11 orb-diameters.
+          #
+          # IPHONEOS_DEPLOYMENT_TARGET is set here because nothing else set it:
+          # the build inherited Capacitor's iOS 13, and Apple flagged it as a
+          # minimum that stops being accepted in 2027. 15.0 clears the warning
+          # while still reaching the iPhone 6s. This game is a canvas in a
+          # WKWebView and asks nothing of a newer OS, so the only thing a higher
+          # floor would buy is fewer players.
           xcodebuild -workspace App.xcworkspace -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
             TARGETED_DEVICE_FAMILY="1,2" \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             archive
           xcodebuild -exportArchive \
