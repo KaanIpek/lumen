@@ -756,27 +756,30 @@
   // ---- main game -----------------------------------------------------------
   const State = { MENU: 'menu', PLAY: 'play', PAUSE: 'pause', DEAD: 'dead' };
 
-  // Reads a CSS environment inset into a number. Cached: the value cannot change
-  // without an orientation change, and every resize would otherwise force layout.
-  let _insetEl = null, _insetCache = {};
+  // Reads a CSS environment inset into a number, every time it is asked.
+  //
+  // The first version cached the answer, and that is precisely why the score
+  // stayed under the notch after it was "fixed": the first call happens inside
+  // resize(), which can run before the document has laid out, so it measured 0 —
+  // and then kept serving that 0 for the life of the page. A cache whose first
+  // entry is wrong is worse than no cache, because it hides the fix.
+  //
+  // resize() is not a hot path (a rotation, a URL bar collapsing), so one
+  // getComputedStyle per call costs nothing worth protecting.
+  let _insetEl = null;
   function readInset(side) {
-    if (_insetCache[side] != null) return _insetCache[side];
     try {
-      if (!_insetEl) {
+      if (!document.body) return 0;
+      if (!_insetEl || !_insetEl.isConnected) {
         _insetEl = document.createElement('div');
-        _insetEl.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;'
-          + 'padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
+        _insetEl.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;'
+          + 'pointer-events:none;padding-top:env(safe-area-inset-top);'
+          + 'padding-bottom:env(safe-area-inset-bottom)';
         document.body.appendChild(_insetEl);
       }
       const cs = getComputedStyle(_insetEl);
-      _insetCache.top = parseFloat(cs.paddingTop) || 0;
-      _insetCache.bottom = parseFloat(cs.paddingBottom) || 0;
-    } catch (e) { _insetCache = { top: 0, bottom: 0 }; }
-    return _insetCache[side] || 0;
-  }
-  // An orientation change moves the notch; nothing else does.
-  if (typeof window !== 'undefined') {
-    window.addEventListener('orientationchange', () => { _insetCache = {}; });
+      return parseFloat(side === 'top' ? cs.paddingTop : cs.paddingBottom) || 0;
+    } catch (e) { return 0; }
   }
 
   class Game {

@@ -361,3 +361,20 @@ jobs:
         run: |
           xcrun altool --upload-app -f "$RUNNER_TEMP"/export/*.ipa -t ios \
             --apiKey ${{ secrets.ASC_KEY_ID }} --apiIssuer ${{ secrets.ASC_ISSUER_ID }}
+
+      # altool puts the build in App Store Connect and stops there. A build with
+      # no group assigned is a build nobody can install: VALID, invisible, while
+      # the tester's phone keeps offering the previous one. That happened twice,
+      # and both times the person who noticed was the one waiting for the update —
+      # reporting bugs against code that was already fixed, because the fix sat in
+      # a build their phone had never been offered.
+      #
+      # A step a human must remember after every upload is a step that will be
+      # forgotten, and this one fails silently. So the workflow does it.
+      - name: Hand the build to the internal testers
+        if: github.event_name == 'workflow_dispatch' && steps.keys.outputs.signed == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH: /Users/runner/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+        run: node tools/asc-assign-build.js
