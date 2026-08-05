@@ -466,10 +466,14 @@ jobs:
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
             TARGETED_DEVICE_FAMILY="1,2" \
             IPHONEOS_DEPLOYMENT_TARGET=15.0 \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             archive || {
-            # THREE WAYS TO SIGN THE ARCHIVE, ALL CLOSED. Each measured from a
-            # real run, none reasoned about:
+            # No signing flags here on purpose: the app target now carries manual
+            # signing in the project, with a certificate whose private key is on
+            # this machine. Naming any of it on the command line would push it
+            # onto every Pods target too, which is the collision that cost four
+            # runs.
+            #
+            # THREE WAYS THAT DID NOT WORK, each measured from a real run:
             #
             #   no identity          -> automatic signing asks for an iOS App
             #                           Development profile, which is built from
