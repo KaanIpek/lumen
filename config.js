@@ -49,6 +49,17 @@
 
     // ---------------------------------------------------------------
 
+    // ---- Sign in with Apple ----
+    // The Services ID registered in the Apple Developer portal, NOT the bundle
+    // id. It is public by design: it identifies the app to Apple's sign-in page
+    // and proves nothing on its own. The key that DOES prove something is the
+    // .p8, which lives only on your machine and in Supabase's provider settings
+    // as a signed secret — never here, and never in this repository.
+    //
+    // Empty means the web build simply has no sign-in button. The app still
+    // does: on iOS the native sheet uses the bundle id and needs nothing here.
+    appleServiceId: 'com.lumen.game.web',
+
     // Only if you self-host server/leaderboard-server.js instead.
     // Leave empty when using Supabase — Supabase wins if both are set.
     leaderboardEndpoint: '',
