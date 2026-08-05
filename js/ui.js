@@ -144,6 +144,7 @@
       onTap($('tab-lb-daily'), () => { this.click(); this.setBoard('daily'); });
       onTap($('tab-lb-all'), () => { this.click(); this.setBoard('all'); });
       onTap($('btn-lb-refresh'), () => { this.click(); this.refreshBoard(); });
+      onTap($('btn-lb-signin'), () => { this.click(); this.signInApple(); });
       onTap($('btn-lb-name'), () => { this.click(); this.saveName(); });
       const nameInput = $('lb-name');
       if (nameInput) {
@@ -1256,6 +1257,14 @@
       if (nameRow) nameRow.classList.toggle('hidden', !onlineTab);
       const nameInput = $('lb-name');
       if (nameInput && LB) nameInput.value = LB.playerName || '';
+      // The shared board needs an account. Signed out, the name field is not
+      // shown at all: offering somewhere to type a name that cannot be
+      // submitted is how the old screen taught people it was broken.
+      const A = LUMEN.Auth;
+      const authed = !!(A && A.signedIn);
+      if (nameRow && onlineTab && !authed) nameRow.classList.add('hidden');
+      const gate = $('lb-gate');
+      if (gate) gate.classList.toggle('hidden', !(onlineTab && !authed));
       this.updateNameHint();
       if (tab === 'me') {
         note.classList.add('hidden');
@@ -1317,7 +1326,10 @@
         // A cancelled sheet is not a failure and must not be reported as one.
         const msg = String((e && e.message) || '');
         if (/cancel|1001|popup_closed/i.test(msg)) return;
-        this.toast(T('signInFailed'));
+        // Say WHAT went wrong. The first version toasted one fixed sentence for
+        // every cause, so the only report anybody could make was "it says it
+        // didn't complete" — which is exactly as much as it told me too.
+        this.toast(msg ? T('signInFailed') + ' ' + msg.slice(0, 90) : T('signInFailed'));
       });
     },
 
@@ -1347,7 +1359,8 @@
       if (!hint) return;
       const LB = LUMEN.Leaderboard;
       const held = Object.keys((Store && Store.pendingBest) || {}).length > 0;
-      const show = this.boardTab !== 'me' && !!LB && LB.enabled && (!LB.named || held);
+      const authed = !!(LUMEN.Auth && LUMEN.Auth.signedIn);
+      const show = this.boardTab !== 'me' && !!LB && LB.enabled && authed && (!LB.named || held);
       hint.classList.toggle('hidden', !show);
     },
 

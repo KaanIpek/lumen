@@ -3875,6 +3875,12 @@
       // below. Without this the board fills with "anon" rows that no player can
       // ever reclaim, which is exactly what happened on the live board.
       L.Store.playerName = 'tester';
+      // …and an account. The shared board is the one part of this game that
+      // needs one: a name alone never owned a row, because anyone could type it.
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u1' } };
+      // …and somewhere to send it. `canSubmit` asks whether a board exists at
+      // all, which the old name-only check never did.
+      LB._sb = { url: 'https://test.invalid', key: 'k' };
       const run = (raw) => {
         const g = newGame();
         g.start();
@@ -3890,6 +3896,8 @@
       eq(L.Store.scores.length, 4, 'but every run is kept on the device');
     } finally {
       LB.submitQuietly = realSubmit;
+      LB._sb = null;
+      L.Auth.session = null;
       L.Modes.setCurrent('classic');
     }
   });
@@ -3899,7 +3907,7 @@
   // opened the leaderboard screen must WAIT for a name rather than go up under
   // one shared with every other silent player. The live board's top three rows
   // were all "anon" for exactly this reason.
-  test('A nameless best is held, then sent the moment a name exists', async () => {
+  test('A best is held until there is BOTH a name and an account', async () => {
     freshStorage();
     const LB = L.Leaderboard;
     const realSubmit = LB.submit;
@@ -3921,9 +3929,16 @@
       eq(L.Store.pendingBest.alltime.score, 1500, 'and only the better of them is held');
       eq(Object.keys(L.Store.pendingBest).length, 1, 'one entry per board, not one per run');
 
+      // A name on its own is NOT enough any more. It never really was: anyone
+      // could type any name, including one already on the board, so no request
+      // could tell the owner from the impostor.
       L.Store.playerName = 'kaan';
+      eq((await LB.flushPending()).length, 0, 'a name without an account sends nothing');
+      eq(L.Store.pendingBest.alltime.score, 1500, 'and the run is still held');
+
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u1' } };
       const boards = await LB.flushPending();
-      eq(boards.join(','), 'alltime', 'naming yourself sends what was held');
+      eq(boards.join(','), 'alltime', 'signing in sends what was held');
       eq(sent.length, 1, 'exactly once');
       eq(sent[0].score, 1500, 'and it is the best run, not the first');
       eq(Object.keys(L.Store.pendingBest).length, 0, 'the queue is then empty');
@@ -3937,6 +3952,7 @@
     } finally {
       LB.submit = realSubmit;
       LB._sb = realSb;
+      L.Auth.session = null;
       L.Store.playerName = '';
       L.Modes.setCurrent('classic');
     }

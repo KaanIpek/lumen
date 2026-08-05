@@ -978,3 +978,8 @@ kbd {
 /* Three difficulties sharing one row still fell a couple of pixels short of a
    fingertip on the narrowest phones. */
 .diffbtn { min-width: 44px; }
+
+/* Signed out, this stands in for the name field on the shared boards. */
+.lb-gate { margin-top: 14px; text-align: center; }
+.lb-gate.hidden { display: none; }
+.lb-gate p { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0 0 12px; }

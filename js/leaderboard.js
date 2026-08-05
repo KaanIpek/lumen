@@ -239,6 +239,18 @@
     // sends it the moment a name exists.
     get named() { return !!this.cleanName(this.playerName); },
 
+    // The shared board needs an account; the game does not.
+    //
+    // A name alone was never enough to own a row. Anyone could type any name,
+    // including one already on the board, so "your" place was only yours until
+    // somebody else typed it — and with nothing but a string to go on, no
+    // request could tell the two apart. A verified user id can, which is the
+    // whole reason an account exists here. Play, shop, daily, achievements and
+    // MY RUNS all still work signed out.
+    get canSubmit() {
+      return this.enabled && !!(LUMEN.Auth && LUMEN.Auth.signedIn) && this.named;
+    },
+
     hold(score, combo, board) {
       if (!Store || !(score > 0)) return;
       const b = board === 'daily' ? 'daily' : 'alltime';
@@ -257,7 +269,7 @@
     flushPending() {
       const all = (Store && Store.pendingBest) || {};
       const boards = Object.keys(all);
-      if (!boards.length || !this.enabled || !this.named) return Promise.resolve([]);
+      if (!boards.length || !this.canSubmit) return Promise.resolve([]);
       const today = LUMEN.Daily ? LUMEN.Daily.todayStr() : '';
       const jobs = boards.map((b) => {
         const p = all[b];

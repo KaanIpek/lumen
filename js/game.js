@@ -1873,7 +1873,7 @@
         // the moment there is a name to put on it.
         if (LUMEN.Leaderboard && isBest) {
           const board = this.daily ? 'daily' : 'alltime';
-          if (LUMEN.Leaderboard.named) LUMEN.Leaderboard.submitQuietly(s, this.bestComboRun, board);
+          if (LUMEN.Leaderboard.canSubmit) LUMEN.Leaderboard.submitQuietly(s, this.bestComboRun, board);
           else LUMEN.Leaderboard.hold(s, this.bestComboRun, board);
         }
         // …and the same rule for Steam's boards, when running inside that build

@@ -150,15 +150,36 @@
         .then((buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join(''));
     },
 
+    // Capacitor.Plugins.X only exists when the plugin's own JS has been imported,
+    // and this project has no bundler to import it with — the package is
+    // installed for its NATIVE half. So the proxy has to be asked for by name.
+    //
+    // Getting this wrong is not a quiet failure. `native` came back false, the
+    // code fell through to the web path, and the app tried to open Apple's JS
+    // popup inside its own WKWebView — the one thing Apple's sign-in explicitly
+    // refuses to do. What the player saw was "Sign-in did not complete".
+    get nativePlugin() {
+      const C = window.Capacitor;
+      if (!C || !(C.isNativePlatform && C.isNativePlatform())) return null;
+      if (C.Plugins && C.Plugins.SignInWithApple) return C.Plugins.SignInWithApple;
+      if (typeof C.registerPlugin === 'function') {
+        try { return C.registerPlugin('SignInWithApple'); } catch (e) { return null; }
+      }
+      return null;
+    },
     get native() {
       const C = window.Capacitor;
-      return !!(C && C.isNativePlatform && C.isNativePlatform()
-        && C.Plugins && C.Plugins.SignInWithApple);
+      return !!(C && C.isNativePlatform && C.isNativePlatform());
     },
 
     _appleToken(raw, hashed) {
       if (this.native) {
-        return window.Capacitor.Plugins.SignInWithApple.authorize({
+        const p = this.nativePlugin;
+        // Inside the app there is no fallback worth having: Apple's web flow is
+        // not allowed in an app's own web view, so pretending would only produce
+        // a stranger failure further along.
+        if (!p) return Promise.reject(new Error('the native sign-in plugin is missing from this build'));
+        return p.authorize({
           // Empty on purpose. The game needs an identity, not an inbox, and a
           // permission you do not ask for is one you can never mishandle.
           scopes: '',
