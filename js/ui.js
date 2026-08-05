@@ -165,6 +165,7 @@
       // settings
       onTap($('btn-settings'), () => { this.click(); this.openSettings(); });
       onTap($('btn-settings-close'), () => { this.click(); this.showScreen('menu'); });
+      onTap($('btn-apple'), () => { this.click(); this.signInApple(); });
       onTap($('btn-reset'), () => this.resetProgress());
       onTap($('btn-save-export'), () => this.exportSave());
       onTap($('btn-save-import'), () => this.importSave());
@@ -1282,6 +1283,44 @@
       this.loadOnlineScores(scope, false);
     },
 
+    // The account row, absent entirely unless sign-in is configured. A button
+    // that cannot work is worse than no button: it reads as a broken feature
+    // rather than an absent one.
+    onAuthChange() {
+      const A = LUMEN.Auth;
+      const sec = $('acct-sec'), row = $('acct-row'), who = $('acct-who'), btn = $('btn-apple');
+      if (!sec || !row) return;
+      // Always present, never demanded. The row stays in Settings whether or
+      // not anyone has signed in, because a feature you can only find after you
+      // already know about it may as well not exist — and an account here is a
+      // recommendation, not a gate: every screen of this game works without one.
+      const on = !!(A && A.enabled);
+      sec.classList.toggle('hidden', !on);
+      row.classList.toggle('hidden', !on);
+      if (!on) return;
+      const inn = A.signedIn;
+      if (who) who.textContent = inn ? T('signedInAs') : T('acctWhy');
+      if (btn && btn.querySelector('span')) {
+        btn.querySelector('span').textContent = inn ? T('signOut') : T('signInApple');
+      }
+    },
+
+    signInApple() {
+      const A = LUMEN.Auth;
+      if (!A || !A.enabled) return;
+      if (A.signedIn) { A.signOut().then(() => this.onAuthChange()); return; }
+      A.signInWithApple().then(() => {
+        this.onAuthChange();
+        // Signing in is the moment a held best finally has an owner.
+        if (LUMEN.Leaderboard) LUMEN.Leaderboard.flushPending().catch(() => {});
+      }).catch((e) => {
+        // A cancelled sheet is not a failure and must not be reported as one.
+        const msg = String((e && e.message) || '');
+        if (/cancel|1001|popup_closed/i.test(msg)) return;
+        this.toast(T('signInFailed'));
+      });
+    },
+
     // Saving a name is not filing it away for later — it is the act of asking to
     // be on the board. The old field did only the first half: it stored a string
     // and waited for some future personal best, so a player who had already set
@@ -1483,6 +1522,7 @@
     renderSettings() {
       if (!this._ready) return;
       this.showBuildStamp();
+      this.onAuthChange();
       const state = {
         music: Store.musicOn, sfx: Store.sfxOn, haptics: Store.hapticsOn,
         flash: Store.reduceFlash, contrast: Store.highContrast,

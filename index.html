@@ -8,7 +8,7 @@
   <title>LUMEN — flip · thread · flow</title>
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
-  <link rel="manifest" href="manifest.json?v=260805011447" />
+  <link rel="manifest" href="manifest.json?v=260805012159" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta property="og:title" content="LUMEN — flip · thread · flow" />
@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=260805011447" />
+  <link rel="stylesheet" href="css/style.css?v=260805012159" />
 </head>
 <body>
   <canvas id="game" role="img" aria-label="LUMEN gameplay" data-i18n-aria="ariaCanvas"></canvas>
@@ -261,6 +261,15 @@
         <button id="btn-settings-close" class="icon-x ui-interactive" aria-label="Close" data-i18n-aria="ariaClose">✕</button>
       </div>
       <div class="settings-list">
+        <!-- Hidden unless Apple sign-in is actually configured. An account is
+             optional here: the game is complete without one, and the button
+             only earns its place by doing something. -->
+        <div class="set-sec hidden" id="acct-sec" data-i18n="secAccount">ACCOUNT</div>
+        <div class="setting hidden" id="acct-row">
+          <span id="acct-who" data-i18n="acctWhy">Claim your name on the board</span>
+          <button id="btn-apple" class="btn btn-ghost ui-interactive"><span data-i18n="signInApple"> Sign in</span></button>
+        </div>
+
         <div class="set-sec" data-i18n="secAudio">AUDIO</div>
         <div class="setting"><span data-i18n="music">Music</span><button class="toggle ui-interactive" data-set="music"></button></div>
         <div class="setting"><span data-i18n="soundFx">Sound FX</span><button class="toggle ui-interactive" data-set="sfx"></button></div>
@@ -354,31 +363,31 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="js/audio.js?v=260805011447"></script>
-  <script src="js/game.js?v=260805011447"></script>
-  <script src="js/i18n.js?v=260805011447"></script>
-  <script src="js/cosmetics.js?v=260805011447"></script>
-  <script src="js/modes.js?v=260805011447"></script>
-  <script src="js/missions.js?v=260805011447"></script>
-  <script src="js/analytics.js?v=260805011447"></script>
-  <script src="js/auth.js?v=260805011447"></script>
-  <script src="js/leaderboard.js?v=260805011447"></script>
-  <script src="js/iap.js?v=260805011447"></script>
-  <script src="js/voice.js?v=260805011447"></script>
-  <script src="js/cheats.js?v=260805011447"></script>
-  <script src="js/input.js?v=260805011447"></script>
-  <script src="js/progression.js?v=260805011447"></script>
-  <script src="js/scores.js?v=260805011447"></script>
-  <script src="js/save.js?v=260805011447"></script>
-  <script src="js/steam.js?v=260805011447"></script>
-  <script src="js/native.js?v=260805011447"></script>
-  <script src="js/poll.js?v=260805011447"></script>
-  <script src="js/ui.js?v=260805011447"></script>
+  <script src="js/audio.js?v=260805012159"></script>
+  <script src="js/game.js?v=260805012159"></script>
+  <script src="js/i18n.js?v=260805012159"></script>
+  <script src="js/cosmetics.js?v=260805012159"></script>
+  <script src="js/modes.js?v=260805012159"></script>
+  <script src="js/missions.js?v=260805012159"></script>
+  <script src="js/analytics.js?v=260805012159"></script>
+  <script src="js/auth.js?v=260805012159"></script>
+  <script src="js/leaderboard.js?v=260805012159"></script>
+  <script src="js/iap.js?v=260805012159"></script>
+  <script src="js/voice.js?v=260805012159"></script>
+  <script src="js/cheats.js?v=260805012159"></script>
+  <script src="js/input.js?v=260805012159"></script>
+  <script src="js/progression.js?v=260805012159"></script>
+  <script src="js/scores.js?v=260805012159"></script>
+  <script src="js/save.js?v=260805012159"></script>
+  <script src="js/steam.js?v=260805012159"></script>
+  <script src="js/native.js?v=260805012159"></script>
+  <script src="js/poll.js?v=260805012159"></script>
+  <script src="js/ui.js?v=260805012159"></script>
   <!-- Optional local settings (leaderboard project, etc). Deliberately loaded
        WITHOUT a version stamp and with onerror swallowed: the file is not in the
        repo, so a build that has no config.js must boot exactly as before rather
        than log a 404 the player can see. Copy config.example.js to config.js. -->
   <script src="config.js" onerror="void 0"></script>
-  <script src="js/main.js?v=260805011447"></script>
+  <script src="js/main.js?v=260805012159"></script>
 </body>
 </html>
