@@ -147,9 +147,18 @@ const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
   // 4. a profile that names this certificate. Profiles are per (bundle id,
   //    certificate), so a new certificate needs a new profile — an old one
   //    would name a certificate that no longer exists.
-  const ids = await api('GET', '/v1/bundleIds?limit=200&filter[identifier]=' + encodeURIComponent(APP_BUNDLE));
-  const bundle = (ids.data || [])[0];
-  if (!bundle) throw new Error('no bundle id record for ' + APP_BUNDLE);
+  // Match the identifier EXACTLY. `filter[identifier]` did not narrow anything
+  // here, so data[0] was a different app on the same account and Apple answered
+  // "You are not allowed to create 'iOS' profile with App ID 696KGYAX6B" — an
+  // error that reads like a permissions problem and was a wrong-record problem.
+  const ids = await api('GET', '/v1/bundleIds?limit=200');
+  const bundle = (ids.data || []).find(
+    (b) => b.attributes && b.attributes.identifier === APP_BUNDLE);
+  if (!bundle) {
+    throw new Error('no bundle id record for ' + APP_BUNDLE + ' — the account has: '
+      + (ids.data || []).map((b) => b.attributes.identifier).join(', '));
+  }
+  console.log('bundle id: ' + bundle.attributes.identifier + '  (' + bundle.id + ')');
 
   const PROFILE = 'LUMEN CI App Store';
   const profs = await api('GET', '/v1/profiles?limit=200');
