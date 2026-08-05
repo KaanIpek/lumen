@@ -159,7 +159,12 @@ const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
 
   // 3. a .p12 is what `security import` understands
   const P12PASS = crypto.randomBytes(12).toString('hex');
-  sh('openssl', ['pkcs12', '-export', '-inkey', keyPath, '-in', pemPath,
+  // -legacy is not optional. OpenSSL 3 writes PKCS#12 with AES-256 and a
+  // SHA-256 MAC, and macOS's keychain cannot read either — it reports
+  // "MAC verification failed during PKCS12 import (wrong password?)", which
+  // sends you looking for a password bug that does not exist. The password was
+  // always right; the container was unreadable.
+  sh('openssl', ['pkcs12', '-export', '-legacy', '-inkey', keyPath, '-in', pemPath,
     '-out', p12Path, '-passout', 'pass:' + P12PASS, '-name', CN]);
 
   // 4. a profile that names this certificate. Profiles are per (bundle id,
