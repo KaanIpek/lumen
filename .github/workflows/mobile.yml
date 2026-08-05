@@ -349,6 +349,68 @@ jobs:
           grep -n 'CODE_SIGN_IDENTITY' App.xcodeproj/project.pbxproj || echo "(none, which is the point)"
 
 
+      # Real signing assets, so the ARCHIVE can be signed like on any other Mac.
+      #
+      # Cloud signing (-allowProvisioningUpdates) keeps the private key at
+      # Apple. That is enough for -exportArchive and for nothing else, so the
+      # archive stayed unsigned, the packaging step that writes entitlements
+      # never ran, and com.apple.developer.applesignin was missing from every
+      # build. Three xcodebuild flags were tried against that and all three are
+      # closed; the flags were never the problem. A private key on this machine
+      # is. tools/asc-signing-assets.js makes one and has Apple certify it.
+      - name: Make signing assets and load them
+        if: steps.keys.outputs.signed == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH: /Users/runner/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          node "$GITHUB_WORKSPACE/tools/asc-signing-assets.js" --out "$RUNNER_TEMP/signing"
+          P12=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/signing/signing.json'))['p12'])")
+          PASS=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/signing/signing.json'))['p12Password'])")
+          UUID=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/signing/signing.json'))['profileUUID'])")
+
+          # A keychain of our own, unlocked, and in the SEARCH LIST — the last
+          # part is what an earlier attempt missed, which is why codesign could
+          # read an identity's name and had no key behind it.
+          KC="$RUNNER_TEMP/lumen.keychain-db"
+          KCPASS=$(uuidgen)
+          security create-keychain -p "$KCPASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPASS" "$KC"
+          security import "$P12" -k "$KC" -P "$PASS" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPASS" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          echo '--- identities now visible ---'
+          security find-identity -v -p codesigning
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$RUNNER_TEMP/signing/profile.mobileprovision"              ~/Library/MobileDevice/Provisioning\ Profiles/"$UUID".mobileprovision
+          echo "installed profile $UUID"
+
+          # Manual signing, in the PROJECT and only for the app target. On the
+          # command line it would reach every Pods target, and that collision
+          # has already cost four runs.
+          cd "$GITHUB_WORKSPACE/mobile/ios/App"
+          python3 - <<'PYEOF'
+          import re, io
+          p = 'App.xcodeproj/project.pbxproj'
+          s = io.open(p, encoding='utf-8').read()
+          TAB = chr(9); NL = chr(10)
+          add = (NL + TAB*4 + 'CODE_SIGN_STYLE = Manual;'
+                 + NL + TAB*4 + 'CODE_SIGN_IDENTITY = "Apple Distribution";'
+                 + NL + TAB*4 + 'PROVISIONING_PROFILE_SPECIFIER = "LUMEN CI App Store";')
+          n = 0
+          def go(m):
+              global n
+              n += 1
+              return m.group(0) + add
+          s = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = [^;]+;', go, s)
+          io.open(p, 'w', encoding='utf-8', newline=NL).write(s)
+          print('manual signing set in %d configurations' % n)
+          PYEOF
+
       - name: Archive and export a signed .ipa
         if: steps.keys.outputs.signed == 'true'
         working-directory: mobile/ios/App
