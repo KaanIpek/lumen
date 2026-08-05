@@ -348,6 +348,34 @@ jobs:
           echo "--- after ---"
           grep -n 'CODE_SIGN_IDENTITY' App.xcodeproj/project.pbxproj || echo "(none, which is the point)"
 
+          # Deleting it is not enough once the ARCHIVE signs. With no identity at
+          # all, automatic signing falls back to development and asks Apple for
+          # an "iOS App Development" profile — which is built FROM REGISTERED
+          # DEVICES, so an account that owns no iPhone gets:
+          #
+          #   Your team has no devices from which to generate a provisioning
+          #   profile. / No profiles for 'com.lumen.game' were found.
+          #
+          # Naming "Apple Distribution" asks for a DISTRIBUTION profile instead,
+          # and those need no devices. It goes in the project, not on the command
+          # line: a command-line build setting reaches every target in the
+          # workspace, including the Pods that must not be signed at all.
+          python3 - <<'PY'
+          import re, io
+          p = 'App.xcodeproj/project.pbxproj'
+          s = io.open(p, encoding='utf-8').read()
+          n = 0
+          def add(m):
+              global n
+              n += 1
+              return m.group(0) + '
+				CODE_SIGN_IDENTITY = "Apple Distribution";'
+          s = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = [^;]+;', add, s)
+          io.open(p, 'w', encoding='utf-8', newline='
+').write(s)
+          print('asked for a distribution identity in %d configurations' % n)
+          PY
+
       - name: Archive and export a signed .ipa
         if: steps.keys.outputs.signed == 'true'
         working-directory: mobile/ios/App
