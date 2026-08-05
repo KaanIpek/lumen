@@ -403,8 +403,37 @@ jobs:
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
             TARGETED_DEVICE_FAMILY="1,2" \
             IPHONEOS_DEPLOYMENT_TARGET=15.0 \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            archive
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
+            archive || {
+            # Signing HERE is the only way to get entitlements into the binary.
+            # With signing off Xcode skips the packaging step that embeds them,
+            # so the export re-signs with the profile's bare minimum and
+            # com.apple.developer.applesignin is simply absent. Re-signing after
+            # the fact cannot rescue it either: cloud signing leaves the
+            # certificate in a temporary keychain, so codesign knows the
+            # identity's NAME and has no key to sign with. Both were measured,
+            # not assumed.
+            #
+            # But five runs died on archive-time signing before this, and a
+            # pipeline that stops shipping is worse than one feature that does
+            # not work. So try the thing that fixes it, keep the thing that works.
+            echo "SIGNED ARCHIVE FAILED — falling back to the unsigned one."
+            echo "Sign in with Apple will not work in this build."
+            rm -rf "$RUNNER_TEMP/LUMEN.xcarchive"
+            xcodebuild -workspace App.xcworkspace -scheme App \
+              -configuration Release \
+              -destination 'generic/platform=iOS' \
+              -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
+              TARGETED_DEVICE_FAMILY="1,2" \
+              IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+              archive
+          }
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
