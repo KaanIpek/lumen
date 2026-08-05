@@ -404,10 +404,31 @@ jobs:
             -archivePath "$RUNNER_TEMP/LUMEN.xcarchive" \
             TARGETED_DEVICE_FAMILY="1,2" \
             IPHONEOS_DEPLOYMENT_TARGET=15.0 \
-            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="-" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             archive || {
+            # THREE WAYS TO SIGN THE ARCHIVE, ALL CLOSED. Each measured from a
+            # real run, none reasoned about:
+            #
+            #   no identity          -> automatic signing asks for an iOS App
+            #                           Development profile, which is built from
+            #                           registered devices this account has none of
+            #   "Apple Distribution" -> "automatically signed for development, but
+            #                           a conflicting code signing identity has
+            #                           been manually specified"
+            #   "-" (ad hoc)         -> "Ad Hoc code signing is not allowed with
+            #                           SDK 'iOS 26.5'", and the setting reaches
+            #                           every Pods target as well
+            #
+            # So the archive stays unsigned, and the cost is real: Xcode never
+            # runs the packaging step that writes entitlements into the binary,
+            # so com.apple.developer.applesignin is absent from every build and
+            # the native Sign in with Apple sheet returns AuthorizationError.
+            #
+            # The way out is not another xcodebuild flag. It is to stop depending
+            # on cloud signing: generate a key and CSR here, create a distribution
+            # certificate through the App Store Connect API, import both into a
+            # keychain and sign manually. Then a private key exists locally and
+            # none of this is special. That is a piece of work, not a tweak.
             # Signing HERE is the only way to get entitlements into the binary.
             # With signing off Xcode skips the packaging step that embeds them,
             # so the export re-signs with the profile's bare minimum and
