@@ -132,10 +132,28 @@ const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
     }
   }
 
-  const made = await api('POST', '/v1/certificates', {
-    data: { type: 'certificates', attributes: { certificateType: 'DISTRIBUTION', csrContent: csr } },
-  });
-  const cert = made.data;
+  // Two distribution certificate TYPES, two separate limits. The account
+  // already has one, created by cloud signing, and Apple answers a second
+  // request for the same type with "You already have a current Distribution
+  // certificate". Revoking it would be destructive and would reach another
+  // project on this account — so try the other type instead, which costs
+  // nobody anything.
+  let cert = null;
+  let lastErr = null;
+  for (const kind of ['DISTRIBUTION', 'IOS_DISTRIBUTION']) {
+    try {
+      const made = await api('POST', '/v1/certificates', {
+        data: { type: 'certificates', attributes: { certificateType: kind, csrContent: csr } },
+      });
+      cert = made.data;
+      console.log('created a ' + kind + ' certificate');
+      break;
+    } catch (e) {
+      lastErr = e;
+      console.log(kind + ' unavailable: ' + String(e.message).slice(-90));
+    }
+  }
+  if (!cert) throw lastErr;
   fs.writeFileSync(cerPath, Buffer.from(cert.attributes.certificateContent, 'base64'));
   sh('openssl', ['x509', '-inform', 'DER', '-in', cerPath, '-out', pemPath]);
 
@@ -191,6 +209,11 @@ const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
     profileName: PROFILE,
     profileUUID: prof.data.attributes.uuid,
     certificateName: cert.attributes.name,
+    // "Apple Distribution" and "iPhone Distribution" are different prefixes and
+    // codesign matches on them, so the workflow must be told which one it got
+    // rather than assuming.
+    identity: cert.attributes.certificateType === 'IOS_DISTRIBUTION'
+      ? 'iPhone Distribution' : 'Apple Distribution',
     teamId: process.env.APPLE_TEAM_ID || '',
   };
   fs.writeFileSync(path.join(OUT, 'signing.json'), JSON.stringify(out, null, 2));

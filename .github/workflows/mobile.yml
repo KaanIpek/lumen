@@ -370,6 +370,8 @@ jobs:
           P12=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/signing/signing.json'))['p12'])")
           PASS=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/signing/signing.json'))['p12Password'])")
           UUID=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/signing/signing.json'))['profileUUID'])")
+          IDENT=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/signing/signing.json'))['identity'])")
+          echo "identity to sign with: $IDENT"
 
           # A keychain of our own, unlocked, and in the SEARCH LIST — the last
           # part is what an earlier attempt missed, which is why codesign could
@@ -393,13 +395,15 @@ jobs:
           # command line it would reach every Pods target, and that collision
           # has already cost four runs.
           cd "$GITHUB_WORKSPACE/mobile/ios/App"
-          python3 - <<'PYEOF'
+          IDENT="$IDENT" python3 - <<'PYEOF'
           import re, io
           p = 'App.xcodeproj/project.pbxproj'
           s = io.open(p, encoding='utf-8').read()
           TAB = chr(9); NL = chr(10)
+          import os
+          ident = os.environ['IDENT']
           add = (NL + TAB*4 + 'CODE_SIGN_STYLE = Manual;'
-                 + NL + TAB*4 + 'CODE_SIGN_IDENTITY = "Apple Distribution";'
+                 + NL + TAB*4 + 'CODE_SIGN_IDENTITY = "' + ident + '";'
                  + NL + TAB*4 + 'PROVISIONING_PROFILE_SPECIFIER = "LUMEN CI App Store";')
           n = 0
           def go(m):
