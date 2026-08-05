@@ -395,14 +395,16 @@ jobs:
           # command line it would reach every Pods target, and that collision
           # has already cost four runs.
           cd "$GITHUB_WORKSPACE/mobile/ios/App"
-          IDENT="$IDENT" python3 - <<'PYEOF'
+          IDENT="$IDENT" TEAMID="${{ secrets.APPLE_TEAM_ID }}" python3 - <<'PYEOF'
           import re, io
           p = 'App.xcodeproj/project.pbxproj'
           s = io.open(p, encoding='utf-8').read()
           TAB = chr(9); NL = chr(10)
           import os
           ident = os.environ['IDENT']
+          team = os.environ.get('TEAMID', '')
           add = (NL + TAB*4 + 'CODE_SIGN_STYLE = Manual;'
+                 + NL + TAB*4 + 'DEVELOPMENT_TEAM = ' + team + ';'
                  + NL + TAB*4 + 'CODE_SIGN_IDENTITY = "' + ident + '";'
                  + NL + TAB*4 + 'PROVISIONING_PROFILE_SPECIFIER = "LUMEN CI App Store";')
           n = 0
