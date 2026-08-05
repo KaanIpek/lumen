@@ -123,12 +123,22 @@ const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
   //    certificate is never touched: matching is on the exact common name, and
   //    the account is limited to three, so leaving ours behind would lock the
   //    pipeline out after two runs.
+  // Revoke by TYPE, not by name. Apple names a certificate after the account —
+  // "iOS Distribution: Kaan Ipek" — never after the CSR's common name, so
+  // matching on CN matched nothing and the previous run's certificate survived
+  // to block the next one.
+  //
+  // IOS_DISTRIBUTION is the slot this script uses. The account's own
+  // certificate is the other type, DISTRIBUTION, made by cloud signing before
+  // any of this existed — and that one is never touched. So anything in this
+  // slot was put there by a previous run of this script, and clearing it is
+  // clearing up after ourselves.
   const existing = await api('GET', '/v1/certificates?limit=200');
   for (const c of existing.data || []) {
     const a = c.attributes || {};
-    if (a.certificateType === 'DISTRIBUTION' && a.name === CN) {
+    if (a.certificateType === 'IOS_DISTRIBUTION') {
       await api('DELETE', '/v1/certificates/' + c.id).catch(() => {});
-      console.log('revoked a previous ' + CN + ' certificate');
+      console.log('revoked our previous certificate: ' + a.name);
     }
   }
 
