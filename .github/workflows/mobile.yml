@@ -420,6 +420,38 @@ jobs:
           path: ${{ runner.temp }}/export/*.ipa
           if-no-files-found: warn
 
+      # Put the entitlement back into the SIGNED app.
+      #
+      # The archive is deliberately built with CODE_SIGNING_ALLOWED=NO -- five
+      # runs failed before that, and it is what finally made this work on a Mac
+      # nobody owns. But with signing off Xcode never runs the packaging step
+      # that embeds entitlements, so the archived binary carries none, and
+      # `-exportArchive` re-signs it with only the minimum the profile demands.
+      #
+      # The diagnostic below proved exactly that: the PROFILE granted
+      # com.apple.developer.applesignin and the signed app did not have it. On a
+      # phone that is AuthorizationError, an error that mentions neither.
+      #
+      # So take the entitlements the export produced, add ours, and re-sign the
+      # app bundle with them. --preserve-metadata deliberately does NOT list
+      # `entitlements`; preserving those is the bug.
+      - name: Re-sign with the Sign in with Apple entitlement
+        if: steps.keys.outputs.signed == 'true'
+        run: |
+          IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
+          WORK="$RUNNER_TEMP/resign"; rm -rf "$WORK"; mkdir -p "$WORK"
+          unzip -q "$IPA" -d "$WORK"
+          APP=$(find "$WORK/Payload" -maxdepth 1 -name '*.app' -type d | head -1)
+          codesign -d --entitlements :- "$APP" > "$WORK/ent.plist" 2>/dev/null
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.applesignin array" "$WORK/ent.plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.applesignin:0 string Default" "$WORK/ent.plist"
+          IDENT=$(security find-identity -v -p codesigning | grep -oE '"[^"]+"' | head -1 | tr -d '"')
+          echo "re-signing as: $IDENT"
+          codesign --force --sign "$IDENT" --entitlements "$WORK/ent.plist"             --preserve-metadata=identifier,flags,runtime "$APP"
+          rm -f "$IPA"
+          (cd "$WORK" && zip -qry "$IPA" Payload)
+          echo "re-signed and repacked"
+
       # What is in the SIGNED app, not what was in the project.
       #
       # `-exportArchive` re-signs, and a re-sign can only keep an entitlement the
