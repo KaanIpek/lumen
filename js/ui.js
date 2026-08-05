@@ -1308,6 +1308,11 @@
       row.classList.toggle('hidden', !on);
       if (!on) return;
       const inn = A.signedIn;
+      // The leaderboard's sign-in gate is built in setBoard, so signing in from
+      // THERE left the button sitting on screen — the account was real, the
+      // screen just never redrew, and it reads exactly like a button that does
+      // nothing. Anything that changes the session has to redraw the board too.
+      if (this.currentScreen === 'scores') this.setBoard(this.boardTab || 'me');
       if (who) who.textContent = inn ? T('signedInAs') : T('acctWhy');
       if (btn && btn.querySelector('span')) {
         btn.querySelector('span').textContent = inn ? T('signOut') : T('signInApple');
