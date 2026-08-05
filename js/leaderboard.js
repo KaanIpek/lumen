@@ -212,9 +212,12 @@
       // cached copy is definitely wrong, so drop it.
       const done = () => { this.invalidate(b); };
       if (this._sb) {
+        // Upsert, not insert. The table has one row per (user, board, day), so
+        // a second personal best REPLACES the first instead of leaving a trail
+        // of a player's own older scores across the board.
         return this._sbFetch('/scores', {
           method: 'POST',
-          headers: { Prefer: 'return=minimal' },
+          headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
           body: JSON.stringify(row),
         }).then((r) => { done(); return r; });
       }
@@ -226,6 +229,25 @@
     submitQuietly(score, combo, board) {
       if (!this.enabled || !(score > 0)) return;
       this.submit(score, combo, board).catch(() => {});
+    },
+
+    // Change the name on the rows you already own.
+    //
+    // The alternative is what happened before there were accounts: submit again
+    // under the new name and leave the old one standing, so one player slowly
+    // becomes several. With auth.uid() on the row this is one UPDATE, and the
+    // database refuses to let it touch anybody else's.
+    rename(newName) {
+      const A = LUMEN.Auth;
+      const name = this.cleanName(newName);
+      if (!name) return Promise.reject(new Error('empty name'));
+      this.playerName = name;
+      if (!this._sb || !A || !A.signedIn) return Promise.resolve(0);
+      return this._sbFetch('/scores?user_id=eq.' + encodeURIComponent(A.userId), {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ name }),
+      }).then(() => { this.invalidate(); return 1; });
     },
 
     // ---- holding a best until it has a name -------------------------------

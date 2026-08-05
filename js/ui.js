@@ -1320,8 +1320,20 @@
       if (A.signedIn) { A.signOut().then(() => this.onAuthChange()); return; }
       A.signInWithApple().then(() => {
         this.onAuthChange();
+        // Ask for a name here, once, while the player is already thinking about
+        // who they are. Leaving it to a field on another screen is what made it
+        // look like an extra chore nobody had asked for -- and a board full of
+        // people who never found it.
+        const LB = LUMEN.Leaderboard;
+        if (LB && !LB.named) {
+          this.showScreen('scores');
+          this.setBoard('all');
+          const input = $('lb-name');
+          if (input) { try { input.focus(); } catch (e) { /* no keyboard here */ } }
+          this.toast(T('lbPickName'));
+        }
         // Signing in is the moment a held best finally has an owner.
-        if (LUMEN.Leaderboard) LUMEN.Leaderboard.flushPending().catch(() => {});
+        if (LB) LB.flushPending().catch(() => {});
       }).catch((e) => {
         // A cancelled sheet is not a failure and must not be reported as one.
         const msg = String((e && e.message) || '');
@@ -1349,10 +1361,12 @@
       const name = LB.cleanName(input.value);
       input.value = name;                       // show what was actually accepted
       if (!name) { this.toast(T('lbNameEmpty')); return; }
-      LB.playerName = name;
-      LB.flushPending().then((sent) => {
-        this.toast(sent.length ? T('lbNameSent', { n: name }) : T('lbNameSaved', { n: name }));
-        if (sent.length && this.boardTab !== 'me') this.refreshBoard();
+      // Rename FIRST, then send anything held. Renaming updates the rows this
+      // player already owns; sending first would put the old name up one last
+      // time and leave it there.
+      LB.rename(name).catch(() => {}).then(() => LB.flushPending()).then((sent) => {
+        this.toast((sent && sent.length) ? T('lbNameSent', { n: name }) : T('lbNameSaved', { n: name }));
+        if (this.boardTab !== 'me') this.refreshBoard();
         this.updateNameHint();
       }).catch(() => { this.toast(T('lbNameSaved', { n: name })); this.updateNameHint(); });
     },
