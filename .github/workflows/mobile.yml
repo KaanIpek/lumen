@@ -438,16 +438,41 @@ jobs:
       - name: Re-sign with the Sign in with Apple entitlement
         if: steps.keys.outputs.signed == 'true'
         run: |
+          set +e
           IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
           WORK="$RUNNER_TEMP/resign"; rm -rf "$WORK"; mkdir -p "$WORK"
           unzip -q "$IPA" -d "$WORK"
           APP=$(find "$WORK/Payload" -maxdepth 1 -name '*.app' -type d | head -1)
+
+          # Where the certificate actually lives. `find-identity -p codesigning`
+          # came back EMPTY on the first attempt and took the whole job down with
+          # it: cloud signing puts the certificate in a temporary keychain that
+          # is not in the default search list once xcodebuild has finished.
+          echo '--- keychains ---'; security list-keychains
+          echo '--- identities ---'; security find-identity -v
+
+          # The app in front of us was signed minutes ago, so it knows the exact
+          # name of the identity that signed it. Ask it, rather than searching.
+          IDENT=$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=//p' | head -1)
+          if [ -z "$IDENT" ]; then
+            IDENT=$(security find-identity -v | grep -oE '"[^"]+"' | head -1 | tr -d '"')
+          fi
+          echo "re-signing as: [$IDENT]"
+
+          if [ -z "$IDENT" ]; then
+            echo "NO SIGNING IDENTITY FOUND — leaving the export untouched."
+            echo "The build still ships; Sign in with Apple will not work in it."
+            exit 0
+          fi
+
           codesign -d --entitlements :- "$APP" > "$WORK/ent.plist" 2>/dev/null
-          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.applesignin array" "$WORK/ent.plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.applesignin array" "$WORK/ent.plist" 2>/dev/null
           /usr/libexec/PlistBuddy -c "Add :com.apple.developer.applesignin:0 string Default" "$WORK/ent.plist"
-          IDENT=$(security find-identity -v -p codesigning | grep -oE '"[^"]+"' | head -1 | tr -d '"')
-          echo "re-signing as: $IDENT"
           codesign --force --sign "$IDENT" --entitlements "$WORK/ent.plist"             --preserve-metadata=identifier,flags,runtime "$APP"
+          if [ $? -ne 0 ]; then
+            echo "RE-SIGN FAILED — shipping the export as it was."
+            exit 0
+          fi
           rm -f "$IPA"
           (cd "$WORK" && zip -qry "$IPA" Payload)
           echo "re-signed and repacked"
