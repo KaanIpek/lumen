@@ -243,6 +243,51 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSSpeechRecognitionUsageDescription string $MIC" Info.plist             || /usr/libexec/PlistBuddy -c "Set :NSSpeechRecognitionUsageDescription $MIC" Info.plist
           /usr/libexec/PlistBuddy -c "Print" Info.plist | grep -E "NonExempt|FullScreen"
 
+      # Sign in with Apple needs the entitlement in the BUILD, not only on the
+      # App ID. Turning the capability on in the developer portal is what lets a
+      # profile carry it; without this file the native sheet does not open at
+      # all, and the failure is silent — the button does nothing and there is no
+      # error to read.
+      #
+      # `npx cap add ios` generates no entitlements file, so this creates one and
+      # points the project at it. CODE_SIGN_ENTITLEMENTS is set per build
+      # configuration because the archive uses Release and a missing path there
+      # fails the signing step rather than the compile.
+      - name: Add the Sign in with Apple entitlement
+        working-directory: mobile/ios/App
+        run: |
+          cat > App/App.entitlements <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>com.apple.developer.applesignin</key>
+            <array><string>Default</string></array>
+          </dict></plist>
+          PLIST
+          # Strip the heredoc's leading indentation — PlistBuddy and codesign both
+          # reject a plist whose declaration is not the first thing in the file.
+          sed -i '' 's/^          //' App/App.entitlements
+          /usr/libexec/PlistBuddy -c "Print" App/App.entitlements
+          python3 - <<'PY'
+          import re, io
+          p = 'App.xcodeproj/project.pbxproj'
+          s = io.open(p, encoding='utf-8').read()
+          if 'CODE_SIGN_ENTITLEMENTS' in s:
+              print('entitlement path already set')
+          else:
+              # Every build configuration that names the app's product gets it.
+              n = 0
+              def add(m):
+                  global n
+                  n += 1
+                  return m.group(0) + '\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = App/App.entitlements;'
+              s = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = [^;]+;', add, s)
+              io.open(p, 'w', encoding='utf-8', newline='\n').write(s)
+              print('set CODE_SIGN_ENTITLEMENTS in %d configurations' % n)
+              if n == 0:
+                  raise SystemExit('found no build configuration to attach it to')
+          PY
+
       # Without the API key there is nothing to sign with, so build the app
       # WITHOUT signing. That still proves the project compiles, which is most
       # of what an early run is for.
