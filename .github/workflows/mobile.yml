@@ -420,6 +420,33 @@ jobs:
           path: ${{ runner.temp }}/export/*.ipa
           if-no-files-found: warn
 
+      # What is in the SIGNED app, not what was in the project.
+      #
+      # `-exportArchive` re-signs, and a re-sign can only keep an entitlement the
+      # provisioning profile actually grants. So the archive can carry
+      # com.apple.developer.applesignin, the build log can say it was set, and
+      # the .ipa on a phone can still be missing it — which is what the native
+      # sheet reports as AuthorizationError, a message that names neither the
+      # entitlement nor the profile.
+      #
+      # This never fails the build. It prints the answer, so the next question is
+      # settled by reading rather than by another guess.
+      - name: What the signed app actually claims
+        if: steps.keys.outputs.signed == 'true'
+        run: |
+          APP=$(find "$RUNNER_TEMP/export" -maxdepth 3 -name '*.app' -type d | head -1)
+          if [ -z "$APP" ]; then
+            IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
+            rm -rf "$RUNNER_TEMP/peek" && mkdir -p "$RUNNER_TEMP/peek"
+            unzip -q "$IPA" -d "$RUNNER_TEMP/peek"
+            APP=$(find "$RUNNER_TEMP/peek/Payload" -maxdepth 1 -name '*.app' -type d | head -1)
+          fi
+          echo "app: $APP"
+          echo '--- entitlements ---'
+          codesign -d --entitlements :- "$APP" 2>/dev/null || echo '(could not read entitlements)'
+          echo '--- profile capabilities ---'
+          security cms -D -i "$APP/embedded.mobileprovision" 2>/dev/null             | plutil -extract Entitlements xml1 -o - - 2>/dev/null             | grep -A3 applesignin || echo 'NO applesignin IN THE PROFILE'
+
       # Uploading is deliberately a SEPARATE, manual choice. A push that
       # silently ships a build to TestFlight is how the wrong thing reaches
       # testers; download the .ipa, look at it, then run this on purpose.

@@ -1329,7 +1329,12 @@
         // Say WHAT went wrong. The first version toasted one fixed sentence for
         // every cause, so the only report anybody could make was "it says it
         // didn't complete" — which is exactly as much as it told me too.
-        this.toast(msg ? T('signInFailed') + ' ' + msg.slice(0, 90) : T('signInFailed'));
+        // Apple's message names neither the entitlement nor the profile, so the
+        // CODE is the only part that distinguishes "you tapped cancel" from
+        // "this build cannot do this at all".
+        const code = e && (e.code != null ? e.code : e.errorCode);
+        this.toast(T('signInFailed') + (code != null ? ' [' + code + ']' : '')
+          + (msg ? ' ' + msg.slice(0, 80) : ''));
       });
     },
 
