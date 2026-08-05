@@ -365,14 +365,14 @@ jobs:
           p = 'App.xcodeproj/project.pbxproj'
           s = io.open(p, encoding='utf-8').read()
           n = 0
+          TAB = chr(9)
+          NL = chr(10)
           def add(m):
               global n
               n += 1
-              return m.group(0) + '
-				CODE_SIGN_IDENTITY = "Apple Distribution";'
+              return m.group(0) + NL + TAB * 4 + 'CODE_SIGN_IDENTITY = "Apple Distribution";'
           s = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = [^;]+;', add, s)
-          io.open(p, 'w', encoding='utf-8', newline='
-').write(s)
+          io.open(p, 'w', encoding='utf-8', newline=NL).write(s)
           print('asked for a distribution identity in %d configurations' % n)
           PY
 
