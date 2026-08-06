@@ -59,6 +59,11 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
     @objc func show(_ call: CAPPluginCall) {
         guard let ad = rewarded else { call.reject("nothing loaded"); return }
         guard let vc = self.bridge?.viewController else { call.reject("no view controller"); return }
+        // canPresent tells us BEFORE the sheet is attempted, with a reason. The
+        // alternative is finding out through a delegate callback that used to
+        // discard it.
+        do { try ad.canPresent(fromRootViewController: vc) }
+        catch { call.reject("cannot present: \(error.localizedDescription)"); return }
         // Held so the delegate can answer once the ad is actually dismissed.
         // Resolving on `present` would pay a player who closed it immediately.
         // A property in Capacitor 6, not a method — calling it reads as
@@ -78,9 +83,15 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
         finish()
     }
 
+    // A presentation FAILURE is not "you watched it and earned nothing" — it is
+    // an error, and reporting it as the former is why the game could only say
+    // "no ad right now" with nothing after it. The reason has to survive.
     public func ad(_ ad: GADFullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
-        earned = false
-        finish()
+        rewarded = nil
+        guard let call = pending else { return }
+        pending = nil
+        call.reject("present failed: \(error.localizedDescription)")
+        call.keepAlive = false
     }
 
     private func finish() {

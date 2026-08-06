@@ -994,3 +994,26 @@ kbd {
   font-size: clamp(26px, 7vw, 38px); color: var(--gold);
   text-shadow: 0 0 18px rgba(255,209,92,.4); line-height: 1.1;
 }
+
+/* The pack piles. Size is the message: you should be able to tell the packs
+   apart without reading a single number. */
+.pack-pile {
+  display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-end;
+  gap: 2px 3px; max-height: 66px; overflow: hidden;
+  /* Narrow ON PURPOSE. Left to the card's full width, six coins and fourteen
+     both sat on one line and measured the same height — the difference the
+     player is supposed to SEE existed only in the number. Seven per row makes
+     each pack a visibly different heap. */
+  width: 94px; margin: 0 auto 8px; line-height: 1;
+}
+.pack-pile .coin {
+  font-size: 13px; color: var(--gold);
+  text-shadow: 0 0 7px rgba(255,209,92,.55);
+  animation: coinBob 2.6s ease-in-out infinite;
+}
+.pack-pile .coin:nth-child(3n)   { animation-delay: .35s; opacity: .92; }
+.pack-pile .coin:nth-child(4n+1) { animation-delay: .7s;  opacity: .84; }
+/* The largest pack spills past its box on purpose — it is the one that does not
+   fit, and saying so with layout beats saying it with a badge. */
+.pack-pile.overflowing { max-height: 74px; margin-top: -8px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%); mask-image: linear-gradient(to bottom, transparent, #000 22%); }
+@keyframes coinBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }

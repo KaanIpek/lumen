@@ -811,7 +811,11 @@
   // both correct and the only thing that knows about an inset at all.
   function safeTopFor(W, H) {
     const measured = readInset('top');
-    return H > W * 1.7 ? Math.max(measured, H * 0.072) : measured;
+    // 0.069, so a device that reports its REAL inset wins. The floor exists for
+    // the WKWebView that answers 0 before viewport-fit resolves; setting it
+    // above the true value (59pt on a Dynamic Island) meant the floor, not the
+    // phone, decided where the score sat.
+    return H > W * 1.7 ? Math.max(measured, H * 0.069) : measured;
   }
 
   class Game {
@@ -902,7 +906,7 @@
       // there was too much empty room above the corridor. This is as far up as
       // it goes — the score's own glyphs end at safeTop + H*0.012 + the 51px
       // font, which lands within a pixel or two of here.
-      this.playTop = this.safeTop + h * 0.064;
+      this.playTop = this.safeTop + h * 0.058;
       this.playBottom = h * 0.945 - this.safeBottom * 0.5;
       this.playH = this.playBottom - this.playTop;
       this.bg.resize(this.viewW, h);   // the sky fills the glass, not the column
@@ -3860,7 +3864,7 @@
       // One origin for the whole top row. The score used to offset by safeTop
       // while the multiplier and the best line did not, so even a correct inset
       // only unclipped one of the three.
-      const top = (this.safeTop || 0) + H * 0.012;
+      const top = (this.safeTop || 0) + H * 0.006;
       ctx.font = `800 ${big}px "Rajdhani", system-ui, sans-serif`;
       ctx.fillStyle = '#fff';
       ctx.shadowColor = this.orbColor(1); ctx.shadowBlur = 16;

@@ -580,8 +580,15 @@
       if (!iap || !iap.PACKS) return;
       iap.PACKS.forEach((p) => {
         const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = '<div class="c-name">◆ ' + p.shards.toLocaleString() + '</div>'
+        card.className = 'card pack';
+        // The pile IS the price comparison. Three identical cards with different
+        // numbers make you read; three different-sized heaps make you see, and
+        // the biggest one visibly does not fit its row.
+        const heap = [6, 14, 26][iap.PACKS.indexOf(p)] || 6;
+        let pile = '';
+        for (let i = 0; i < heap; i++) pile += '<span class="coin">◆</span>';
+        card.innerHTML = '<div class="pack-pile' + (heap > 20 ? ' overflowing' : '') + '">' + pile + '</div>'
+          + '<div class="c-name">◆ ' + p.shards.toLocaleString() + '</div>'
           + '<div class="c-desc">' + T('shardPack') + '</div>';
         const b = document.createElement('button');
         b.className = 'c-btn cash';
