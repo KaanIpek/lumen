@@ -61,7 +61,9 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
         guard let vc = self.bridge?.viewController else { call.reject("no view controller"); return }
         // Held so the delegate can answer once the ad is actually dismissed.
         // Resolving on `present` would pay a player who closed it immediately.
-        call.keepAlive(true)
+        // A property in Capacitor 6, not a method — calling it reads as
+        // "cannot call value of non-function type 'Bool'".
+        call.keepAlive = true
         pending = call
         earned = false
         ad.present(fromRootViewController: vc) { [weak self] in
@@ -86,6 +88,6 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
         guard let call = pending else { return }
         pending = nil
         call.resolve(["earned": earned])
-        call.keepAlive(false)
+        call.keepAlive = false
     }
 }
