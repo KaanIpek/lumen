@@ -78,6 +78,25 @@
     // The provider call, the analytics either side of it, and the entitlement —
     // shared by single cosmetics and by sets so a bundle can never drift into a
     // second, subtly different payment path.
+    // Shard packs. Not cosmetics, so they do not go through the catalogue: there
+    // is nothing to own and nothing to restore — a consumable is bought, spent,
+    // and bought again. Restore deliberately ignores them for that reason.
+    PACKS: [
+      { id: 'shards_small',  shards: 1200,  usd: 1.99 },
+      { id: 'shards_medium', shards: 6500,  usd: 4.99 },
+      { id: 'shards_large',  shards: 15000, usd: 9.99 },
+    ],
+    pack(id) { return this.PACKS.find((p) => p.id === id) || null; },
+    async buyShards(id) {
+      const p = this.pack(id);
+      if (!p) return { ok: false, reason: 'unknown_pack' };
+      if (!this.available) return { ok: false, reason: 'unavailable' };
+      return this._charge(p.id, p.usd, () => {
+        if (LUMEN.Cosmetics && LUMEN.Cosmetics.grantShards) LUMEN.Cosmetics.grantShards(p.shards);
+        else LUMEN.Store.shards = LUMEN.Store.shards + p.shards;
+      });
+    },
+
     async _charge(id, usd, grant) {
       LUMEN.Analytics && LUMEN.Analytics.track('iap_start', { sku: id, usd });
       let res;

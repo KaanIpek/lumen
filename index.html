@@ -8,7 +8,7 @@
   <title>LUMEN — flip · thread · flow</title>
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
-  <link rel="manifest" href="manifest.json?v=260806160720" />
+  <link rel="manifest" href="manifest.json?v=260806163209" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta property="og:title" content="LUMEN — flip · thread · flow" />
@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=260806160720" />
+  <link rel="stylesheet" href="css/style.css?v=260806163209" />
 </head>
 <body>
   <canvas id="game" role="img" aria-label="LUMEN gameplay" data-i18n-aria="ariaCanvas"></canvas>
@@ -108,12 +108,6 @@
       <div class="btn-row">
         <button id="btn-retry" class="btn btn-primary ui-interactive"><span data-i18n="retry">RETRY</span></button>
       </div>
-      <!-- Only ever here, only ever rewarded, and only when one is available.
-           Hidden entirely on the web and once the daily allowance is spent —
-           a button that cannot pay is a button that teaches you to ignore it. -->
-      <div class="btn-row hidden" id="ad-row">
-        <button id="btn-ad" class="btn btn-ghost ui-interactive wide">◆ <span id="ad-label">WATCH</span></button>
-      </div>
       <div class="btn-row">
         <button id="btn-share" class="btn btn-ghost ui-interactive"><span data-i18n="share">SHARE</span></button>
         <button id="btn-menu" class="btn btn-ghost ui-interactive"><span data-i18n="menu">MENU</span></button>
@@ -164,6 +158,7 @@
       <div class="shop-tabs">
         <button id="tab-customize" class="tab active ui-interactive"><span data-i18n="customize">CUSTOMIZE</span></button>
         <button id="tab-maps" class="tab ui-interactive"><span data-i18n="maps">MAPS</span></button>
+        <button id="tab-coins" class="tab ui-interactive"><span data-i18n="coins">COINS</span></button>
         <button id="tab-items" class="tab ui-interactive"><span data-i18n="items">ITEMS</span></button>
         <button id="tab-skills" class="tab ui-interactive"><span data-i18n="skills">SKILLS</span></button>
       </div>
@@ -380,32 +375,32 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="js/audio.js?v=260806160720"></script>
-  <script src="js/game.js?v=260806160720"></script>
-  <script src="js/i18n.js?v=260806160720"></script>
-  <script src="js/cosmetics.js?v=260806160720"></script>
-  <script src="js/modes.js?v=260806160720"></script>
-  <script src="js/missions.js?v=260806160720"></script>
-  <script src="js/analytics.js?v=260806160720"></script>
-  <script src="js/auth.js?v=260806160720"></script>
-  <script src="js/leaderboard.js?v=260806160720"></script>
-  <script src="js/ads.js?v=260806160720"></script>
-  <script src="js/iap.js?v=260806160720"></script>
-  <script src="js/voice.js?v=260806160720"></script>
-  <script src="js/cheats.js?v=260806160720"></script>
-  <script src="js/input.js?v=260806160720"></script>
-  <script src="js/progression.js?v=260806160720"></script>
-  <script src="js/scores.js?v=260806160720"></script>
-  <script src="js/save.js?v=260806160720"></script>
-  <script src="js/steam.js?v=260806160720"></script>
-  <script src="js/native.js?v=260806160720"></script>
-  <script src="js/poll.js?v=260806160720"></script>
-  <script src="js/ui.js?v=260806160720"></script>
+  <script src="js/audio.js?v=260806163209"></script>
+  <script src="js/game.js?v=260806163209"></script>
+  <script src="js/i18n.js?v=260806163209"></script>
+  <script src="js/cosmetics.js?v=260806163209"></script>
+  <script src="js/modes.js?v=260806163209"></script>
+  <script src="js/missions.js?v=260806163209"></script>
+  <script src="js/analytics.js?v=260806163209"></script>
+  <script src="js/auth.js?v=260806163209"></script>
+  <script src="js/leaderboard.js?v=260806163209"></script>
+  <script src="js/ads.js?v=260806163209"></script>
+  <script src="js/iap.js?v=260806163209"></script>
+  <script src="js/voice.js?v=260806163209"></script>
+  <script src="js/cheats.js?v=260806163209"></script>
+  <script src="js/input.js?v=260806163209"></script>
+  <script src="js/progression.js?v=260806163209"></script>
+  <script src="js/scores.js?v=260806163209"></script>
+  <script src="js/save.js?v=260806163209"></script>
+  <script src="js/steam.js?v=260806163209"></script>
+  <script src="js/native.js?v=260806163209"></script>
+  <script src="js/poll.js?v=260806163209"></script>
+  <script src="js/ui.js?v=260806163209"></script>
   <!-- Optional local settings (leaderboard project, etc). Deliberately loaded
        WITHOUT a version stamp and with onerror swallowed: the file is not in the
        repo, so a build that has no config.js must boot exactly as before rather
        than log a 404 the player can see. Copy config.example.js to config.js. -->
   <script src="config.js" onerror="void 0"></script>
-  <script src="js/main.js?v=260806160720"></script>
+  <script src="js/main.js?v=260806163209"></script>
 </body>
 </html>

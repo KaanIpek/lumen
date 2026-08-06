@@ -103,7 +103,6 @@
       onTap($('btn-retry'), () => { this.click(); this.game.daily ? game.startDaily() : game.start(); });
       onTap($('btn-menu'), () => { this.click(); game.toMenu(); });
       onTap($('btn-share'), () => this.share());
-      onTap($('btn-ad'), () => { this.click(); this.watchAd(); });
 
       // pause
       onTap($('btn-resume'), () => { this.click(); game.resume(); });
@@ -114,6 +113,7 @@
       onTap($('btn-shop-close'), () => { this.click(); this.closeShop(); });
       onTap($('tab-customize'), () => { this.click(); this.setTab('customize'); });
       onTap($('tab-maps'), () => { this.click(); this.setTab('maps'); });
+      onTap($('tab-coins'), () => { this.click(); this.setTab('coins'); });
       onTap($('tab-items'), () => { this.click(); this.setTab('items'); });
       onTap($('tab-skills'), () => { this.click(); this.setTab('skills'); });
       onTap($('btn-restore'), () => {
@@ -525,6 +525,62 @@
         'box-shadow: inset 0 0 0 1px rgba(255,255,255,.10)';
     },
 
+    // Shards: earn them by watching, or buy them. Both in one place, because
+    // they answer the same question — the game-over screen was the wrong home
+    // for an ad, since the moment you have just failed is the moment an offer
+    // reads as pressure rather than a choice.
+    renderCoinsShop(grid, note) {
+      note.classList.add('hidden');
+      grid.className = 'shop-grid items';
+      const A = LUMEN.Ads;
+
+      if (A && A.available) {
+        const card = document.createElement('div');
+        card.className = 'card owned';
+        card.innerHTML = '<div class="c-name">' + T('freeShards') + '</div>'
+          + '<div class="c-desc">' + T('adTiers') + '</div>';
+        const b = document.createElement('button');
+        b.className = 'c-btn buy';
+        b.textContent = T('adWatch', { n: A.nextReward });
+        onTap(b, () => {
+          this.click();
+          b.disabled = true;
+          A.watch().then((paid) => {
+            b.disabled = false;
+            this.toast(paid > 0 ? T('adPaid', { n: paid }) : T('adNone'));
+            this.renderShop();
+          });
+        });
+        card.appendChild(b);
+        grid.appendChild(card);
+      }
+
+      const iap = LUMEN.IAP;
+      if (!iap || !iap.PACKS) return;
+      iap.PACKS.forEach((p) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = '<div class="c-name">◆ ' + p.shards.toLocaleString() + '</div>'
+          + '<div class="c-desc">' + T('shardPack') + '</div>';
+        const b = document.createElement('button');
+        b.className = 'c-btn cash';
+        const live = iap.available;
+        b.textContent = '$' + p.usd.toFixed(2) + (live ? '' : ' ' + T('sandbox'));
+        onTap(b, () => {
+          this.click();
+          if (!live) { this.toast(T('storeUnavailable')); return; }
+          b.disabled = true;
+          iap.buyShards(p.id).then((r) => {
+            b.disabled = false;
+            this.toast(r && r.ok ? T('adPaid', { n: p.shards }) : T('storeUnavailable'));
+            this.renderShop();
+          });
+        });
+        card.appendChild(b);
+        grid.appendChild(card);
+      });
+    },
+
     renderShop() {
       $('shop-shards').textContent = Store.shards;
       const grid = $('shop-grid');
@@ -535,7 +591,7 @@
       // being on Items left the single-column items layout behind.
       const wide = this.shopTab === 'items' || this.shopTab === 'skills';
       grid.className = 'shop-grid' + (wide ? ' items' : '');
-      ['customize', 'maps', 'items', 'skills'].forEach((t) => {
+      ['customize', 'maps', 'coins', 'items', 'skills'].forEach((t) => {
         const el = $('tab-' + t);
         if (el) el.classList.toggle('active', this.shopTab === t);
       });
@@ -544,6 +600,7 @@
       this.renderCoach();
 
       this.stopSigPreviews();   // rebuilt below if the tab still wants them
+      if (this.shopTab === 'coins') return this.renderCoinsShop(grid, note);
       if (this.shopTab === 'items') return this.renderItemsShop(grid, note);
       if (this.shopTab === 'skills') return this.renderSkillsShop(grid, note);
       note.classList.toggle('hidden', this.shopTab !== 'maps');
@@ -1776,35 +1833,8 @@
       return 'quip_plain';
     },
 
-    // The one ad in the game, on the one screen where shards are on your mind.
-    refreshAdRow() {
-      const A = LUMEN.Ads, row = $('ad-row'), label = $('ad-label');
-      if (!row) return;
-      const on = !!(A && A.available);
-      row.classList.toggle('hidden', !on);
-      // Say what THIS one pays. The amount steps down as the day goes on, and a
-      // button that still advertised the first-tier figure would be lying by the
-      // fourth watch.
-      if (on && label) label.textContent = T('adWatch', { n: A.nextReward });
-    },
-
-    watchAd() {
-      const A = LUMEN.Ads;
-      if (!A) return;
-      const btn = $('btn-ad');
-      if (btn) btn.disabled = true;
-      A.watch().then((paid) => {
-        if (btn) btn.disabled = false;
-        // Nothing earned is not an error. Closing an ad early is a choice, and
-        // an ad that had none to show is Google's problem, not the player's.
-        if (paid > 0) { this.toast(T('adPaid', { n: paid })); this.refreshMenu && this.refreshMenu(); }
-        else this.toast(T('adNone'));
-        this.refreshAdRow();
-      });
-    },
 
     showGameOver(data) {
-      this.refreshAdRow();
       if (!this._ready) return;
       $('final-score').textContent = data.score;
       $('final-best').textContent = data.best;
