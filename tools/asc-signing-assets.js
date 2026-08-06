@@ -105,6 +105,18 @@ function api(method, p, body) {
 }
 const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
 
+// The profile that already names the stored certificate. Nothing is created and
+// nothing is deleted — the point of the stored .p12 is that neither has to be.
+async function reuseProfile() {
+  const PROFILE = 'LUMEN CI App Store';
+  const profs = await api('GET', '/v1/profiles?limit=200');
+  const p = (profs.data || []).find((x) => x.attributes && x.attributes.name === PROFILE);
+  if (!p) throw new Error('no "' + PROFILE + '" profile — clear SIGNING_P12_B64 to rebuild the assets');
+  const file = path.join(OUT, 'profile.mobileprovision');
+  fs.writeFileSync(file, Buffer.from(p.attributes.profileContent, 'base64'));
+  return { file, name: PROFILE, uuid: p.attributes.uuid };
+}
+
 (async () => {
   JWT = token();
 
@@ -113,6 +125,28 @@ const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
   const cerPath = path.join(OUT, 'signing.cer');
   const pemPath = path.join(OUT, 'signing.pem');
   const p12Path = path.join(OUT, 'signing.p12');
+
+  // 0. REUSE a certificate we were given, and revoke nothing.
+  //
+  // Creating one per run means revoking the previous one per run, and Apple
+  // emails the account owner every single time. That is noise I generated, on
+  // somebody else's inbox, for no benefit — the certificate only has to exist
+  // once. Hand the .p12 back through a secret and this whole section is skipped.
+  if (process.env.SIGNING_P12_B64 && process.env.SIGNING_P12_PASS) {
+    fs.writeFileSync(p12Path, Buffer.from(process.env.SIGNING_P12_B64, 'base64'));
+    const prof = await reuseProfile();
+    fs.writeFileSync(path.join(OUT, 'signing.json'), JSON.stringify({
+      p12: p12Path,
+      p12Password: process.env.SIGNING_P12_PASS,
+      profile: prof.file,
+      profileName: prof.name,
+      profileUUID: prof.uuid,
+      identity: process.env.SIGNING_IDENTITY || 'iPhone Distribution',
+      teamId: process.env.APPLE_TEAM_ID || '',
+    }, null, 2));
+    console.log('reused the stored certificate — nothing was revoked');
+    return;
+  }
 
   // 1. a key that exists on THIS machine, which is the entire point
   sh('openssl', ['req', '-new', '-newkey', 'rsa:2048', '-nodes',
@@ -235,4 +269,10 @@ const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
   console.log('certificate: ' + cert.attributes.name + '  (' + cert.attributes.certificateType + ')');
   console.log('profile:     ' + PROFILE + '  ' + prof.data.attributes.uuid);
   console.log('wrote ' + path.join(OUT, 'signing.json'));
+  console.log('');
+  console.log('TO STOP REVOKING A CERTIFICATE ON EVERY RUN, save these as repository');
+  console.log('secrets — after that this script reuses them and revokes nothing:');
+  console.log('  SIGNING_P12_B64   ' + fs.readFileSync(p12Path).toString('base64').slice(0, 24) + '…  (full value below)');
+  console.log('  SIGNING_P12_PASS  ' + '(printed once, in the masked block that follows)');
+  console.log('  SIGNING_IDENTITY  ' + out.identity);
 })().catch((e) => { console.error(e.message); process.exitCode = 1; });

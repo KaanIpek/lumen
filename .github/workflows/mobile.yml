@@ -397,6 +397,12 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_PATH: /Users/runner/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Set these three and the script reuses the certificate instead of
+          # revoking and recreating one per run — which is what makes Apple email
+          # the account owner on every single build.
+          SIGNING_P12_B64: ${{ secrets.SIGNING_P12_B64 }}
+          SIGNING_P12_PASS: ${{ secrets.SIGNING_P12_PASS }}
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
         run: |
           node "$GITHUB_WORKSPACE/tools/asc-signing-assets.js" --out "$RUNNER_TEMP/signing"
           P12=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/signing/signing.json'))['p12'])")
