@@ -58,9 +58,12 @@
       const C = window.Capacitor;
       if (!C || !(C.isNativePlatform && C.isNativePlatform())) return null;
       if (this._plugin) return this._plugin;
-      if (C.Plugins && C.Plugins.AdMob) return (this._plugin = C.Plugins.AdMob);
+      // LumenAds, ours — see mobile/ios-plugin/. The community plugin is gone:
+      // it did not compile, and because that is a compile failure it stopped any
+      // build being produced at all.
+      if (C.Plugins && C.Plugins.LumenAds) return (this._plugin = C.Plugins.LumenAds);
       if (typeof C.registerPlugin === 'function') {
-        try { return (this._plugin = C.registerPlugin('AdMob')); } catch (e) { return null; }
+        try { return (this._plugin = C.registerPlugin('LumenAds')); } catch (e) { return null; }
       }
       return null;
     },
@@ -92,13 +95,10 @@
     init() {
       const p = this.native;
       if (!p || this._ready) return Promise.resolve(this._ready);
-      return p.initialize({
-        // Test devices see test ads even from live units. Harmless here, and it
-        // is the switch that stops a developer's own taps looking like fraud
-        // once the units are real.
-        initializeForTesting: this.isTestAds,
-        requestTrackingAuthorization: false,   // 1.1 asks properly, see docs/ADS.md
-      }).then(() => (this._ready = true)).catch(() => false);
+      // No consent or tracking call here on purpose: those belong with the
+      // privacy declaration and the ATT prompt, in the release that turns live
+      // ads on. See docs/ADS.md.
+      return p.initialize().then(() => (this._ready = true)).catch(() => false);
     },
 
     // ---- the daily allowance ----------------------------------------------
@@ -128,15 +128,15 @@
       const p = this.native;
       if (!p) return Promise.resolve(0);
       if (this.left <= 0) return Promise.resolve(0);
-      const opts = { adId: this.units.rewarded, isTesting: this.isTestAds };
+      const opts = { adId: this.units.rewarded };
       return this.init()
-        .then(() => p.prepareRewardVideoAd(opts))
-        .then(() => p.showRewardVideoAd())
+        .then(() => p.prepare(opts))
+        .then(() => p.show())
         .then((r) => {
           // The plugin resolves with the reward when one was earned. No reward
           // means the ad was dismissed early, which pays nothing and costs
           // nothing — the allowance is only spent on a completed view.
-          if (!r) return 0;
+          if (!r || !r.earned) return 0;
           this._spend();
           if (LUMEN.Cosmetics && LUMEN.Cosmetics.grantShards) LUMEN.Cosmetics.grantShards(REWARD);
           else if (Store) Store.shards = Store.shards + REWARD;
