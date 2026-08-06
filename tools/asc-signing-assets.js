@@ -269,10 +269,39 @@ async function reuseProfile() {
   console.log('certificate: ' + cert.attributes.name + '  (' + cert.attributes.certificateType + ')');
   console.log('profile:     ' + PROFILE + '  ' + prof.data.attributes.uuid);
   console.log('wrote ' + path.join(OUT, 'signing.json'));
+
+  // The .p12 is a PRIVATE KEY. It is never printed in CI, and the earlier
+  // version of this message promised a "full value below" that it never
+  // printed — which was a broken promise hiding a worse idea, because this
+  // repository is public and its build logs are readable by anyone.
+  //
+  // So the values are printed only when a human runs this on their own machine.
+  // Same script, same certificate, no log in between.
+  if (process.env.GITHUB_ACTIONS) {
+    console.log('');
+    console.log('This run created a certificate, which revoked the previous one.');
+    console.log('To stop that happening on every build, run this on your own machine:');
+    console.log('');
+    console.log('  node tools/asc-signing-assets.js --out ./signing-out');
+    console.log('');
+    console.log('It prints the three values to paste into repository secrets. They are');
+    console.log('deliberately NOT printed here: a private key does not belong in a log.');
+    return;
+  }
+
   console.log('');
-  console.log('TO STOP REVOKING A CERTIFICATE ON EVERY RUN, save these as repository');
-  console.log('secrets — after that this script reuses them and revokes nothing:');
-  console.log('  SIGNING_P12_B64   ' + fs.readFileSync(p12Path).toString('base64').slice(0, 24) + '…  (full value below)');
-  console.log('  SIGNING_P12_PASS  ' + '(printed once, in the masked block that follows)');
-  console.log('  SIGNING_IDENTITY  ' + out.identity);
+  console.log('Save these three as repository secrets (Settings -> Secrets and');
+  console.log('variables -> Actions). After that this script reuses them and revokes');
+  console.log('nothing, so Apple stops emailing you on every build.');
+  console.log('');
+  console.log('SIGNING_IDENTITY');
+  console.log(out.identity);
+  console.log('');
+  console.log('SIGNING_P12_PASS');
+  console.log(P12PASS);
+  console.log('');
+  console.log('SIGNING_P12_B64');
+  console.log(fs.readFileSync(p12Path).toString('base64'));
+  console.log('');
+  console.log('Then delete ./signing-out — it holds the private key in the clear.');
 })().catch((e) => { console.error(e.message); process.exitCode = 1; });
