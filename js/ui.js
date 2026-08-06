@@ -534,8 +534,25 @@
     // reads as pressure rather than a choice.
     renderCoinsShop(grid, note) {
       note.classList.add('hidden');
+      // CUSTOMIZE leaves its category row behind. It is only ever cleared by the
+      // branch that draws it, so arriving here from Orbs kept "ALL / SETS /
+      // ORBS…" pinned above a page with no categories at all.
+      $('shop-filters').classList.add('hidden');
       grid.className = 'shop-grid items';
       const A = LUMEN.Ads;
+
+      // What you have, drawn rather than stated. The cluster grows with the
+      // balance — one lit diamond per tier — so the page answers "how am I
+      // doing" before it asks for anything.
+      const bal = document.createElement('div');
+      bal.className = 'card owned coin-balance';
+      const lit = Math.max(1, Math.min(8, Math.floor(Math.log2(Math.max(1, Store.shards) / 150) + 2)));
+      let pips = '';
+      for (let i = 0; i < 8; i++) pips += '<span class="pip' + (i < lit ? ' on' : '') + '">◆</span>';
+      bal.innerHTML = '<div class="coin-pips">' + pips + '</div>'
+        + '<div class="coin-total">' + Store.shards.toLocaleString() + '</div>'
+        + '<div class="c-desc">' + T('coinsHave') + '</div>';
+      grid.appendChild(bal);
 
       if (A && A.available) {
         const card = document.createElement('div');

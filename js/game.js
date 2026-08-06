@@ -902,7 +902,7 @@
       // there was too much empty room above the corridor. This is as far up as
       // it goes — the score's own glyphs end at safeTop + H*0.012 + the 51px
       // font, which lands within a pixel or two of here.
-      this.playTop = this.safeTop + h * 0.072;
+      this.playTop = this.safeTop + h * 0.064;
       this.playBottom = h * 0.945 - this.safeBottom * 0.5;
       this.playH = this.playBottom - this.playTop;
       this.bg.resize(this.viewW, h);   // the sky fills the glass, not the column
@@ -3852,7 +3852,11 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       // score
-      const big = clamp(H * 0.06, 30, 58);
+      // Smaller than it was, because the band above the corridor could not come
+      // down any further while the glyphs were this tall — the score's bottom
+      // edge WAS the top of the playfield. 44px on a 393-wide phone is still the
+      // largest thing on screen by a wide margin.
+      const big = clamp(H * 0.052, 28, 50);
       // One origin for the whole top row. The score used to offset by safeTop
       // while the multiplier and the best line did not, so even a correct inset
       // only unclipped one of the three.
