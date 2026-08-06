@@ -164,6 +164,9 @@
       });
       onTap($('btn-giveup'), () => { this.click(); game.finalizeRun(); });
       onTap($('btn-revive-ad'), () => { this.click(); this.reviveWithAd(); });
+      // finalizeRun FIRST: leaving is not the same as throwing the run away, and
+      // a score you actually reached should be recorded whichever door you use.
+      onTap($('btn-revive-menu'), () => { this.click(); game.finalizeRun(); game.toMenu(); });
 
       // settings
       onTap($('btn-settings'), () => { this.click(); this.openSettings(); });
