@@ -7,14 +7,27 @@ trade.
 
 ## The number
 
-**75 shards, three times a day.**
+**75 shards for the first three, then 50, then 25. Resets daily.**
 
 The shop's real items cost 4,500 and 9,000. At 50 a player does the arithmetic,
 sees ninety ads, and never watches one. Above 100 the ads beat playing, and the
 game becomes a waiting room. 75 is roughly a good run — so an ad repeats a good
-run instead of replacing it. Three a day is 225: a 4,500 item is about twenty
-days on ads alone, far less if you actually play. An accelerator, not a
-shortcut.
+run instead of replacing it.
+
+A schedule rather than a cap. A hard limit has to refuse somebody who wanted to
+keep going, and the only thing that teaches is that the button lies. Diminishing
+returns say the same thing without saying no: the first ads are worth a good
+run, and by the point where grinding them would beat playing they are worth a
+third of that. Nobody is stopped, and nobody is paid for not playing.
+
+## Continuing on an ad
+
+Offered on the revive screen, once per run, and the shard price stays exactly as
+it was. An ad must be an alternative to paying, never the only way to carry on.
+
+Once per run for a second reason: unlimited revives would turn the shared board
+from a list of who plays best into a list of who watched most, which is not what
+it is for.
 
 ## Right now it is TEST ads
 

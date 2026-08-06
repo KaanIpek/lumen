@@ -163,6 +163,7 @@
         if (!game.revive()) { this.toast(T('notEnough')); game.finalizeRun(); }
       });
       onTap($('btn-giveup'), () => { this.click(); game.finalizeRun(); });
+      onTap($('btn-revive-ad'), () => { this.click(); this.reviveWithAd(); });
 
       // settings
       onTap($('btn-settings'), () => { this.click(); this.openSettings(); });
@@ -1492,9 +1493,32 @@
     // ---- tutorial --------------------------------------------------------
     showTutorialDone() { this.showScreen('tutdone'); },
 
+    // Continue on an ad instead of shards. Once per run, and the shard price
+    // stays: an ad must be an alternative to paying, never the only way to
+    // carry on. Unlimited revives would also turn the shared board into a list
+    // of who watched most, which is not what it is for.
+    reviveWithAd() {
+      const A = LUMEN.Ads, g = this.game;
+      if (!A || !g || g.adRevived) return;
+      const btn = $('btn-revive-ad');
+      if (btn) btn.disabled = true;
+      A.watchToRevive().then((ok) => {
+        if (btn) btn.disabled = false;
+        if (!ok) { this.toast(T('adNone')); return; }
+        g.adRevived = true;
+        if (!g.revive(true)) g.finalizeRun();
+      });
+    },
+
     // ---- revive ----------------------------------------------------------
     showRevive(data) {
       if (!this._ready) return;
+      // Hidden once it has been used, because the offer is per run.
+      const adRow = $('revive-ad-row');
+      if (adRow) {
+        adRow.classList.toggle('hidden',
+          !(LUMEN.Ads && LUMEN.Ads.available && this.game && !this.game.adRevived));
+      }
       $('revive-cost').textContent = data.cost;
       // The score you are being asked to save — which means the score you would
       // actually keep, multipliers and all. Showing the raw figure here made the
@@ -1756,9 +1780,12 @@
     refreshAdRow() {
       const A = LUMEN.Ads, row = $('ad-row'), label = $('ad-label');
       if (!row) return;
-      const on = !!(A && A.available && A.left > 0);
+      const on = !!(A && A.available);
       row.classList.toggle('hidden', !on);
-      if (on && label) label.textContent = T('adWatch', { n: A.REWARD, k: A.left });
+      // Say what THIS one pays. The amount steps down as the day goes on, and a
+      // button that still advertised the first-tier figure would be lying by the
+      // fourth watch.
+      if (on && label) label.textContent = T('adWatch', { n: A.nextReward });
     },
 
     watchAd() {

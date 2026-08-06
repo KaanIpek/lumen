@@ -41,12 +41,22 @@
                rewarded: 'ca-app-pub-3940256099942544/5224354917' },
   };
 
-  const REWARD = 75;
-  const PER_DAY = 3;
+  // A schedule, not a cap. Watch as many as you like; the third one is worth
+  // less than the first and the seventh less again.
+  //
+  // A hard limit has to say "no" to somebody who wanted to keep going, and the
+  // only thing that teaches is that the button lies. Diminishing returns say the
+  // same thing without refusing: the first ads are worth roughly a good run,
+  // and by the time grinding them would beat playing they are worth a third of
+  // that. Nobody is stopped, and nobody is rewarded for stopping playing.
+  const TIERS = [
+    { upTo: 3, shards: 75 },
+    { upTo: 6, shards: 50 },
+    { upTo: Infinity, shards: 25 },
+  ];
 
   const Ads = {
-    REWARD,
-    PER_DAY,
+    TIERS,
 
     _plugin: null,
     _ready: false,
@@ -115,7 +125,16 @@
       const [day, n] = raw.split(':');
       return day === this._today() ? (parseInt(n, 10) || 0) : 0;
     },
-    get left() { return Math.max(0, PER_DAY - this.usedToday); },
+    // What the NEXT one pays. Shown on the button, so the trade is stated before
+    // it is made rather than discovered afterwards.
+    rewardFor(n) {
+      for (const t of TIERS) if (n < t.upTo) return t.shards;
+      return TIERS[TIERS.length - 1].shards;
+    },
+    get nextReward() { return this.rewardFor(this.usedToday); },
+    // Kept because the UI asks: there is no limit any more, so there is always
+    // one more available.
+    get left() { return Infinity; },
     _spend() {
       if (Store) Store.adsToday = this._today() + ':' + (this.usedToday + 1);
     },
@@ -127,7 +146,7 @@
     watch() {
       const p = this.native;
       if (!p) return Promise.resolve(0);
-      if (this.left <= 0) return Promise.resolve(0);
+      const pay = this.nextReward;
       const opts = { adId: this.units.rewarded };
       return this.init()
         .then(() => p.prepare(opts))
@@ -138,13 +157,28 @@
           // nothing — the allowance is only spent on a completed view.
           if (!r || !r.earned) return 0;
           this._spend();
-          if (LUMEN.Cosmetics && LUMEN.Cosmetics.grantShards) LUMEN.Cosmetics.grantShards(REWARD);
-          else if (Store) Store.shards = Store.shards + REWARD;
-          if (LUMEN.Analytics) LUMEN.Analytics.track('ad_reward', { shards: REWARD, test: this.isTestAds });
-          return REWARD;
+          if (LUMEN.Cosmetics && LUMEN.Cosmetics.grantShards) LUMEN.Cosmetics.grantShards(pay);
+          else if (Store) Store.shards = Store.shards + pay;
+          if (LUMEN.Analytics) LUMEN.Analytics.track('ad_reward', { shards: pay, test: this.isTestAds });
+          return pay;
         })
         .catch(() => 0);
     },
+  };
+
+  // ---- watching one to carry on -----------------------------------------
+  // Deliberately separate from watch(): this pays no shards, spends no part of
+  // the schedule above, and answers a different question. It is also the moment
+  // a player most wants an ad to exist, which is exactly why it must not be the
+  // only way to continue — the shard price stays.
+  Ads.watchToRevive = function () {
+    const p = this.native;
+    if (!p) return Promise.resolve(false);
+    return this.init()
+      .then(() => p.prepare({ adId: this.units.rewarded }))
+      .then(() => p.show())
+      .then((r) => !!(r && r.earned))
+      .catch(() => false);
   };
 
   LUMEN.Ads = Ads;

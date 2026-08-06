@@ -1009,6 +1009,7 @@
       this.resolveMode();
       this.applyMods();
       this.revived = false;      // one paid revive per run
+      this.adRevived = false;    // …and one on an ad, separately
       this.invuln = 0;           // seconds of post-revive grace
       this._finalized = false;   // guards against double-recording a run
       this.flow = 0;
@@ -1672,9 +1673,12 @@
 
     // Spend shards to continue the same run: clear the road ahead, drop the combo
     // (the chain is genuinely lost), keep the score, and grant brief invulnerability.
-    revive() {
-      if (!this.canRevive()) return false;
-      Store.shards = Store.shards - this.reviveCost;
+    // `free` is the ad path: the run continues without paying shards, and
+    // canRevive() — which asks whether you can AFFORD it — must not stand in the
+    // way of a player who just watched an ad precisely because they could not.
+    revive(free) {
+      if (!free && !this.canRevive()) return false;
+      if (!free) Store.shards = Store.shards - this.reviveCost;
       Store.reviveCount = Store.reviveCount + 1;
       this.revived = true;
       const p = this.player;
