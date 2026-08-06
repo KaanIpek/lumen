@@ -28,3 +28,6 @@ Thumbs.db
 #   STORE_LISTING.md the store copy, in four languages, before it is submitted
 docs/LAUNCH.md
 docs/STORE_LISTING.md
+
+# A private key in the clear. Never committed, and the script says to delete it.
+signing-out/

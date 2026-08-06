@@ -547,7 +547,8 @@
           b.disabled = true;
           A.watch().then((paid) => {
             b.disabled = false;
-            this.toast(paid > 0 ? T('adPaid', { n: paid }) : T('adNone'));
+            this.toast(paid > 0 ? T('adPaid', { n: paid })
+              : T('adNone') + (A.lastError ? ' — ' + A.lastError.slice(0, 90) : ''));
             this.renderShop();
           });
         });

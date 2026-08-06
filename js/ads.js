@@ -162,7 +162,14 @@
           if (LUMEN.Analytics) LUMEN.Analytics.track('ad_reward', { shards: pay, test: this.isTestAds });
           return pay;
         })
-        .catch(() => 0);
+        .catch((e) => {
+          // Keep WHY. A bare 0 became "no ad right now", which is the same
+          // sentence whether the SDK never started, the unit is wrong, or there
+          // genuinely was no fill — and the person testing it could only ever
+          // report the sentence back to me.
+          this.lastError = String((e && e.message) || e || 'unknown');
+          return 0;
+        });
     },
   };
 

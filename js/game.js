@@ -897,7 +897,12 @@
       // whose padding IS the inset, read back through getComputedStyle.
       this.safeTop = safeTopFor(w, h);
       this.safeBottom = readInset('bottom');
-      this.playTop = this.safeTop + h * 0.085;
+      // 0.072, not 0.085. With the notch inset finally being respected the band
+      // was measured twice: once by me and once by the person playing, who said
+      // there was too much empty room above the corridor. This is as far up as
+      // it goes — the score's own glyphs end at safeTop + H*0.012 + the 51px
+      // font, which lands within a pixel or two of here.
+      this.playTop = this.safeTop + h * 0.072;
       this.playBottom = h * 0.945 - this.safeBottom * 0.5;
       this.playH = this.playBottom - this.playTop;
       this.bg.resize(this.viewW, h);   // the sky fills the glass, not the column
@@ -3851,7 +3856,7 @@
       // One origin for the whole top row. The score used to offset by safeTop
       // while the multiplier and the best line did not, so even a correct inset
       // only unclipped one of the three.
-      const top = (this.safeTop || 0) + H * 0.022;
+      const top = (this.safeTop || 0) + H * 0.012;
       ctx.font = `800 ${big}px "Rajdhani", system-ui, sans-serif`;
       ctx.fillStyle = '#fff';
       ctx.shadowColor = this.orbColor(1); ctx.shadowBlur = 16;
