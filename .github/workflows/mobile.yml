@@ -242,7 +242,13 @@ jobs:
           MIC="Voice control lets you fire a held item by saying its name. The microphone is used only while that switch is on, and this app records nothing and sends nothing anywhere."
           /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string $MIC" Info.plist             || /usr/libexec/PlistBuddy -c "Set :NSMicrophoneUsageDescription $MIC" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSSpeechRecognitionUsageDescription string $MIC" Info.plist             || /usr/libexec/PlistBuddy -c "Set :NSSpeechRecognitionUsageDescription $MIC" Info.plist
-          /usr/libexec/PlistBuddy -c "Print" Info.plist | grep -E "NonExempt|FullScreen"
+          # The Google Mobile Ads SDK RAISES on start when this key is absent —
+          # it does not warn, it terminates the app. Google's own sample app id;
+          # the real one arrives with the privacy declaration and the ATT prompt,
+          # in the release that turns live ads on (docs/ADS.md).
+          GADID="ca-app-pub-3940256099942544~1458002511"
+          /usr/libexec/PlistBuddy -c "Add :GADApplicationIdentifier string $GADID" Info.plist             || /usr/libexec/PlistBuddy -c "Set :GADApplicationIdentifier $GADID" Info.plist
+          /usr/libexec/PlistBuddy -c "Print" Info.plist | grep -E "NonExempt|FullScreen|GADApplication"
 
       # Sign in with Apple needs the entitlement in the BUILD, not only on the
       # App ID. Turning the capability on in the developer portal is what lets a
