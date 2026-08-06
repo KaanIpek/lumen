@@ -40,6 +40,9 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
     @objc func prepare(_ call: CAPPluginCall) {
         let unit = call.getString("adId") ?? ""
         if unit.isEmpty { call.reject("no ad unit"); return }
+        // Loading on main too: the SDK delivers its callbacks there, and the
+        // delegate assignment below touches state the presentation path reads.
+        DispatchQueue.main.async {
         let request = GADRequest()
         GADRewardedAd.load(withAdUnitID: unit, request: request) { [weak self] ad, error in
             guard let self = self else { return }
@@ -54,25 +57,40 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
             self.rewarded = ad
             call.resolve()
         }
+        }
     }
 
     @objc func show(_ call: CAPPluginCall) {
-        guard let ad = rewarded else { call.reject("nothing loaded"); return }
-        guard let vc = self.bridge?.viewController else { call.reject("no view controller"); return }
-        // canPresent tells us BEFORE the sheet is attempted, with a reason. The
-        // alternative is finding out through a delegate callback that used to
-        // discard it.
-        do { try ad.canPresent(fromRootViewController: vc) }
-        catch { call.reject("cannot present: \(error.localizedDescription)"); return }
-        // Held so the delegate can answer once the ad is actually dismissed.
-        // Resolving on `present` would pay a player who closed it immediately.
-        // A property in Capacitor 6, not a method — calling it reads as
-        // "cannot call value of non-function type 'Bool'".
-        call.keepAlive = true
-        pending = call
-        earned = false
-        ad.present(fromRootViewController: vc) { [weak self] in
-            self?.earned = true
+        // ON THE MAIN THREAD, and this is the whole bug.
+        //
+        // Capacitor runs plugin methods on a background queue, and UIKit refuses
+        // to put anything on screen from there:
+        //
+        //   cannot present: presentation must be called on the main thread
+        //
+        // The ad was loading correctly the entire time and simply could not be
+        // shown. What reached the player was "No ad right now", a sentence that
+        // described neither the cause nor the fix — and it took surfacing the
+        // real message to find a one-line answer.
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let ad = self.rewarded else { call.reject("nothing loaded"); return }
+            guard let vc = self.bridge?.viewController else {
+                call.reject("no view controller"); return
+            }
+            // canPresent answers BEFORE the sheet is attempted, and with a
+            // reason. The alternative is learning it from a delegate callback.
+            do { try ad.canPresent(fromRootViewController: vc) }
+            catch { call.reject("cannot present: \(error.localizedDescription)"); return }
+            // Held so the delegate can answer once the ad is actually dismissed.
+            // Resolving on `present` would pay a player who closed it instantly.
+            // keepAlive is a property in Capacitor 6, not a method.
+            call.keepAlive = true
+            self.pending = call
+            self.earned = false
+            ad.present(fromRootViewController: vc) { [weak self] in
+                self?.earned = true
+            }
         }
     }
 
