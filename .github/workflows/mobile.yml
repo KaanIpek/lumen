@@ -161,6 +161,31 @@ jobs:
           npm install
           npx cap add ios || echo "ios project already present"
 
+          # Static linkage, or pods will not install at all:
+          #
+          #   [!] The 'Pods-App' target has transitive dependencies that include
+          #       statically linked binaries: (Google-Mobile-Ads-SDK and
+          #       GoogleUserMessagingPlatform)
+          #
+          # Capacitor generates `use_frameworks!`, which means dynamic, and the
+          # Google SDKs ship static binaries. CocoaPods refuses the mixture. The
+          # documented answer is to keep frameworks and make the linkage static,
+          # which changes nothing for the other pods.
+          python3 - <<'PYEOF'
+          import io, os
+          p = 'ios/App/Podfile'
+          if not os.path.exists(p):
+              print('no Podfile yet'); raise SystemExit(0)
+          s = io.open(p, encoding='utf-8').read()
+          if ':linkage' in s:
+              print('linkage already set'); raise SystemExit(0)
+          if 'use_frameworks!' not in s:
+              raise SystemExit('no use_frameworks! line to change')
+          s = s.replace('use_frameworks!', 'use_frameworks! :linkage => :static', 1)
+          io.open(p, 'w', encoding='utf-8', newline=chr(10)).write(s)
+          print('Podfile now links frameworks statically')
+          PYEOF
+
           npx cap sync ios
 
       # The app icon. `npx cap add ios` does NOT take the web icons — it leaves
