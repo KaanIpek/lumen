@@ -121,6 +121,10 @@
     set pollSeen(v) { this._write('lumen_pollseen', String(v || '')); },
     get pollVote() { return this._read('lumen_pollvote', ''); },
     set pollVote(v) { this._write('lumen_pollvote', String(v || '')); },
+    // "YYYY-MM-DD:n" — a stamp that is not today's IS a fresh day, so a clock
+    // moved backwards cannot mint extra ad views.
+    get adsToday() { return this._read('lumen_ads', ''); },
+    set adsToday(v) { this._write('lumen_ads', String(v || '')); },
     get playerName() { return this._read('lumen_name', ''); },
     set playerName(v) { this._write('lumen_name', v); },
     // Bests that have no name to go up under yet, keyed by board.

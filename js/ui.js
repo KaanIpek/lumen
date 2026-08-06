@@ -103,6 +103,7 @@
       onTap($('btn-retry'), () => { this.click(); this.game.daily ? game.startDaily() : game.start(); });
       onTap($('btn-menu'), () => { this.click(); game.toMenu(); });
       onTap($('btn-share'), () => this.share());
+      onTap($('btn-ad'), () => { this.click(); this.watchAd(); });
 
       // pause
       onTap($('btn-resume'), () => { this.click(); game.resume(); });
@@ -1751,7 +1752,32 @@
       return 'quip_plain';
     },
 
+    // The one ad in the game, on the one screen where shards are on your mind.
+    refreshAdRow() {
+      const A = LUMEN.Ads, row = $('ad-row'), label = $('ad-label');
+      if (!row) return;
+      const on = !!(A && A.available && A.left > 0);
+      row.classList.toggle('hidden', !on);
+      if (on && label) label.textContent = T('adWatch', { n: A.REWARD, k: A.left });
+    },
+
+    watchAd() {
+      const A = LUMEN.Ads;
+      if (!A) return;
+      const btn = $('btn-ad');
+      if (btn) btn.disabled = true;
+      A.watch().then((paid) => {
+        if (btn) btn.disabled = false;
+        // Nothing earned is not an error. Closing an ad early is a choice, and
+        // an ad that had none to show is Google's problem, not the player's.
+        if (paid > 0) { this.toast(T('adPaid', { n: paid })); this.refreshMenu && this.refreshMenu(); }
+        else this.toast(T('adNone'));
+        this.refreshAdRow();
+      });
+    },
+
     showGameOver(data) {
+      this.refreshAdRow();
       if (!this._ready) return;
       $('final-score').textContent = data.score;
       $('final-best').textContent = data.best;

@@ -87,6 +87,9 @@
     } else if (c.leaderboardEndpoint) {
       LUMEN.Leaderboard.endpoint = c.leaderboardEndpoint;
     }
+    // Rewarded ads. No-op anywhere there is no native plugin, so the web build
+    // and the test page are untouched.
+    if (LUMEN.Ads) LUMEN.Ads.init();
     // The next-update vote rides the same Supabase project as the board. No
     // poll in the config means no button, no screen and no requests.
     if (LUMEN.Poll && c.supabaseUrl && c.supabaseAnonKey) {

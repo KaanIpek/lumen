@@ -228,7 +228,14 @@ async function uploadScreenshots(versionId) {
   const locs = await api('GET', '/v1/appStoreVersions/' + versionId + '/appStoreVersionLocalizations?limit=50');
   const en = (locs.data || []).find((l) => l.attributes.locale === 'en-US');
   if (!en) throw new Error('no en-US localization to attach screenshots to');
-  for (const spec of SHOT_SETS) await uploadOneSet(en, spec);
+  // EVERY localization, not just the primary one. A localization that exists
+  // with no artwork leaves the version in a state App Store Connect will not
+  // review, and the API says only "not in valid state" — it never names the
+  // locale. Three empty ones sat there while the submission was refused.
+  for (const loc of locs.data || []) {
+    console.log('  [' + loc.attributes.locale + ']');
+    for (const spec of SHOT_SETS) await uploadOneSet(loc, spec);
+  }
 }
 
 async function uploadOneSet(en, spec) {
