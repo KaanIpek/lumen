@@ -11,7 +11,11 @@ Pod::Spec.new do |s|
   s.author = 'RLD Games'
   s.source = { :git => 'https://github.com/KaanIpek/lumen.git', :tag => s.version.to_s }
   s.source_files = 'ios/Plugin/**/*.{swift,h,m}'
-  s.ios.deployment_target = '15.0'
+  # 13.0, not 15: this must be <= the Podfile's platform, which Capacitor
+  # generates at 13. Asking for more made CocoaPods refuse the pod outright —
+  # "required a higher minimum deployment target" — and the app's own floor is
+  # raised by a build setting, not by this.
+  s.ios.deployment_target = '13.0'
   s.dependency 'Capacitor'
   # 11.x on purpose: 12 renamed GADRewardedAd to RewardedAd and the rest of the
   # GAD-prefixed API with it. Declaring it HERE is the difference that matters —
