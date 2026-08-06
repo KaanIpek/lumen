@@ -161,38 +161,6 @@ jobs:
           npm install
           npx cap add ios || echo "ios project already present"
 
-          # Pin the consent SDK before pods are installed.
-          #
-          # @capacitor-community/admob v6 is written against UserMessagingPlatform
-          # 2.x. CocoaPods resolves to the newest by default, and UMP 3.0 renamed
-          # the very things the plugin calls, so the ARCHIVE fails to compile:
-          #
-          #   ConsentExecutor.swift: error: 'sharedInstance' …  'UMPConsentStatus' …
-          #
-          # That is a build failure, not a signing one, so the unsigned fallback
-          # cannot rescue it — nothing ships at all. Pin the dependency rather
-          # than chase a plugin version that wants Capacitor 7.
-          python3 - <<'PYEOF'
-          import io, os
-          p = 'ios/App/Podfile'
-          if not os.path.exists(p):
-              print('no Podfile yet'); raise SystemExit(0)
-          s = io.open(p, encoding='utf-8').read()
-          if 'GoogleUserMessagingPlatform' in s:
-              print('already pinned'); raise SystemExit(0)
-          NL = chr(10)
-          pin = "  pod 'GoogleUserMessagingPlatform', '~> 2.7'"
-          lines = s.split(NL)
-          for i, l in enumerate(lines):
-              if l.strip().startswith("pod 'Capacitor'"):
-                  lines.insert(i, pin)
-                  break
-          else:
-              raise SystemExit("could not find the Capacitor pod line to anchor to")
-          io.open(p, 'w', encoding='utf-8', newline=NL).write(NL.join(lines))
-          print('pinned UserMessagingPlatform to 2.7')
-          PYEOF
-
           npx cap sync ios
 
       # The app icon. `npx cap add ios` does NOT take the web icons — it leaves

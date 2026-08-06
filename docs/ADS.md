@@ -44,3 +44,33 @@ unit collects a device identifier and serves personalised advertising, so:
 
 Do these together or not at all. Half of this shipped is a compliance problem,
 not a bug.
+
+## The native plugin is NOT in the build
+
+`@capacitor-community/admob` v6 does not compile against the toolchain this
+project uses:
+
+```
+ConsentExecutor.swift: error: 'sharedInstance' … 'UMPConsentStatus' …
+```
+
+It is written against UserMessagingPlatform 2.x and the resolved SDK is 3.x,
+which renamed exactly what it calls. Pinning `GoogleUserMessagingPlatform` in
+the Podfile does not help — the plugin's own podspec resolves the dependency and
+the pin is ignored. Two builds confirmed that.
+
+This is a COMPILE failure, so the unsigned-archive fallback cannot rescue it and
+NOTHING ships while the plugin is present. That is why it has been removed
+rather than left in place broken: a pipeline that cannot produce a build is a
+worse problem than a feature that is not finished.
+
+`js/ads.js` stays. It is provider-agnostic and already covered by tests against
+a stub, and with no plugin present it reports `available: false`, so the button
+never appears — which is its designed behaviour, not a workaround.
+
+Next attempt, in rough order of promise:
+1. `@capacitor-community/admob` v7 plus a Capacitor 6 -> 7 migration.
+2. A `post_install` hook in the Podfile forcing the older UMP into the plugin's
+   own target, rather than a top-level pod line.
+3. A thin native shim in the iOS project calling GADRewardedAd directly, which
+   is about forty lines and no third-party plugin at all.
