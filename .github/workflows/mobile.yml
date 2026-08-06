@@ -42,6 +42,17 @@ on:
   push:
     tags: ['v*']            # …and automatically for a release tag
 
+# One at a time, and never cancel the one that is running.
+#
+# Several dispatches in a row meant several runs asking for a macOS machine at
+# once, and the ones that could not get one were cancelled — which looks exactly
+# like a build that failed for no reason, and cost an evening of "did it land?"
+# with nothing in the log to read. Queueing makes the wait deliberate and
+# visible instead.
+concurrency:
+  group: mobile
+  cancel-in-progress: false
+
 jobs:
   android:
     runs-on: ubuntu-latest   # no Mac needed for Android at all
