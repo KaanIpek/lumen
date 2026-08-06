@@ -1017,3 +1017,13 @@ kbd {
    fit, and saying so with layout beats saying it with a badge. */
 .pack-pile.overflowing { max-height: 74px; margin-top: -8px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%); mask-image: linear-gradient(to bottom, transparent, #000 22%); }
 @keyframes coinBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+
+/* The name screen. One question, one field, one button. */
+.name-panel .name-why { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0 0 18px; }
+.name-panel input {
+  width: 100%; min-height: 48px; padding: 10px 14px; margin-bottom: 16px;
+  border-radius: 12px; border: 1px solid var(--panel-brd);
+  background: rgba(255,255,255,.06); color: var(--ink); text-align: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: .06em;
+}
+.name-panel input:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }

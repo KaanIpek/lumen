@@ -77,6 +77,7 @@
         progress: $('screen-progress'),
         checkout: $('screen-checkout'),
         modes: $('screen-modes'),
+        name: $('screen-name'),
         poll: $('screen-poll'),
       };
 
@@ -146,16 +147,8 @@
       onTap($('tab-lb-all'), () => { this.click(); this.setBoard('all'); });
       onTap($('btn-lb-refresh'), () => { this.click(); this.refreshBoard(); });
       onTap($('btn-lb-signin'), () => { this.click(); this.signInApple(); });
-      onTap($('btn-lb-name'), () => { this.click(); this.saveName(); });
-      const nameInput = $('lb-name');
-      if (nameInput) {
-        nameInput.value = (LUMEN.Leaderboard && LUMEN.Leaderboard.playerName) || '';
-        // typing here must never reach the game's window-level key handler
-        nameInput.addEventListener('keydown', (e) => {
-          e.stopPropagation();
-          if (e.key === 'Enter') { e.preventDefault(); this.saveName(); }
-        });
-      }
+      onTap($('btn-name-save'), () => { this.click(); this.saveName(); });
+      onTap($('btn-name-edit'), () => { this.click(); this.openNameScreen(); });
 
       // revive
       onTap($('btn-revive'), () => {
@@ -1337,22 +1330,17 @@
       const NOOP = { classList: { add() {}, remove() {}, toggle() {} }, textContent: '', innerHTML: '' };
       const note = $('lb-note') || NOOP;
       const refresh = $('btn-lb-refresh');
-      const nameRow = $('lb-name-row');
+      const nameRow = null;
       // only the online boards have anything to re-fetch, or a name to carry
       const onlineTab = tab !== 'me' && !!LB && LB.enabled;
       if (refresh) refresh.classList.toggle('hidden', !onlineTab);
-      if (nameRow) nameRow.classList.toggle('hidden', !onlineTab);
-      const nameInput = $('lb-name');
-      if (nameInput && LB) nameInput.value = LB.playerName || '';
       // The shared board needs an account. Signed out, the name field is not
       // shown at all: offering somewhere to type a name that cannot be
       // submitted is how the old screen taught people it was broken.
       const A = LUMEN.Auth;
       const authed = !!(A && A.signedIn);
-      if (nameRow && onlineTab && !authed) nameRow.classList.add('hidden');
       const gate = $('lb-gate');
       if (gate) gate.classList.toggle('hidden', !(onlineTab && !authed));
-      this.updateNameHint();
       if (tab === 'me') {
         note.classList.add('hidden');
         return this.renderScores();
@@ -1404,6 +1392,11 @@
       if (btn && btn.querySelector('span')) {
         btn.querySelector('span').textContent = inn ? T('signOut') : T('signInApple');
       }
+      // Changing your name lives HERE now, and only once there is an account to
+      // attach it to. It used to sit on the leaderboard, where it read as a
+      // chore rather than a setting.
+      const edit = $('btn-name-edit');
+      if (edit) edit.classList.toggle('hidden', !inn);
     },
 
     signInApple() {
@@ -1416,14 +1409,9 @@
         // who they are. Leaving it to a field on another screen is what made it
         // look like an extra chore nobody had asked for -- and a board full of
         // people who never found it.
+        // Asked once, here, and it returns to the board afterwards.
         const LB = LUMEN.Leaderboard;
-        if (LB && !LB.named) {
-          this.showScreen('scores');
-          this.setBoard('all');
-          const input = $('lb-name');
-          if (input) { try { input.focus(); } catch (e) { /* no keyboard here */ } }
-          this.toast(T('lbPickName'));
-        }
+        if (LB && !LB.named) this.openNameScreen('scores');
         // Signing in is the moment a held best finally has an owner.
         if (LB) LB.flushPending().catch(() => {});
       }).catch((e) => {
@@ -1442,13 +1430,30 @@
       });
     },
 
+    // One screen, one question. `_nameNext` is where SAVE goes afterwards, so
+    // the first-run path lands on the board and a later edit returns to Settings
+    // — the same screen doing two jobs without either feeling like a detour.
+    openNameScreen(back) {
+      this._nameNext = back || 'settings';
+      const input = $('name-input');
+      if (input) {
+        input.value = (LUMEN.Leaderboard && LUMEN.Leaderboard.playerName) || '';
+        input.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') { e.preventDefault(); this.saveName(); }
+        }, { once: true });
+      }
+      this.showScreen('name');
+      if (input) { try { input.focus(); } catch (e) { /* no keyboard here */ } }
+    },
+
     // Saving a name is not filing it away for later — it is the act of asking to
     // be on the board. The old field did only the first half: it stored a string
     // and waited for some future personal best, so a player who had already set
     // theirs typed a name, saw nothing change, and was right to call it broken.
     saveName() {
       const LB = LUMEN.Leaderboard;
-      const input = $('lb-name');
+      const input = $('name-input');
       if (!LB || !input) return;
       const name = LB.cleanName(input.value);
       input.value = name;                       // show what was actually accepted
@@ -1459,21 +1464,13 @@
       LB.rename(name).catch(() => {}).then(() => LB.flushPending()).then((sent) => {
         this.toast((sent && sent.length) ? T('lbNameSent', { n: name }) : T('lbNameSaved', { n: name }));
         if (this.boardTab !== 'me') this.refreshBoard();
-        this.updateNameHint();
-      }).catch(() => { this.toast(T('lbNameSaved', { n: name })); this.updateNameHint(); });
+        this.showScreen(this._nameNext || 'settings');
+      }).catch(() => {
+        this.toast(T('lbNameSaved', { n: name }));
+        this.showScreen(this._nameNext || 'settings');
+      });
     },
 
-    // Say why the board does not have you on it yet, rather than leaving an
-    // empty field to be interpreted.
-    updateNameHint() {
-      const hint = $('lb-name-hint');
-      if (!hint) return;
-      const LB = LUMEN.Leaderboard;
-      const held = Object.keys((Store && Store.pendingBest) || {}).length > 0;
-      const authed = !!(LUMEN.Auth && LUMEN.Auth.signedIn);
-      const show = this.boardTab !== 'me' && !!LB && LB.enabled && authed && (!LB.named || held);
-      hint.classList.toggle('hidden', !show);
-    },
 
     // The online boards are fetched once per session. This is the one control
     // that goes and looks again.
