@@ -37,6 +37,15 @@ callbacks while serving nothing and earning nothing — which is what you want
 before there is anything to earn from, and while the app is in review without an
 ads declaration.
 
+## When the ads build ships, flip the privacy policy too
+
+`privacy.html` currently says "the version on the App Store today shows no ads"
+and describes the rewarded video in the future tense, because the binary under
+review has no ad SDK in it. The moment a build WITH ads is the one on the store,
+that sentence becomes false. Change it in the same release, in all three copies
+(the root file, mobile/www, and dist — `node tools/build-web.js` handles the
+last two).
+
 ## Before real units go live — ALL of this, in the same release
 
 Switching `CONFIG.admob` to live ids is **not** a config change. A live AdMob
