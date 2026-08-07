@@ -24,6 +24,8 @@
 import Foundation
 import Capacitor
 import GoogleMobileAds
+import AppTrackingTransparency
+import AdSupport
 
 @objc(LumenAds)
 public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
@@ -35,6 +37,44 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
     @objc func initialize(_ call: CAPPluginCall) {
         GADMobileAds.sharedInstance().start(completionHandler: nil)
         call.resolve()
+    }
+
+    // App Tracking Transparency.
+    //
+    // Ask BEFORE the SDK starts, never after: the answer decides whether Google
+    // may read the advertising identifier at all, and a request made once the
+    // SDK is already running changes nothing for the session it is running in.
+    // js/ads.js:init() therefore awaits this and only then calls initialize().
+    //
+    // Declining is a complete answer, not a failure. Without permission the SDK
+    // serves non-personalised ads, which pay less and work fine, so this always
+    // resolves — a rejected promise here would be read as "no ad available" and
+    // would take the reward away from someone who simply said no.
+    //
+    // Resolves { status } so the caller can tell "asked and declined" from
+    // "never asked", and { tracking } as the plain yes/no.
+    @objc func requestTracking(_ call: CAPPluginCall) {
+        guard #available(iOS 14, *) else {
+            // Before iOS 14 there is no prompt and the identifier is governed by
+            // the old system switch, which is not ours to ask about.
+            call.resolve(["status": "unavailable", "tracking": true])
+            return
+        }
+        // Presentation, so main thread — the same rule that cost this plugin a
+        // build when show() was called off it.
+        DispatchQueue.main.async {
+            ATTrackingManager.requestTrackingAuthorization { status in
+                let name: String
+                switch status {
+                case .authorized:        name = "authorized"
+                case .denied:            name = "denied"
+                case .restricted:        name = "restricted"
+                case .notDetermined:     name = "notDetermined"
+                @unknown default:        name = "unknown"
+                }
+                call.resolve(["status": name, "tracking": status == .authorized])
+            }
+        }
     }
 
     @objc func prepare(_ call: CAPPluginCall) {

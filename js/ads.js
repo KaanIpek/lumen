@@ -107,15 +107,37 @@
     // directory and nothing else. Without this the Android build showed a
     // "watch for shards" button whose every press came back "not implemented".
     // Delete the check the day the Android side lands.
-    get available() { return !!this.native && this.platform === 'ios'; },
+    // …and not while the units are Google's TEST units. Those render with a
+    // "Test Ad" label burned into the creative, so every ad surface in the game
+    // would show App Review a placeholder — read as unfinished functionality
+    // under guideline 2.1 — while earning nothing, because test units do not
+    // pay. Putting real ids in CONFIG.admob flips isTestAds and every surface
+    // returns on its own; nothing else has to change. That is the whole point
+    // of the seam described at the top of this file.
+    get available() {
+      return !!this.native && this.platform === 'ios' && !this.isTestAds;
+    },
+
+    // Whether the player let Google read the advertising identifier. Null until
+    // asked. Non-personalised ads are the answer to "no", not an error.
+    trackingStatus: null,
 
     init() {
       const p = this.native;
       if (!p || this._ready) return Promise.resolve(this._ready);
-      // No consent or tracking call here on purpose: those belong with the
-      // privacy declaration and the ATT prompt, in the release that turns live
-      // ads on. See docs/ADS.md.
-      return p.initialize().then(() => (this._ready = true)).catch(() => false);
+      // Ask about tracking BEFORE starting the SDK, never after. The answer
+      // decides what Google may read, and a session that has already started
+      // does not go back and reconsider. Whatever the player says — including
+      // saying nothing, on a build where the prompt cannot appear — the SDK
+      // starts either way and simply serves less valuable ads.
+      const ask = p.requestTracking
+        ? p.requestTracking().then((r) => { this.trackingStatus = (r && r.status) || null; })
+            .catch(() => { this.trackingStatus = 'error'; })
+        : Promise.resolve();
+      return ask
+        .then(() => p.initialize())
+        .then(() => (this._ready = true))
+        .catch(() => false);
     },
 
     // ---- the daily allowance ----------------------------------------------

@@ -12,6 +12,7 @@
 
 CAP_PLUGIN(LumenAds, "LumenAds",
            CAP_PLUGIN_METHOD(initialize, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(requestTracking, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(prepare, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(show, CAPPluginReturnPromise);
 )

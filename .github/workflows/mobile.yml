@@ -284,7 +284,14 @@ jobs:
           # in the release that turns live ads on (docs/ADS.md).
           GADID="ca-app-pub-3940256099942544~1458002511"
           /usr/libexec/PlistBuddy -c "Add :GADApplicationIdentifier string $GADID" Info.plist             || /usr/libexec/PlistBuddy -c "Set :GADApplicationIdentifier $GADID" Info.plist
-          /usr/libexec/PlistBuddy -c "Print" Info.plist | grep -E "NonExempt|FullScreen|GADApplication"
+          # App Tracking Transparency. The prompt cannot appear without this
+          # string, and calling requestTrackingAuthorization without it is one of
+          # the ways an app is rejected for asking a question it never shows.
+          # Says what the player gets for saying yes, because a prompt that
+          # explains nothing gets declined by reflex.
+          ATT="LUMEN only asks so the optional videos you choose to watch can be matched to you. Say no and they still play, still pay the same shards, and simply become less relevant. Nothing about how you play is ever shared."
+          /usr/libexec/PlistBuddy -c "Add :NSUserTrackingUsageDescription string $ATT" Info.plist             || /usr/libexec/PlistBuddy -c "Set :NSUserTrackingUsageDescription $ATT" Info.plist
+          /usr/libexec/PlistBuddy -c "Print" Info.plist | grep -E "NonExempt|FullScreen|GADApplication|UserTracking"
 
       # Sign in with Apple needs the entitlement in the BUILD, not only on the
       # App ID. Turning the capability on in the developer portal is what lets a

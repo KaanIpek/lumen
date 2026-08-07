@@ -4506,6 +4506,25 @@
     freshStorage();
   });
 
+  test('test ad units cannot reach a player', () => {
+    const A = L.Ads;
+    if (!A) throw new Error('Ads module missing');
+    // No real ids in CONFIG.admob -> these are Google's test units, which render
+    // with a "Test Ad" label. Every ad surface in the UI is gated on `available`,
+    // so this one getter is what keeps a placeholder out of a shipped build.
+    eq(A.isTestAds, true, 'shipping config still uses test units');
+    eq(A.available, false, 'so no ad surface is offered');
+  });
+
+  test('the ad reward schedule pays what the shop screen promises', () => {
+    const A = L.Ads;
+    // 3 x 75, then 3 x 50, then 25 forever — and it must not depend on state
+    // left over from an earlier assertion.
+    const want = [75, 75, 75, 50, 50, 50, 25, 25, 25];
+    const got = want.map((_, i) => A.rewardFor(i));
+    eq(got.join(','), want.join(','), 'tier payouts');
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 
