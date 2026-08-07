@@ -4533,6 +4533,43 @@
     eq(got.join(','), want.join(','), 'tier payouts');
   });
 
+  test('the rating prompt never nags, and never gates', () => {
+    const R = L.Rating;
+    if (!R) throw new Error('Rating module missing');
+    // We draw no stars of our own. A custom "did you enjoy it?" that routes the
+    // happy players to the store is review gating, and it is a rejection.
+    eq(typeof R.consider, 'function', 'has consider()');
+    if (R.stars || R.rate || R.openStorePage) throw new Error('drew its own rating UI');
+
+    freshStorage();
+    // Not available off-device, so consider() must decline rather than throw.
+    eq(R.available, false, 'no native plugin in the browser');
+    eq(R.consider(true), false, 'declines without the plugin');
+
+    // With the plugin faked, the gates are: enough runs, a GOOD run, and a long
+    // gap since the last ask.
+    let asked = 0;
+    const realPlugin = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(R) || R, 'plugin');
+    Object.defineProperty(R, 'plugin', { configurable: true, get: () => ({ requestReview: () => { asked++; } }) });
+    Object.defineProperty(R, 'available', { configurable: true, get: () => true });
+
+    L.Store.runs = 3;
+    eq(R.consider(true), false, 'too early to have an opinion');
+    L.Store.runs = 12;
+    eq(R.consider(false), false, 'a bad run is not the moment');
+    eq(R.consider(true), true, 'a good run at run 12 asks');
+    eq(asked, 1, 'the system sheet was requested once');
+    L.Store.runs = 20;
+    eq(R.consider(true), false, 'and does not ask again eight runs later');
+    L.Store.runs = 200;
+    eq(R.consider(true), true, 'but will, much later');
+    eq(asked, 2, 'twice in two hundred runs');
+
+    delete R.plugin; delete R.available;
+    if (realPlugin) Object.defineProperty(R, 'plugin', realPlugin);
+    freshStorage();
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 

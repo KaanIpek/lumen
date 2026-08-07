@@ -11,4 +11,5 @@ CAP_PLUGIN(LumenStore, "LumenStore",
            CAP_PLUGIN_METHOD(products, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(purchase, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(restore, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(requestReview, CAPPluginReturnPromise);
 )

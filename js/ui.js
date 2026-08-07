@@ -1975,6 +1975,18 @@
       this._lastCombo = data.combo;
       this._lastIsBest = data.isBest;
       this.showScreen('gameover');
+
+      // Ask for a rating on a GOOD run only, and never on the frame that just
+      // killed you. A personal best, a finished daily, or a run long enough to
+      // have been enjoyed — those are the moments where "are you enjoying
+      // this" has an honest answer. Rating.consider() decides the rest: it
+      // will not ask before the eighth run, will not ask twice in sixty, and
+      // shows Apple's own sheet rather than anything we drew. See js/rating.js
+      // for why there are no stars of our own here.
+      const wentWell = !!(data.isBest || data.daily || (data.time || 0) >= 45);
+      if (LUMEN.Rating) {
+        setTimeout(() => LUMEN.Rating.consider(wentWell), 900);
+      }
     },
 
     fullscreenSupported() {

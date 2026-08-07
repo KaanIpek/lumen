@@ -76,7 +76,7 @@
     // a mode (js/modes.js), a world or a signature (js/cosmetics.js). Those you
     // can always build in a month. Multiplayer is a different game.
     poll: {
-      id: '',                       // <- put your poll id here to open the vote                 // change this and everybody may vote again
+      id: '2026-09',                // any string; changing it opens a fresh vote for everybody
       closes: '2026-09-20',          // YYYY-MM-DD, in the player's own day
       options: [
         // name/desc take a plain string, or a { en, tr, es, zh } map.

@@ -29,6 +29,7 @@
 import Foundation
 import Capacitor
 import StoreKit
+import UIKit
 
 @objc(LumenStore)
 public class LumenStore: CAPPlugin {
@@ -138,6 +139,37 @@ public class LumenStore: CAPPlugin {
                 if case .verified(let t) = result { owned.append(t.productID) }
             }
             call.resolve(["owned": owned])
+        }
+    }
+
+    // MARK: - asking for a rating
+
+    // Apple's own prompt, never ours.
+    //
+    // A custom "did you like it?" dialog that sends the happy players to the
+    // App Store and the unhappy ones to a feedback form is called review
+    // gating, and it is against the guidelines — the rating you get has to be
+    // the rating you earned, from whoever the system decides to ask. So this
+    // shows the system sheet and does not know or care what the player then
+    // does with it.
+    //
+    // The system also decides IF it appears: no more than three times a year,
+    // never twice for the same version, and silently ignored when a user has
+    // turned in-app ratings off in Settings. That is why this resolves without
+    // reporting success — there is nothing truthful to report. js/rating.js
+    // therefore counts what it asked for rather than what happened.
+    @objc func requestReview(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if #available(iOS 14.0, *) {
+                let scene = UIApplication.shared.connectedScenes
+                    .first { $0.activationState == .foregroundActive } as? UIWindowScene
+                if let scene = scene {
+                    SKStoreReviewController.requestReview(in: scene)
+                    call.resolve(["asked": true])
+                    return
+                }
+            }
+            call.resolve(["asked": false])
         }
     }
 
