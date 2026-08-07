@@ -262,3 +262,30 @@ limit: stopping it means accounts, and accounts cost more than a preference
 poll among people who already like your game is worth. If a poll is ever close
 enough that this matters, the honest fix is to say so and re-run it, not to
 build a login.
+
+## Account deletion (App Store Guideline 5.1.1(v))
+
+An app that lets you create an account must let you delete it from inside the
+app. Settings → ACCOUNT → DELETE ACCOUNT does that, and it needs two things
+that live in your Supabase project, not in this repository:
+
+1. **A DELETE policy on `scores`** — run `supabase/delete-policy.sql` once in
+   the SQL editor. Without it a delete returns 200 with an empty body, which is
+   Postgres politely saying no row matched anything you may touch. It looks
+   exactly like success, so `Leaderboard.deleteMine()` checks the returned rows
+   rather than the status code.
+
+2. **The `delete-account` Edge Function** — `supabase/functions/delete-account/`.
+
+   ```
+   supabase functions deploy delete-account --project-ref <your-ref>
+   ```
+
+   The auth user itself can only be removed with the `service_role` key, which
+   must never ship in a client. The function holds it server-side and takes the
+   caller's identity from their access token, never from the request body — so
+   nobody can delete anyone but themselves.
+
+Until both are in place the button still signs the player out on the device and
+says plainly that the server did not confirm, rather than claiming a deletion
+that did not happen.

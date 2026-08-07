@@ -165,6 +165,7 @@
       onTap($('btn-settings'), () => { this.click(); this.openSettings(); });
       onTap($('btn-settings-close'), () => { this.click(); this.showScreen('menu'); });
       onTap($('btn-apple'), () => { this.click(); this.signInApple(); });
+      onTap($('btn-acct-delete'), () => { this.click(); this.deleteAccount(); });
       onTap($('btn-reset'), () => this.resetProgress());
       onTap($('btn-save-export'), () => this.exportSave());
       onTap($('btn-save-import'), () => this.importSave());
@@ -1380,9 +1381,32 @@
     // The account row, absent entirely unless sign-in is configured. A button
     // that cannot work is worse than no button: it reads as a broken feature
     // rather than an absent one.
+    // Guideline 5.1.1(v). Two confirmations, because this is the one action in
+    // the game that cannot be undone and does not cost shards to find out.
+    deleteAccount() {
+      const A = LUMEN.Auth;
+      if (!A || !A.signedIn) return;
+      if (!window.confirm(T('deleteAcctConfirm'))) return;
+      const btn = $('btn-acct-delete');
+      if (btn) btn.disabled = true;
+      A.deleteAccount().then((r) => {
+        if (btn) btn.disabled = false;
+        // Say what actually happened. `deleteMine` reports false when the table
+        // has no DELETE policy, and the Edge Function reports false when it is
+        // not deployed — in both cases the player is signed out here but their
+        // row may still be on the board, and telling them it is gone would be
+        // the one lie this screen must not tell.
+        this.toast(r && r.row && r.account ? T('deleteAcctDone') : T('deleteAcctPartial'));
+      }).catch(() => {
+        if (btn) btn.disabled = false;
+        this.toast(T('deleteAcctPartial'));
+      });
+    },
+
     onAuthChange() {
       const A = LUMEN.Auth;
       const sec = $('acct-sec'), row = $('acct-row'), who = $('acct-who'), btn = $('btn-apple');
+      const delRow = $('acct-del-row');
       if (!sec || !row) return;
       // Always present, never demanded. The row stays in Settings whether or
       // not anyone has signed in, because a feature you can only find after you
@@ -1391,8 +1415,13 @@
       const on = !!(A && A.enabled);
       sec.classList.toggle('hidden', !on);
       row.classList.toggle('hidden', !on);
+      if (delRow) delRow.classList.add('hidden');
       if (!on) return;
       const inn = A.signedIn;
+      // Only offered when there is something to delete. Apple requires the path
+      // to exist for anyone who made an account; showing it to someone who never
+      // did is just a frightening button.
+      if (delRow) delRow.classList.toggle('hidden', !inn);
       // The leaderboard's sign-in gate is built in setBoard, so signing in from
       // THERE left the button sitting on screen — the account was real, the
       // screen just never redrew, and it reads exactly like a button that does

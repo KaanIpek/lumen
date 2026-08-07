@@ -242,9 +242,18 @@
       <ol class="score-list" id="score-list"></ol>
       <p class="score-empty hidden" id="score-empty" data-i18n="noRuns">No runs yet — go set a record.</p>
       <div id="lb-note" class="setting-hint hidden"></div>
-      <!-- Without this every score went up as "anon" — the translated `yourName`
-           string existed in all four languages but nothing ever used it, so the
-           board was a list of identical strangers. -->
+      <!-- The shared boards need an account, so the shared boards are where we
+           say so. ui.js has always toggled #lb-gate and bound #btn-lb-signin,
+           css/style.css has always styled .lb-gate and `lbNeedAccount` has
+           existed in all four languages — but the markup was deleted, so a
+           signed-out player saw a list of strangers, no explanation, and no way
+           to join from the one screen that made them want to. Their own best
+           sat in Store.pendingBest waiting for an account nobody told them
+           about. -->
+      <div id="lb-gate" class="lb-gate hidden">
+        <p data-i18n="lbNeedAccount">Sign in to join the shared board. Everything else works without one.</p>
+        <button id="btn-lb-signin" class="btn btn-ghost ui-interactive"><span data-i18n="signInApple"> Sign in</span></button>
+      </div>
       <!-- The online boards are fetched once and kept for the session; this is
            how you ask for a newer copy. Hidden on MY RUNS, which is local. -->
       <button id="btn-lb-refresh" class="btn btn-ghost ui-interactive hidden">
@@ -282,6 +291,14 @@
           <span id="acct-who" data-i18n="acctWhy">Claim your name on the board</span>
           <button id="btn-name-edit" class="btn btn-ghost ui-interactive hidden"><span data-i18n="changeName">NAME</span></button>
           <button id="btn-apple" class="btn btn-ghost ui-interactive"><span data-i18n="signInApple"> Sign in</span></button>
+        </div>
+        <!-- Guideline 5.1.1(v): an app that creates accounts must delete them
+             from inside the app. Signing out is not deletion — the row keyed to
+             your id stays on a board other people read. Only shown while there
+             is an account to delete. -->
+        <div class="setting hidden" id="acct-del-row">
+          <span class="danger-hint" data-i18n="deleteAcctWhy">Removes your board entry and your account. Your shards and unlocks stay on this device.</span>
+          <button id="btn-acct-delete" class="btn btn-ghost btn-danger ui-interactive"><span data-i18n="deleteAcct">DELETE ACCOUNT</span></button>
         </div>
 
         <div class="set-sec" data-i18n="secAudio">AUDIO</div>

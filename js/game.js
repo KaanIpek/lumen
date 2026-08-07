@@ -701,7 +701,17 @@
     // damage flash, gentle audio" — since it was written, and nothing ever read
     // the flag, so the calm mode shook and flashed exactly like Sprint.
     try {
-      const m = LUMEN.Modes && LUMEN.Modes.current();
+      // The mode being PLAYED, not the one highlighted in the menu. A daily
+      // resolves its own mode from the day's twist and never writes Store.mode,
+      // so asking Modes.current() meant a player whose last pick was Zen carried
+      // Zen's calm into the daily: Blackout dimmed to 0.43 instead of 0.965 and
+      // Vortex tilted a quarter as far. Two people on the same seeded course,
+      // one of them playing a visibly easier version of it, both posting to the
+      // same board.
+      const g = LUMEN.game;
+      const m = (g && g.state !== State.MENU && g.mode)
+        ? g.mode
+        : (LUMEN.Modes && LUMEN.Modes.current());
       if (m && m.calm) return true;
     } catch (e) { /* Modes may not be loaded yet */ }
     return false;
@@ -3202,9 +3212,17 @@
       const label = T('skipTutorial');
       const tw = ctx.measureText(label).width;
       const pw = tw + 34, ph = clamp(H * 0.045, 30, 42);
-      this._tutSkipRect = { x: cx - pw / 2 + this.stageX, y: sy - ph / 2, w: pw, h: ph };
+      // Draw in STAGE space (the caller is already inside the stage translate);
+      // store the tap rect in SCREEN space, because the tap handler reads clientX
+      // against the canvas. Adding stageX to the drawn x as well put the pill a
+      // whole column to the right of the words it is supposed to enclose — the
+      // label was correct, the border was out in the letterbox, and the only
+      // thing that skipped the tutorial was bare text with no button around it.
+      // Invisible on a phone, where stageX is 0. Same shape as drawItemButtons.
+      const skipX = cx - pw / 2;
+      this._tutSkipRect = { x: skipX + this.stageX, y: sy - ph / 2, w: pw, h: ph };
       ctx.globalAlpha = 0.85;
-      this.roundRect(ctx, this._tutSkipRect.x, this._tutSkipRect.y, pw, ph, ph / 2);
+      this.roundRect(ctx, skipX, this._tutSkipRect.y, pw, ph, ph / 2);
       ctx.fillStyle = 'rgba(10,14,32,0.6)'; ctx.fill();
       ctx.strokeStyle = 'rgba(120,200,255,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = 'rgba(234,246,255,0.7)';

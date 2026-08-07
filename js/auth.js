@@ -103,6 +103,48 @@
         .then((s) => { this._save(s); return s; });
     },
 
+    // ---- account deletion --------------------------------------------------
+    // App Store Review Guideline 5.1.1(v): an app that lets you CREATE an
+    // account must let you DELETE it from inside the app. Sign-out is not
+    // deletion and does not satisfy it — the row keyed to your user id stays on
+    // the board, and the auth user stays in the project.
+    //
+    // Two steps, and the order matters. The leaderboard row goes first, while
+    // we still hold a token that RLS will accept as its owner; only then does
+    // the account itself go. If the second step fails the player is at least
+    // off the board, which is the part they can see.
+    //
+    // Deleting the auth user cannot be done from a client: the service_role key
+    // that Supabase requires for it must never ship, so the app calls an Edge
+    // Function that holds it server-side. Without that function deployed this
+    // resolves { account: false } and the caller says so rather than claiming a
+    // deletion that did not happen. See docs/LEADERBOARD.md.
+    deleteAccount() {
+      if (!this.enabled || !this.signedIn) return Promise.reject(new Error('not signed in'));
+      const t = this.token;
+      const uid = this.userId;
+      const auth = { apikey: this.key, Authorization: 'Bearer ' + t };
+
+      const dropRow = LUMEN.Leaderboard && LUMEN.Leaderboard.deleteMine
+        ? LUMEN.Leaderboard.deleteMine().catch(() => false)
+        : Promise.resolve(false);
+
+      return dropRow.then((rowGone) =>
+        fetch(this.url + '/functions/v1/delete-account', {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, auth),
+          body: JSON.stringify({ user_id: uid }),
+        })
+          .then((r) => r.ok)
+          .catch(() => false)
+          .then((accountGone) => {
+            // Local state goes regardless. Whatever happened upstream, this
+            // device is signed out and holds nothing of the account.
+            this._save(null);
+            return { row: !!rowGone, account: !!accountGone };
+          }));
+    },
+
     signOut() {
       const t = this.token;
       this._save(null);

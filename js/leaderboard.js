@@ -250,6 +250,26 @@
       }).then(() => { this.invalidate(); return 1; });
     },
 
+    // Remove every row this account owns. Used by account deletion, which has to
+    // leave nothing behind on a board other people read.
+    //
+    // This needs a DELETE policy on the table. The project shipped with SELECT,
+    // INSERT and UPDATE policies only, so a DELETE returned 200 with an empty
+    // body — the polite way Postgres says "no row matched anything you are
+    // allowed to touch". That looks exactly like success, so this checks what
+    // actually went and reports false rather than lying to the caller.
+    deleteMine() {
+      const A = LUMEN.Auth;
+      if (!this._sb || !A || !A.signedIn) return Promise.resolve(false);
+      return this._sbFetch('/scores?user_id=eq.' + encodeURIComponent(A.userId), {
+        method: 'DELETE',
+        headers: { Prefer: 'return=representation' },
+      }).then((rows) => {
+        this.invalidate();
+        return Array.isArray(rows) && rows.length > 0;
+      }).catch(() => false);
+    },
+
     // ---- holding a best until it has a name -------------------------------
     // There are no accounts here, so a row belongs to whoever typed the name on
     // it — which makes "anon" permanent. A player who set a personal best before
