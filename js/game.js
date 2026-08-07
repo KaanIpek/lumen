@@ -1755,6 +1755,12 @@
       this.motes = this.motes.filter(alive);
       this.powers = this.powers.filter(alive);
       this.spawnTimer = Math.max(this.spawnTimer, 1.0);
+      // The chain dying with you is a lost chain, and it is THE chain SPARK
+      // advertises giving back. Only breakCombo() wrote lastChain, and death
+      // does not go through it — so after crashing at 40 and reviving, SPARK
+      // handed back whatever had merely lapsed earlier in the run. A 340-shard
+      // item paying out a stale 6.
+      if (this.combo > this.lastChain) this.lastChain = this.combo;
       this.combo = 0; this.comboTimer = 0; this.flowActive = false;
       this.invuln = 2.0;
       this.state = State.PLAY;
@@ -1873,7 +1879,14 @@
         if (this.bestComboRun > Store.bestCombo) Store.bestCombo = this.bestComboRun;
         Store.nearMissTotal = Store.nearMissTotal + this.nearMissRun;
         if (this.flowSecRun > 0) Store.flowCount = Store.flowCount + 1;
-        if (this.elapsed > Store.bestTime) Store.bestTime = this.elapsed;
+        // Time SURVIVED, not time on the clock. Sprint starts at elapsed = 20
+        // (mode.headStart) so its difficulty curve opens already steep — but
+        // that is a handicap, not twenty seconds of play. Counted raw, it paid
+        // out "Survive 60 seconds" for 40 seconds of Sprint, and the 2-minute
+        // tier at 100 — a tier whose only reward is the Obsidian orb, which the
+        // shop states can never be bought.
+        const survived = this.elapsed - ((this.mode && this.mode.headStart) || 0);
+        if (survived > Store.bestTime) Store.bestTime = survived;
       }
 
       let isBest;
@@ -2687,8 +2700,11 @@
         // Instant, not timed: hand back the chain that just broke. Worth nothing
         // if you never had one, which is the point — it rewards a lost run, not a
         // bad one.
+        // Never worse than what you are already holding. Fired mid-run with a
+        // live 45-chain and a stale 6 on record, this used to overwrite the 45
+        // with the 6 and charge you for the privilege.
         const back = Math.max(this.lastChain, 0);
-        if (back <= 0) {
+        if (back <= this.combo) {
           this.texts.add(p.x, p.y - 44, T('sparkNothing'), col, 18);
           return false;
         }

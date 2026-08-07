@@ -4439,6 +4439,73 @@
     eq(dangling.length, 0, 'promises a cosmetic that does not exist: ' + dangling.join(', '));
   });
 
+  test('SPARK gives back the chain you actually just lost', () => {
+    freshStorage();
+    const g = newGame();
+    g.tutorial = false; g.attract = false; g.daily = false;
+    g.start();
+    L.Store.items = { spark: 2 };
+    // an early chain lapses...
+    g.combo = 6; g.breakCombo();
+    eq(g.lastChain, 6, 'lapsed chain recorded');
+    // ...then a much bigger one dies WITH you, which never went through breakCombo
+    g.combo = 40;
+    g.revive(true);
+    eq(g.lastChain, 40, 'the chain that died with you is the one on record');
+    g.hand.spark = 1; g.handFree.spark = 0; g.combo = 0;
+    eq(g.useItem('spark'), true, 'fires');
+    eq(g.combo, 40, 'restores 40, not the stale 6');
+    freshStorage();
+  });
+
+  test('SPARK refuses to downgrade a live chain, and costs nothing when it does', () => {
+    freshStorage();
+    const g = newGame();
+    g.tutorial = false; g.attract = false; g.daily = false;
+    g.start();
+    L.Store.items = { spark: 1 };
+    g.lastChain = 6;
+    g.combo = 45;                       // already holding more than it would give
+    g.hand.spark = 1; g.handFree.spark = 0;
+    eq(g.useItem('spark'), false, 'declines');
+    eq(g.combo, 45, 'the live chain is untouched');
+    eq(L.Store.items.spark, 1, 'and it was not spent');
+    freshStorage();
+  });
+
+  test('the next-unlock teaser never advertises zero', () => {
+    freshStorage();
+    const C = L.Cosmetics;
+    // rich enough to afford the cheapest priced item outright
+    L.Store.shards = 100000;
+    const nx = C.nextUnlock();
+    if (nx) {
+      if (nx.missing <= 0) throw new Error('teaser shows ' + nx.id + ' at ' + nx.missing);
+    }
+    // and broke, where it must still find something to aim at
+    L.Store.shards = 0;
+    const poor = C.nextUnlock();
+    if (!poor) throw new Error('nothing to aim at with 0 shards');
+    if (poor.missing <= 0) throw new Error('zero-cost teaser at 0 shards');
+    freshStorage();
+  });
+
+  test('a mode head start is not time survived', () => {
+    freshStorage();
+    const sprint = L.Modes.def('sprint');
+    eq(sprint.headStart, 20, 'sprint opens the clock at 20');
+    const g = newGame();
+    g.tutorial = false; g.attract = false; g.daily = false;
+    L.Store.mode = 'sprint';
+    g.start();
+    eq(Math.round(g.elapsed), 20, 'clock starts at the handicap');
+    g.elapsed = 60;                      // 40 seconds of actual play
+    g.finalizeRun();
+    eq(L.Store.bestTime, 40, 'the achievement counts what was played');
+    L.Store.mode = 'classic';
+    freshStorage();
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 

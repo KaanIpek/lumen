@@ -481,9 +481,13 @@
     // there's always a visible reason to tap RETRY.
     nextUnlock() {
       const buyable = all()
-        // `> 0`, not just "has a price": a teaser reading "next unlock — 0
-        // shards" is not a reason to press RETRY, it is a bug wearing a badge.
-        .filter((i) => !this.owned(i.id) && this.price(i.id) && this.price(i.id).shards > 0)
+        // A teaser reading "next unlock — 0 shards" is not a reason to press
+        // RETRY, it is a bug wearing a badge. The guard for that was here, but
+        // on the item's PRICE rather than on what the player is short by — so
+        // the moment they could afford the cheapest thing, the panel started
+        // advertising it at zero after every single run. Filter on the gap.
+        .filter((i) => !this.owned(i.id) && this.price(i.id)
+          && this.price(i.id).shards > Store.shards)
         .sort((a, b) => this.price(a.id).shards - this.price(b.id).shards);
       if (!buyable.length) return null;
       const item = buyable[0];
