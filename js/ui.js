@@ -213,12 +213,15 @@
       if (Store.muted) { Audio && (Audio.isMuted = true); muteBtn.classList.add('muted'); }
 
       this.showScreen('menu');
-      // First-time players get taught before they get punished: PLAY runs the
-      // tutorial once, then behaves normally forever after.
-      if (!Store.tutorialDone && Store.runs === 0) {
-        this.setPlayLabel('playLearn');
-        this._firstRun = true;
-      }
+      // Left over from when PLAY hijacked the first run: this relabelled the
+      // button "START — LEARN TO PLAY" and set a _firstRun flag that nothing
+      // ever read, so the very first thing a new player saw promised a lesson
+      // and delivered a full-speed scored run. refreshMenu() then quietly reset
+      // the same button to PLAY the moment they opened SHOP and came back.
+      //
+      // That design was deliberately reversed — see the PLAY handler above, and
+      // the `nudge` on the tutorial button in refreshMenu(), which is how a new
+      // player is pointed at the lesson now. Only the relabelling survived it.
     },
 
     // The build actually running, read off the stamp the loader put on its own
@@ -252,12 +255,6 @@
 
     // Retarget the PLAY label without destroying its data-i18n span, so a later
     // language switch can still translate it.
-    setPlayLabel(key) {
-      const span = $('btn-play').querySelector('[data-i18n]');
-      if (span) { span.setAttribute('data-i18n', key); span.textContent = T(key); }
-      else $('btn-play').textContent = T(key);
-    },
-
     showScreen(name) {
       // The game calls into the UI from its lifecycle methods. If the UI hasn't
       // been wired to a document yet (tests, or a boot race), stay silent instead
@@ -1641,6 +1638,15 @@
           !(LUMEN.Ads && LUMEN.Ads.available && this.game && !this.game.adRevived));
       }
       $('revive-cost').textContent = data.cost;
+      // The panel now opens when the player cannot afford the shard price but
+      // CAN watch an ad, so the shard button has to say so instead of failing
+      // silently when tapped.
+      const pay = $('btn-revive');
+      if (pay) {
+        const afford = LUMEN.Store.shards >= data.cost;
+        pay.disabled = !afford;
+        pay.classList.toggle('locked', !afford);
+      }
       // The score you are being asked to save — which means the score you would
       // actually keep, multipliers and all. Showing the raw figure here made the
       // decision on a Sprint run look like half of what was really at stake.

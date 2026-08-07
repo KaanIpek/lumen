@@ -1710,6 +1710,19 @@
       return !this.revived && !this.daily && Math.floor(this.score) > 0 && Store.shards >= this.reviveCost;
     }
 
+    // Whether the CONTINUE? panel opens at all — deliberately NOT canRevive().
+    // canRevive() asks whether you can AFFORD the shard price, and the
+    // "Watch an ad instead" button lives inside this panel. Gating the panel on
+    // affordability therefore hid the free option from precisely the players it
+    // was built for: someone who just spent down in the shop, died at 1,200 and
+    // was never offered anything at all. On iOS this panel is the only place a
+    // rewarded revive can be reached.
+    canOfferRevive() {
+      if (this.revived || this.daily || Math.floor(this.score) <= 0) return false;
+      if (Store.shards >= this.reviveCost) return true;
+      return !!(LUMEN.Ads && LUMEN.Ads.available && !this.adRevived);
+    }
+
     // Spend shards to continue the same run: clear the road ahead, drop the combo
     // (the chain is genuinely lost), keep the score, and grant brief invulnerability.
     // `free` is the ad path: the run continues without paying shards, and
@@ -1811,7 +1824,7 @@
       // player says it is, so no stats/missions/shards are recorded yet.
       setTimeout(() => {
         if (this.state !== State.DEAD) return; // already resolved elsewhere
-        if (this.canRevive() && LUMEN.UI) LUMEN.UI.showRevive({ cost: this.reviveCost, shards: Store.shards });
+        if (this.canOfferRevive() && LUMEN.UI) LUMEN.UI.showRevive({ cost: this.reviveCost, shards: Store.shards });
         else this.finalizeRun();
       }, 620);
     }
@@ -3499,8 +3512,24 @@
       this._itemRects = [];
       if (!types.length) return;
       const { W, H } = this;
-      const r = clamp(H * 0.042, 26, 44);
-      const gap = r * 0.7;
+      let r = clamp(H * 0.042, 26, 44);
+      let gap = r * 0.7;
+      // Six is reachable: three bought (the cap) plus three found in the
+      // corridor with auto-use off. At the natural size that row is 555px wide
+      // and an iPhone stage is 393, so the outermost buttons fell off BOTH ends
+      // — neither drawn nor hit-tested. The one on the right is SPARK, the most
+      // expensive item in the shop at 340 shards, and with Digit1-3 only mapping
+      // the first three held types there was no other way to fire it for the
+      // rest of that run.
+      //
+      // So the row shrinks to fit instead of overflowing. Six buttons on the
+      // narrowest phone come out around 30px across, still a comfortable target.
+      const room = W - clamp(W * 0.06, 12, 40);
+      const natural = types.length * (r * 2) + (types.length - 1) * gap;
+      if (natural > room) {
+        const k = room / natural;
+        r *= k; gap *= k;
+      }
       const totalW = types.length * (r * 2) + (types.length - 1) * gap;
       let x = W / 2 - totalW / 2 + r;
       const y = H - r - clamp(H * 0.03, 12, 30);
