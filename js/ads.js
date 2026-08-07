@@ -100,7 +100,14 @@
     // Available only where an ad can actually play. On the web there is no
     // rewarded ad and pretending otherwise would put a button on the menu that
     // fails every time it is pressed.
-    get available() { return !!this.native; },
+    //
+    // The platform check is not redundant. Capacitor's registerPlugin hands back
+    // a proxy on every native platform whether or not an implementation exists,
+    // so `native` is truthy on Android too — and mobile/lumen-ads ships an ios/
+    // directory and nothing else. Without this the Android build showed a
+    // "watch for shards" button whose every press came back "not implemented".
+    // Delete the check the day the Android side lands.
+    get available() { return !!this.native && this.platform === 'ios'; },
 
     init() {
       const p = this.native;

@@ -7,7 +7,7 @@
 - **Genre:** Hypercasual arcade / endless high-score
 - **Platforms:** Web (desktop + mobile), installable PWA. Steam and Android/iOS
   builds are wired and buildable from the same source
-- **Price:** Free, with cosmetic-only purchases (no ads, no pay-to-win)
+- **Price:** Free. Optional purchases (cosmetics, shard packs, consumables) and opt-in rewarded video. No banners, no interstitials.
 - **Input:** One button — tap / click / space · optional gamepad · optional voice
 - **Players:** Single-player
 - **Engine:** Vanilla JavaScript + Canvas 2D (no dependencies)

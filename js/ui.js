@@ -570,7 +570,12 @@
       }
 
       const iap = LUMEN.IAP;
-      if (!iap || !iap.PACKS) return;
+      // No provider, no prices. The native builds deliberately register none
+      // (see js/iap.js) because the sandbox checkout would be selling digital
+      // goods outside in-app purchase; drawing a dead "$1.99" tile there is both
+      // a broken button and something App Review reads as a failed purchase.
+      // The ad buttons above still work, so the tab stays useful without it.
+      if (!iap || !iap.PACKS || !iap.available) return;
       iap.PACKS.forEach((p) => {
         const card = document.createElement('div');
         card.className = 'card pack';
@@ -1897,6 +1902,17 @@
         el.className = 'ge-mission';
         el.innerHTML = '★ ' + T('ach_' + a.id) + ' <span class="r">+◆' + a.reward + '</span>';
         gm.appendChild(el);
+        // check() has always reported which cosmetic an achievement handed over,
+        // and nothing read it — so nine skins and trails were granted in silence
+        // and the player had to stumble on them in the shop to learn they owned
+        // something. The unlock is the bigger prize; say so on its own line.
+        if (a.unlocks && LUMEN.Cosmetics) {
+          const u = document.createElement('div');
+          u.className = 'ge-mission ge-unlock';
+          u.innerHTML = '✦ ' + T('unlocked') + ' <span class="r">'
+            + LUMEN.Cosmetics.name(a.unlocks) + '</span>';
+          gm.appendChild(u);
+        }
       });
       (data.missionsDone || []).forEach((m) => {
         const el = document.createElement('div');

@@ -33,10 +33,17 @@
   // Chinese recognition may return the short form), because those are the same
   // word, not a different one.
   const PHRASES = {
-    en: { shield: ['shield'],     magnet: ['magnet'],               slow: ['slow'] },
-    tr: { shield: ['kalkan'],     magnet: ['mıknatıs', 'miknatis'], slow: ['yavaş', 'yavas'] },
-    es: { shield: ['escudo'],     magnet: ['imán', 'iman'],         slow: ['lento'] },
-    zh: { shield: ['护盾', '盾'],  magnet: ['磁铁', '磁'],            slow: ['减速', '慢'] },
+    // All six of ITEM_TYPES, not the first three. Scout, anchor and spark were
+    // buyable and holdable but had no word, so the only way to fire them was the
+    // on-screen button — and spark is the most expensive item in the shop.
+    en: { shield: ['shield'],     magnet: ['magnet'],               slow: ['slow'],
+          scout:  ['scout'],      anchor: ['anchor'],               spark: ['spark', 'chain'] },
+    tr: { shield: ['kalkan'],     magnet: ['mıknatıs', 'miknatis'], slow: ['yavaş', 'yavas'],
+          scout:  ['izci'],       anchor: ['çapa', 'capa'],         spark: ['kıvılcım', 'kivilcim', 'zincir'] },
+    es: { shield: ['escudo'],     magnet: ['imán', 'iman'],         slow: ['lento'],
+          scout:  ['explorador'], anchor: ['ancla'],                spark: ['chispa', 'cadena'] },
+    zh: { shield: ['护盾', '盾'],  magnet: ['磁铁', '磁'],            slow: ['减速', '慢'],
+          scout:  ['侦察', '侦'],  anchor: ['锚'],                    spark: ['火花', '连击'] },
   };
 
   // A command is a word, not a sentence. Recognition hands us whole utterances,
@@ -46,6 +53,7 @@
   const MAX_CJK_CHARS = 6;
 
   const Voice = {
+    PHRASES,   // exposed so the suite can prove every ITEM_TYPE has a word
     supported: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
     listening: false,
     _rec: null,

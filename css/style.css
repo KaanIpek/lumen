@@ -322,6 +322,10 @@ kbd {
 .ge-missions { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .ge-mission { font-size: 13px; font-weight: 700; color: #4dffa0; letter-spacing: .04em; animation: badgePop .5s ease; }
 .ge-mission .r { color: var(--gold); }
+/* A cosmetic unlock outranks the shard reward printed above it, so it gets its
+   own colour rather than reading as one more green line. */
+.ge-unlock { color: #ffd76a; }
+.ge-unlock .r { color: #fff; text-shadow: 0 0 10px rgba(255,215,106,.55); }
 
 /* shop */
 .shop-panel { width: min(560px, 95vw); }

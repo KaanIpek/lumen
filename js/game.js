@@ -695,7 +695,16 @@
     else if (mq.addListener) mq.addListener(onMq);
   } catch (e) {}
   function calmVisuals() {
-    return prefersReducedMotion || (LUMEN.Store ? LUMEN.Store.reduceFlash : false);
+    if (prefersReducedMotion) return true;
+    if (LUMEN.Store && LUMEN.Store.reduceFlash) return true;
+    // A mode can ask for it too. Zen has declared `calm: true` — "no shake, no
+    // damage flash, gentle audio" — since it was written, and nothing ever read
+    // the flag, so the calm mode shook and flashed exactly like Sprint.
+    try {
+      const m = LUMEN.Modes && LUMEN.Modes.current();
+      if (m && m.calm) return true;
+    } catch (e) { /* Modes may not be loaded yet */ }
+    return false;
   }
   LUMEN.calmVisuals = calmVisuals;
 
@@ -823,6 +832,9 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
       this.dpr = 1;
+      // resize() owns this; the default only guards the window before the
+      // first resize, where a hit rect built from it would come out NaN.
+      this.stageX = 0;
       this.particles = new Particles();
       this.rings = new Rings();
       this.texts = new FloatingTexts();
@@ -988,6 +1000,14 @@
       // topped up by pickups when auto-use is off.
       this.hand = {};
       for (const t of ITEM_TYPES) this.hand[t] = 0;
+      // How many of the held items were FOUND rather than bought. Without this
+      // the hand is just a count, and useItem cannot tell a corridor pickup from
+      // shop stock — so a free shield picked up mid-run debited a shield the
+      // player had paid for. Worst in the daily, which deliberately brings no
+      // loadout at all: every item used there was free, and every one of them
+      // was billed to the shop inventory.
+      this.handFree = {};
+      for (const t of ITEM_TYPES) this.handFree[t] = 0;
       this.lastChain = 0;         // what SPARK restores: the chain you just lost
       this.bumps = 0;             // Zen has no score, so it counts crashes instead
       this.bountyTimer = this.rrand(12, 20);   // first bounty is never instant
@@ -1966,8 +1986,19 @@
       const rr = (a, b) => a + rng() * (b - a);
       // never above the ceiling, or the clamp below would invert
       const floor = Math.min(Math.max(0.17, o.minGap || 0), 0.52);
-      const gapH = clamp(clamp(0.35 - e * 0.0022, 0.205, 0.35) * (o.gapMul || 1), floor, 0.52);
-      const maxJump = lerp(0.28, 0.62, clamp(e / 40, 0, 1));
+      // The corridor's tightening runs on the MODE's clock, not the wall clock.
+      // `ramp` is documented as "how quickly the run tightens" and the speed and
+      // gap getters already honour it, but this function never saw it — so Zen,
+      // which declares ramp: 0 and advertises a run that never tightens, still
+      // squeezed its gaps 41% (0.35 -> 0.205) over the first minute.
+      //
+      // Only the tightening terms use it. Archetype variety and power spawns
+      // below stay on real elapsed on purpose: at ramp 0 a ramped clock is
+      // frozen at zero, `e > 8` would never come true, and Zen would quietly
+      // lose every power-up. Calm is meant to be gentle, not empty.
+      const dt = o.rampT != null ? o.rampT : e;
+      const gapH = clamp(clamp(0.35 - dt * 0.0022, 0.205, 0.35) * (o.gapMul || 1), floor, 0.52);
+      const maxJump = lerp(0.28, 0.62, clamp(dt / 40, 0, 1));
 
       // pick the archetype first — its motion affects how much padding we need
       let kind = 'normal';
@@ -2076,7 +2107,8 @@
         // shared course must not be. No mode the daily can draw has `swell`, so
         // there is nothing for it to protect against there anyway.
         : Game.makeSpec(this.rng, this.elapsed, this.lastC,
-          { gapMul: this.gapMul, minGap: this.minGapFrac });
+          { gapMul: this.gapMul, minGap: this.minGapFrac,
+            rampT: this.elapsed * (this.mode ? this.mode.ramp : 1) });
       this.lastC = spec.c;
       this._lastSpecTight = !!spec.tight;
 
@@ -2580,6 +2612,7 @@
       } else {
         // picked up, not spent — say so, so the player knows they're holding it
         this.hand[w.type] = (this.hand[w.type] || 0) + 1;
+        this.handFree[w.type] = (this.handFree[w.type] || 0) + 1;   // found, not bought
         this.texts.add(w.x, w.y - 26, '+' + T('pw_' + w.type), col, 20);
         this.flash = Math.max(this.flash, 0.15);
         haptic(8);
@@ -2591,23 +2624,41 @@
     useItem(type) {
       if (this.state !== State.PLAY) return false;
       if (!this.hand[type]) return false;
+      // Charge only for something that HAPPENED.
+      //
+      // The stock was decremented and paid for before activateItem ran, and
+      // activateItem can decline: spark with no chain to restore says "NO CHAIN
+      // TO RESTORE" and returns, shield fired while already shielded overwrites
+      // a true with a true. Both took the item anyway — and spark is the most
+      // expensive one in the shop at 340 shards, limit one.
+      const fired = this.activateItem(type, false);
+      if (!fired) return false;
       this.hand[type]--;
+      // Free ones go first, so a run that ends with something still in hand
+      // leaves the PAID one in the shop rather than the found one.
+      if (this.handFree[type] > 0) { this.handFree[type]--; return true; }
       // Pay for it HERE, at the moment it fires. It used to be deducted when the
       // run started and never written back, so buying an item, pressing PLAY and
       // then going back to the menu destroyed it without ever using it.
-      // A pickup found in the corridor is free, so this is the only place that
-      // touches the stock.
       if (LUMEN.Progression && LUMEN.Progression.spend) LUMEN.Progression.spend(type);
-      this.activateItem(type, false);
       return true;
     }
 
+    // Returns TRUE when the item actually did something. useItem charges on that
+    // answer, so an item that declines costs nothing.
     activateItem(type, fromPickup) {
       const def = POWER_DEF[type];
-      if (!def) return;
+      if (!def) return false;
       const col = `hsl(${def.hue} 95% 65%)`;
       const p = this.player;
       if (type === 'shield') {
+        // Already shielded: there is nothing to gain and the player cannot see
+        // that, so it read as a successful use that did nothing. Aegis III makes
+        // this routine, not rare.
+        if (this.shield) {
+          this.texts.add(p.x, p.y - 44, T('alreadyShielded'), col, 18);
+          return false;
+        }
         this.shield = true;
       } else if (type === 'spark') {
         // Instant, not timed: hand back the chain that just broke. Worth nothing
@@ -2616,7 +2667,7 @@
         const back = Math.max(this.lastChain, 0);
         if (back <= 0) {
           this.texts.add(p.x, p.y - 44, T('sparkNothing'), col, 18);
-          return;
+          return false;
         }
         this.combo = back;
         if (this.combo > this.bestComboRun) this.bestComboRun = this.combo;
@@ -2632,6 +2683,7 @@
       haptic([8, 5, 14]);
       Audio && this._sfx('flow');
       LUMEN.Analytics && LUMEN.Analytics.track('item_use', { type, fromPickup: !!fromPickup });
+      return true;
     }
 
     // Move, arm and cull the traps, then check whether one of them got you.
@@ -3065,6 +3117,20 @@
 
       ctx.restore();
 
+      // Everything below is drawn in STAGE coordinates too — the score, the item
+      // buttons, the vignette, the tutorial. Without this translate they were
+      // laid out against the corridor's width and then painted from the screen's
+      // left edge, so on any viewport wider than h*0.62 — every iPad, every
+      // landscape — the HUD sat out in the letterbox beside the playfield and
+      // BLACKOUT darkened empty sky while charging x1.9.
+      //
+      // The item buttons' hit rects are stored in SCREEN space (the tap handler
+      // reads clientX against the canvas), so drawItemButtons adds stageX when
+      // it records them. Move one without the other and the buttons stop
+      // working where they appear.
+      ctx.save();
+      if (this.stageX) ctx.translate(this.stageX, 0);
+
       // flow vignette + flashes (not shaken)
       this.drawOverlays(ctx);
       // the tutorial has its own guidance; the score HUD would just be noise
@@ -3079,6 +3145,8 @@
       // only coach genuinely new players — veterans don't need the hint every run
       if (!this.attract && this.state === State.PLAY && !this.hasFlipped && Store.runs < 3) this.drawOnboarding(ctx);
       if (this.tutorial && this.state === State.PLAY) this.drawTutorial(ctx);
+
+      ctx.restore();
     }
 
     drawTutorial(ctx) {
@@ -3134,7 +3202,7 @@
       const label = T('skipTutorial');
       const tw = ctx.measureText(label).width;
       const pw = tw + 34, ph = clamp(H * 0.045, 30, 42);
-      this._tutSkipRect = { x: cx - pw / 2, y: sy - ph / 2, w: pw, h: ph };
+      this._tutSkipRect = { x: cx - pw / 2 + this.stageX, y: sy - ph / 2, w: pw, h: ph };
       ctx.globalAlpha = 0.85;
       this.roundRect(ctx, this._tutSkipRect.x, this._tutSkipRect.y, pw, ph, ph / 2);
       ctx.fillStyle = 'rgba(10,14,32,0.6)'; ctx.fill();
@@ -3424,7 +3492,9 @@
       for (const t of types) {
         const def = POWER_DEF[t];
         const col = `hsl(${def.hue} 95% 66%)`;
-        this._itemRects.push({ type: t, x: x - r, y: y - r, w: r * 2, h: r * 2 });
+        // + stageX: these are read by the tap handler in SCREEN space, while the
+        // button itself is drawn inside the stage translate.
+        this._itemRects.push({ type: t, x: x - r + this.stageX, y: y - r, w: r * 2, h: r * 2 });
 
         ctx.beginPath(); ctx.arc(x, y, r, 0, TAU);
         ctx.fillStyle = 'rgba(8,12,28,0.82)'; ctx.fill();
@@ -3687,9 +3757,17 @@
       ctx.globalCompositeOperation = 'lighter';
       const off = 1.5 + this.flow * 3 + (this.scrollSpeed / this.W) * 4;
       ctx.globalAlpha = 0.5;
-      ctx.fillStyle = `hsl(${(hue + 160) % 360} 100% 60%)`;
+      // Follow the SKIN's saturation and lightness, not a hardcoded 100%/60%.
+      // Obsidian is deliberately desaturated and dark (sat 40, light 34); with
+      // fixed values its two ghosts came out fully saturated and twice as bright
+      // as the orb they belong to, so the quietest skin in the game had the
+      // loudest fringe.
+      const sk = this.skin();
+      const gs = sk.sat != null ? sk.sat : 100;
+      const gl = clamp((sk.light != null ? sk.light : 60) + this.flow * 22, 0, 97);
+      ctx.fillStyle = `hsl(${(hue + 160) % 360} ${gs}% ${gl}%)`;
       ctx.beginPath(); ctx.arc(p.x + off, p.y, p.r, 0, TAU); ctx.fill();
-      ctx.fillStyle = `hsl(${hue} 100% 60%)`;
+      ctx.fillStyle = `hsl(${hue} ${gs}% ${gl}%)`;
       ctx.beginPath(); ctx.arc(p.x - off, p.y, p.r, 0, TAU); ctx.fill();
       ctx.restore();
 

@@ -36,7 +36,7 @@
     { id: 'chain3',     cat: 'chain',   stat: 'bestCombo',   goal: 70,    reward: 220, unlocks: 'apex' },
     { id: 'flow1',      cat: 'chain',   stat: 'flowCount',   goal: 1,     reward: 25 },
     { id: 'flow2',      cat: 'chain',   stat: 'flowCount',   goal: 25,    reward: 80,  unlocks: 'aurora' },
-    { id: 'flow3',      cat: 'chain',   stat: 'flowCount',   goal: 100,   reward: 240 },
+    { id: 'flow3',      cat: 'chain',   stat: 'flowCount',   goal: 100,   reward: 240, unlocks: 'wake' },
     // endurance
     { id: 'endure1',    cat: 'endure',  stat: 'bestTime',    goal: 60,    reward: 60 },
     { id: 'endure2',    cat: 'endure',  stat: 'bestTime',    goal: 120,   reward: 130, unlocks: 'obsidian' },
@@ -47,11 +47,11 @@
     { id: 'motes2',     cat: 'collect', stat: 'motes',       goal: 2500,  reward: 110 },
     { id: 'motes3',     cat: 'collect', stat: 'motes',       goal: 10000, reward: 280 },
     { id: 'close1',     cat: 'collect', stat: 'nearMiss',    goal: 50,    reward: 50 },
-    { id: 'close2',     cat: 'collect', stat: 'nearMiss',    goal: 250,   reward: 150 },
+    { id: 'close2',     cat: 'collect', stat: 'nearMiss',    goal: 250,   reward: 150, unlocks: 'mirage' },
     // dedication
     { id: 'runs1',      cat: 'devote',  stat: 'runs',        goal: 25,    reward: 30 },
     { id: 'runs2',      cat: 'devote',  stat: 'runs',        goal: 100,   reward: 90 },
-    { id: 'runs3',      cat: 'devote',  stat: 'runs',        goal: 500,   reward: 320 },
+    { id: 'runs3',      cat: 'devote',  stat: 'runs',        goal: 500,   reward: 320, unlocks: 'eclipse' },
     { id: 'streak1',    cat: 'devote',  stat: 'dailyStreak', goal: 7,     reward: 120 },
     { id: 'streak2',    cat: 'devote',  stat: 'dailyStreak', goal: 30,    reward: 400 },
     { id: 'curator',    cat: 'devote',  stat: 'unlockCount', goal: 5,     reward: 55 },
@@ -270,7 +270,12 @@
         closeWindow: val('precision'),
         closeBonus: 8 + lv('precision') * 2,
         startShield: aegis >= 3,
-        reviveCost: 60 - (aegis > 0 && aegis < 3 ? aegis * 10 : 0),
+        // Math.min(aegis, 2), not `aegis < 3`. The old test excluded level 3
+        // from the discount entirely, so buying it for 1,100 raised the revive
+        // price from 40 back to 60 and silently voided the 800 spent on levels
+        // 1 and 2. Level 3 adds a starting shield; it should not take away what
+        // the levels below it bought.
+        reviveCost: 60 - Math.min(aegis, 2) * 10,
         skillsActive: !daily,
       };
     },

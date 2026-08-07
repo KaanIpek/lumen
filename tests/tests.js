@@ -4341,6 +4341,104 @@
     L.Store.items = {};
   });
 
+  // ---- regressions from the pre-release audit ------------------------------
+  // Each of these locks in a fix for something that shipped wrong. They are
+  // cheap and specific on purpose: the bugs were all silent, and a silent bug
+  // that comes back is a silent bug nobody notices twice.
+
+  test('Aegis III keeps the revive discount it paid for', () => {
+    freshStorage();
+    const seen = [0, 1, 2, 3].map((n) => {
+      L.Store.skills = Object.assign({}, L.Store.skills, { aegis: n });
+      return L.Progression.modifiers(false).reviveCost;
+    });
+    eq(seen[0], 60, 'no aegis');
+    eq(seen[1], 50, 'aegis I');
+    eq(seen[2], 40, 'aegis II');
+    // The old test was `aegis < 3`, so buying the 1,100-shard tier put the price
+    // back to 60 and silently voided the 800 spent below it.
+    eq(seen[3], 40, 'aegis III must not cost you the discount');
+    freshStorage();
+  });
+
+  test('mode ramp reaches the corridor generator', () => {
+    const gap = (mode, secs) => L.Game.makeSpec(() => 0.5, secs, 0.5,
+      { gapMul: mode.gap, rampT: secs * mode.ramp }).gapH;
+    const zen = L.Modes.def('zen'), classic = L.Modes.def('classic');
+    eq(zen.ramp, 0, 'zen declares no ramp');
+    // Zen advertises a run that never tightens. It used to squeeze 41%.
+    near(gap(zen, 120), gap(zen, 0), 1e-9, 'zen must not tighten');
+    // Classic is ramp 1, so the ramped clock IS the wall clock — the daily
+    // course must be byte-identical to before the change.
+    near(gap(classic, 120),
+      L.Game.makeSpec(() => 0.5, 120, 0.5, { gapMul: classic.gap }).gapH, 1e-9,
+      'classic layout unchanged');
+    // and the frozen clock must not starve Zen of power-ups
+    const withPower = [30, 60, 120].every((t) =>
+      !!L.Game.makeSpec(() => 0.02, t, 0.5, { gapMul: zen.gap, rampT: t * zen.ramp }).power);
+    eq(withPower, true, 'zen still spawns power-ups');
+  });
+
+  test('a power-up found in the corridor never bills the shop', () => {
+    freshStorage();
+    const g = newGame();
+    L.Store.items = { shield: 3 };
+    g.daily = true; g.tutorial = false; g.attract = false;
+    g.start();
+    // found, not bought
+    g.hand.shield = 1; g.handFree.shield = 1; g.shield = false;
+    eq(g.useItem('shield'), true, 'the free shield fires');
+    eq(L.Store.items.shield, 3, 'stock untouched by a free pickup');
+
+    // a bought one still costs
+    g.daily = false; g.start();
+    g.hand.shield = 1; g.handFree.shield = 0; g.shield = false;
+    eq(g.useItem('shield'), true, 'the bought shield fires');
+    eq(L.Store.items.shield, 2, 'stock debited for a bought item');
+    freshStorage();
+  });
+
+  test('an item that declines to fire is not consumed', () => {
+    freshStorage();
+    const g = newGame();
+    L.Store.items = { shield: 2 };
+    g.daily = false; g.tutorial = false; g.attract = false;
+    g.start();
+    g.hand.shield = 1; g.handFree.shield = 0;
+    g.shield = true;                       // already shielded: nothing to gain
+    eq(g.useItem('shield'), false, 'declines');
+    eq(g.hand.shield, 1, 'still in hand');
+    eq(L.Store.items.shield, 2, 'still in stock');
+    freshStorage();
+  });
+
+  test('every item type can be spoken, in every language', () => {
+    const words = L.Voice && L.Voice.PHRASES;
+    if (!words) throw new Error('Voice.PHRASES is not exposed');
+    for (const lang of Object.keys(words)) {
+      for (const t of L.ITEM_TYPES) {
+        const list = words[lang][t];
+        if (!list || !list.length) {
+          throw new Error('no ' + lang + ' word for "' + t + '"');
+        }
+      }
+    }
+  });
+
+  test('every achievement-gated cosmetic is announced by its achievement', () => {
+    const achs = L.Progression.ACHIEVEMENTS;
+    const items = [].concat(L.Cosmetics.SKINS, L.Cosmetics.TRAILS,
+      L.Cosmetics.MAPS, L.Cosmetics.SIGNATURES);
+    const silent = items.filter((i) => i.req).filter((i) => {
+      const a = achs.find((x) => x.id === i.req);
+      return !a || a.unlocks !== i.id;
+    }).map((i) => i.id);
+    eq(silent.length, 0, 'unlocked with no announcement: ' + silent.join(', '));
+    const dangling = achs.filter((a) => a.unlocks && !items.some((i) => i.id === a.unlocks))
+      .map((a) => a.id);
+    eq(dangling.length, 0, 'promises a cosmetic that does not exist: ' + dangling.join(', '));
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 

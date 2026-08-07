@@ -200,5 +200,18 @@
   };
 
   LUMEN.IAP = IAP;
-  IAP.register(IAP.sandboxProvider());
+
+  // The sandbox checkout ships on the WEB and desktop builds only.
+  //
+  // Inside the App Store / Play wrapper it must never register: it grants the
+  // item from a plain in-page confirmation with no processor behind it, which
+  // is both a free unlock and exactly what App Store guideline 3.1.1 forbids —
+  // digital goods sold through anything other than in-app purchase. With no
+  // provider, `available` is false, the cash tiles hide themselves and the shop
+  // falls back to shard prices, which is the honest state until a real StoreKit
+  // provider is registered.
+  if (!(window.LUMEN_NATIVE ||
+        (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()))) {
+    IAP.register(IAP.sandboxProvider());
+  }
 })();
