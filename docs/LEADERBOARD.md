@@ -266,26 +266,24 @@ build a login.
 ## Account deletion (App Store Guideline 5.1.1(v))
 
 An app that lets you create an account must let you delete it from inside the
-app. Settings → ACCOUNT → DELETE ACCOUNT does that, and it needs two things
-that live in your Supabase project, not in this repository:
+app. Settings -> ACCOUNT -> DELETE ACCOUNT does that, and it needs one thing
+that lives in the Supabase project rather than in this repository: run
+`supabase/delete-policy.sql` once in the SQL editor.
 
-1. **A DELETE policy on `scores`** — run `supabase/delete-policy.sql` once in
-   the SQL editor. Without it a delete returns 200 with an empty body, which is
-   Postgres politely saying no row matched anything you may touch. It looks
-   exactly like success, so `Leaderboard.deleteMine()` checks the returned rows
-   rather than the status code.
+It adds two things. A DELETE policy on `scores`, without which a delete returns
+200 with an empty body -- Postgres politely saying no row matched anything you
+may touch, which looks exactly like success, and is why
+`Leaderboard.deleteMine()` checks the returned rows rather than the status code.
+And `public.delete_own_account()`, a SECURITY DEFINER function that removes the
+auth user, which needs rights no browser may hold.
 
-2. **The `delete-account` Edge Function** — `supabase/functions/delete-account/`.
+An Edge Function holding the service_role key would also work and was the first
+approach here. The database function is better for one reason worth keeping in
+mind: it takes the identity from `auth.uid()`, read out of the caller's own
+verified JWT, and has no parameter at all. There is nothing to lie about, so a
+caller can delete exactly themselves. The Edge Function had to be trusted to
+ignore the `user_id` in the request body; this cannot get that wrong.
 
-   ```
-   supabase functions deploy delete-account --project-ref <your-ref>
-   ```
-
-   The auth user itself can only be removed with the `service_role` key, which
-   must never ship in a client. The function holds it server-side and takes the
-   caller's identity from their access token, never from the request body — so
-   nobody can delete anyone but themselves.
-
-Until both are in place the button still signs the player out on the device and
-says plainly that the server did not confirm, rather than claiming a deletion
-that did not happen.
+Until it is run, the button still signs the player out on the device and says
+plainly that the server did not confirm, rather than claiming a deletion that
+did not happen.

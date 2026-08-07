@@ -114,15 +114,15 @@
     // the account itself go. If the second step fails the player is at least
     // off the board, which is the part they can see.
     //
-    // Deleting the auth user cannot be done from a client: the service_role key
-    // that Supabase requires for it must never ship, so the app calls an Edge
-    // Function that holds it server-side. Without that function deployed this
+    // Deleting the auth user needs rights no client may hold, so it happens
+    // inside a SECURITY DEFINER function in the database. The function takes the
+    // identity from auth.uid() — the caller's own JWT — and never from an
+    // argument, so nobody can delete anyone but themselves. Until it exists this
     // resolves { account: false } and the caller says so rather than claiming a
     // deletion that did not happen. See docs/LEADERBOARD.md.
     deleteAccount() {
       if (!this.enabled || !this.signedIn) return Promise.reject(new Error('not signed in'));
       const t = this.token;
-      const uid = this.userId;
       const auth = { apikey: this.key, Authorization: 'Bearer ' + t };
 
       const dropRow = LUMEN.Leaderboard && LUMEN.Leaderboard.deleteMine
@@ -130,10 +130,10 @@
         : Promise.resolve(false);
 
       return dropRow.then((rowGone) =>
-        fetch(this.url + '/functions/v1/delete-account', {
+        fetch(this.url + '/rest/v1/rpc/delete_own_account', {
           method: 'POST',
           headers: Object.assign({ 'Content-Type': 'application/json' }, auth),
-          body: JSON.stringify({ user_id: uid }),
+          body: '{}',
         })
           .then((r) => r.ok)
           .catch(() => false)
