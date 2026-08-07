@@ -75,6 +75,22 @@
     // Keep every option to something that is a TABLE ENTRY in this codebase —
     // a mode (js/modes.js), a world or a signature (js/cosmetics.js). Those you
     // can always build in a month. Multiplayer is a different game.
+    // ---- AdMob ------------------------------------------------------------
+    // Real units. Putting them here is what turns the ad surfaces back on:
+    // js/ads.js hides every one of them while `isTestAds` is true, so the game
+    // never showed a player one of Google's "Test Ad" placeholders.
+    //
+    // These are not secrets — they ship inside the binary and any player can
+    // read them in a minute. They are here so the switch lives in one file.
+    admob: {
+      ios: {
+        app:      'ca-app-pub-8253427588583765~9285134085',
+        rewarded: 'ca-app-pub-8253427588583765/4948489169',
+      },
+      // No Android units yet: mobile/lumen-ads ships an ios/ directory and
+      // nothing else, so Ads.available is false there regardless.
+    },
+
     poll: {
       id: '2026-09',                // any string; changing it opens a fresh vote for everybody
       closes: '2026-09-20',          // YYYY-MM-DD, in the player's own day

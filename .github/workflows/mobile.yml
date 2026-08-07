@@ -279,10 +279,11 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string $MIC" Info.plist             || /usr/libexec/PlistBuddy -c "Set :NSMicrophoneUsageDescription $MIC" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSSpeechRecognitionUsageDescription string $MIC" Info.plist             || /usr/libexec/PlistBuddy -c "Set :NSSpeechRecognitionUsageDescription $MIC" Info.plist
           # The Google Mobile Ads SDK RAISES on start when this key is absent —
-          # it does not warn, it terminates the app. Google's own sample app id;
-          # the real one arrives with the privacy declaration and the ATT prompt,
-          # in the release that turns live ads on (docs/ADS.md).
-          GADID="ca-app-pub-3940256099942544~1458002511"
+          # it does not warn, it terminates the app. This is LUMEN's own app id
+          # and it must match CONFIG.admob.ios.app in config.js — the SDK checks
+          # the plist, the ad request uses the config, and a mismatch fails at
+          # the second step with an error that points at the first.
+          GADID="ca-app-pub-8253427588583765~9285134085"
           /usr/libexec/PlistBuddy -c "Add :GADApplicationIdentifier string $GADID" Info.plist             || /usr/libexec/PlistBuddy -c "Set :GADApplicationIdentifier $GADID" Info.plist
           # App Tracking Transparency. The prompt cannot appear without this
           # string, and calling requestTrackingAuthorization without it is one of

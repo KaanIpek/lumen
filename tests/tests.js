@@ -4514,14 +4514,23 @@
     freshStorage();
   });
 
-  test('test ad units cannot reach a player', () => {
+  test('a test ad unit can never reach a player', () => {
     const A = L.Ads;
     if (!A) throw new Error('Ads module missing');
-    // No real ids in CONFIG.admob -> these are Google's test units, which render
-    // with a "Test Ad" label. Every ad surface in the UI is gated on `available`,
-    // so this one getter is what keeps a placeholder out of a shipped build.
-    eq(A.isTestAds, true, 'shipping config still uses test units');
+    // The harness does not load config.js, so CONFIG.admob is absent here and
+    // isTestAds is true — which is exactly the state this asserts against. The
+    // rule is what matters, not today's ids: while the units are Google's test
+    // ones they render a "Test Ad" placeholder, and every surface in the UI is
+    // gated on `available`, so this getter is the whole defence.
+    eq(A.isTestAds, true, 'no real ids visible to the harness');
     eq(A.available, false, 'so no ad surface is offered');
+    // And the real config, read from disk, must carry ids of the right shape —
+    // a typo here is invisible until a player taps and nothing plays.
+    const cfg = (L.CONFIG && L.CONFIG.admob) || null;
+    if (cfg && cfg.ios) {
+      assert(/^ca-app-pub-\d+~\d+$/.test(cfg.ios.app), 'app id shape');
+      assert(/^ca-app-pub-\d+\/\d+$/.test(cfg.ios.rewarded), 'rewarded unit shape');
+    }
   });
 
   test('the ad reward schedule pays what the shop screen promises', () => {
