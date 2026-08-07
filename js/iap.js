@@ -41,10 +41,14 @@
 
     // Regional formatting is the provider's job when it has one; otherwise show a
     // plain USD figure rather than pretending to know the player's currency.
-    formatPrice(usd) {
+    formatPrice(usd, id) {
       if (!usd) return '';
       if (this.provider && this.provider.formatPrice) {
-        try { return this.provider.formatPrice(usd); } catch (e) { /* fall through */ }
+        // `id` reaches StoreKit, which answers with Apple's own localised price
+        // for this storefront. Without it every price in the app would be a
+        // dollar figure we invented, which is wrong outside the US twice over:
+        // wrong symbol, and wrong number once a tier maps to a local one.
+        try { return this.provider.formatPrice(usd, id); } catch (e) { /* fall through */ }
       }
       return '$' + usd.toFixed(2);
     },
@@ -199,6 +203,71 @@
     },
   };
 
+  // ---- StoreKit -----------------------------------------------------------
+  // App Store product ids. Reverse-DNS off the bundle id because Apple's ids are
+  // global across every app on the store, not per-app, so a bare "shards_small"
+  // is both likely taken and impossible to reason about in a report.
+  //
+  // These strings must match App Store Connect EXACTLY. A typo does not error:
+  // Product.products(for:) simply returns nothing for the id it cannot find, the
+  // tile disappears, and it looks like the store is down.
+  const SK_PREFIX = 'com.lumen.game.';
+  const SK_ID = {
+    shards_small:  SK_PREFIX + 'shards.small',
+    shards_medium: SK_PREFIX + 'shards.medium',
+    shards_large:  SK_PREFIX + 'shards.large',
+    nightfall:     SK_PREFIX + 'set.nightfall',
+    spectra:       SK_PREFIX + 'set.spectra',
+    rimefall:      SK_PREFIX + 'set.rimefall',
+  };
+  const SK_LOCAL = Object.fromEntries(Object.entries(SK_ID).map(([k, v]) => [v, k]));
+
+  IAP.storeKitProvider = function (plugin) {
+    let priced = {};      // local id -> Apple's already-localised price string
+    let loaded = false;
+
+    const load = () => plugin.products({ ids: Object.values(SK_ID) })
+      .then((r) => {
+        priced = {};
+        (r && r.products ? r.products : []).forEach((p) => {
+          const local = SK_LOCAL[p.id];
+          if (local) priced[local] = p.price;
+        });
+        loaded = true;
+      })
+      .catch(() => { loaded = true; });
+    load();
+
+    return {
+      _storekit: true,
+      isReady: () => true,
+      // Apple's displayPrice, never a number we format. A hardcoded "$" is wrong
+      // in most of the world, and the amount is wrong too the moment a price
+      // tier maps to a local one — ₺, ¥ and € tiers are not conversions.
+      formatPrice(usd, id) {
+        if (id && priced[id]) return priced[id];
+        return loaded ? '—' : '…';
+      },
+      purchase(sku) {
+        const appleId = SK_ID[sku];
+        if (!appleId) return Promise.resolve({ ok: false, reason: 'unknown_product' });
+        return plugin.purchase({ id: appleId })
+          .then((r) => (r && r.ok
+            ? { ok: true, receipt: r.transactionId }
+            : { ok: false, reason: (r && r.reason) || 'failed' }))
+          .catch((e) => ({ ok: false, reason: String((e && e.message) || e) }));
+      },
+      // Consumables never come back — a spent shard pack restored on every
+      // reinstall would print currency. Only the sets are non-consumable, and
+      // giving them back is what the Restore button is required to do.
+      restore() {
+        return plugin.restore()
+          .then((r) => (r && r.owned ? r.owned : []).map((id) => SK_LOCAL[id]).filter(Boolean))
+          .catch(() => []);
+      },
+    };
+  };
+
   LUMEN.IAP = IAP;
 
   // The sandbox checkout ships on the WEB and desktop builds only.
@@ -210,8 +279,20 @@
   // provider, `available` is false, the cash tiles hide themselves and the shop
   // falls back to shard prices, which is the honest state until a real StoreKit
   // provider is registered.
-  if (!(window.LUMEN_NATIVE ||
-        (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()))) {
+  const isNative = !!(window.LUMEN_NATIVE ||
+    (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()));
+
+  if (!isNative) {
     IAP.register(IAP.sandboxProvider());
+  } else {
+    // StoreKit, or nothing at all. If the plugin is missing — an older shell, a
+    // platform we have not written one for — `available` stays false, the cash
+    // tiles hide, and the shop is a shard shop. That is a smaller failure than
+    // showing a price nothing can charge.
+    try {
+      const C = window.Capacitor;
+      const plugin = C && C.registerPlugin ? C.registerPlugin('LumenStore') : null;
+      if (plugin && plugin.products) IAP.register(IAP.storeKitProvider(plugin));
+    } catch (e) { /* no store on this platform; shards only */ }
   }
 })();

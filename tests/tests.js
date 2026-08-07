@@ -1974,7 +1974,9 @@
   test('Checkout: real money never spends shards, and cancelling grants nothing', async () => {
     freshStorage();
     L.Store.shards = 500;
-    const price = L.Cosmetics.price('ember');
+    // Individual cosmetics are shard-only now — cash buys shards, or one of the
+    // three premium SETS. So the cash path is exercised through a set.
+    const price = L.Cosmetics.setPrice('nightfall');
     assert(price.usd > 0, 'this one has a cash price');
     // stand in for the UI: refuse, then accept
     L.IAP.register({
@@ -1982,26 +1984,27 @@
       purchase: () => Promise.resolve({ ok: false }),
       restore: () => Promise.resolve([]),
     });
-    const no = await L.IAP.purchase('ember');
+    const piece = L.Cosmetics.setDef('nightfall').items[0];
+    const no = await L.IAP.purchase('nightfall');
     eq(no.ok, false, 'cancelled');
-    eq(L.Cosmetics.owned('ember'), false, 'nothing granted');
+    eq(L.Cosmetics.owned(piece), false, 'nothing granted');
     eq(L.Store.shards, 500, 'and no shards moved');
 
     L.IAP.register({
       isReady: () => true,
       purchase: () => Promise.resolve({ ok: true, receipt: 'r' }),
-      restore: () => Promise.resolve(['ember']),
+      restore: () => Promise.resolve(['nightfall']),
     });
-    const yes = await L.IAP.purchase('ember');
+    const yes = await L.IAP.purchase('nightfall');
     eq(yes.ok, true, 'paid');
-    eq(L.Cosmetics.owned('ember'), true, 'granted');
+    eq(L.Cosmetics.owned(piece), true, 'granted');
     eq(L.Store.shards, 500, 'paying cash must NEVER also cost shards');
     // a wiped device gets it back
     L.Store.unlocks = []; L.Cosmetics.invalidate();
-    eq(L.Cosmetics.owned('ember'), false, 'wiped');
+    eq(L.Cosmetics.owned(piece), false, 'wiped');
     const r = await L.IAP.restore();
     eq(r.ok, true, 'restore ran');
-    eq(L.Cosmetics.owned('ember'), true, 'and re-granted what was paid for');
+    eq(L.Cosmetics.owned(piece), true, 'and re-granted what was paid for');
     L.IAP.register(L.IAP.sandboxProvider());
   });
 
@@ -2916,7 +2919,12 @@
       const sum = s.items.reduce((n, i) => n + (C.price(i) ? C.price(i).shards : 0), 0);
       assert(cold.shards < sum, s.id + ' is cheaper than the pieces (' + cold.shards + ' vs ' + sum + ')');
       eq(cold.saving, sum - cold.shards, s.id + ' states its saving truthfully');
-      assert(cold.usd > 0, s.id + ' offers a cash price while nothing is owned');
+      // Not every set carries one: kindling is deliberately shard-only, so a
+      // player who never spends can still finish a whole coordinated look.
+      // What matters is that a cash price, where it exists, is offered only
+      // while the whole set is still unowned.
+      if (s.usd > 0) assert(cold.usd > 0, s.id + ' offers its cash price while nothing is owned');
+      else eq(cold.usd, 0, s.id + ' is shard-only and never quotes cash');
 
       // own the dearest piece: the price must fall by that piece's share
       const dearest = s.items.slice().sort((a, b) =>

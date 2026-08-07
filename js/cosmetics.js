@@ -30,11 +30,21 @@
 
   // tier → price shape. `usd` is what the store charges in real money.
   const TIER = {
+    // No usd here any more, deliberately. Every cosmetic used to carry its own
+    // cash price, which meant one App Store product record per cosmetic — forty
+    // of them, each separately reviewed, separately priced, and one more to file
+    // every time a skin is added. It also put "$2.49 or 4,500 shards" on the
+    // same card, which reads as a choice and is really a tax on not paying, and
+    // it made the shard packs pointless: nobody buys currency to buy a thing
+    // they could have bought directly.
+    //
+    // Cash now buys shards, and shards buy everything. The only exceptions are
+    // the three premium SETS below, which are sold whole.
     free:    { shards: 0,    usd: 0 },
-    cheap:   { shards: 550,  usd: 0.99 },
-    mid:     { shards: 1400, usd: 1.49 },
-    premium: { shards: 4500, usd: 2.49 },
-    elite:   { shards: 9000, usd: 3.49 },
+    cheap:   { shards: 550,  usd: 0 },
+    mid:     { shards: 1400, usd: 0 },
+    premium: { shards: 4500, usd: 0 },
+    elite:   { shards: 9000, usd: 0 },
   };
 
   // ---- orbs ---------------------------------------------------------------
@@ -248,7 +258,11 @@
   const SET_DISCOUNT = 0.32;
   const SETS = [
     // warm, rising, unhurried
-    { id: 'kindling', items: ['ember', 'embers', 'cinder'], usd: 2.99 },
+    // Shard-only on purpose: it is built from the cheapest pieces in the game,
+    // so a player who never spends a penny can still finish a whole coordinated
+    // look. A shop where the only complete outfit costs money is a shop that
+    // says the free path is decoration.
+    { id: 'kindling', items: ['ember', 'embers', 'cinder'], usd: 0 },
     // the dark one: black orb, black wake, black rings with a lit rim
     { id: 'nightfall', items: ['abyss', 'void', 'umbra'], usd: 5.99 },
     // every colour at once, and loud about it

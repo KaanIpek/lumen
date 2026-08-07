@@ -1,0 +1,11 @@
+{
+  "name": "lumen-store",
+  "version": "1.0.0",
+  "description": "LUMEN in-app purchases over StoreKit 2",
+  "main": "index.js",
+  "license": "MIT",
+  "files": ["ios/", "LumenStore.podspec", "index.js", "package.json"],
+  "capacitor": {
+    "ios": { "src": "ios" }
+  }
+}

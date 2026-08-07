@@ -594,7 +594,10 @@
         // packs I added did not, which made them the only prices in the game
         // that lied.
         const live = iap.available && !iap.sandbox;
-        b.textContent = '$' + p.usd.toFixed(2) + (live ? '' : ' ' + T('sandbox'));
+        // Apple's own localised price when StoreKit is behind this; the USD
+        // figure only when nothing real is.
+        b.textContent = live ? iap.formatPrice(p.usd, p.id)
+          : '$' + p.usd.toFixed(2) + ' ' + T('sandbox');
         onTap(b, () => {
           this.click();
           if (!live) { this.toast(T('storeUnavailable')); return; }
@@ -844,7 +847,7 @@
           if (p.usd && iapOn) {
             const sb = LUMEN.IAP.sandbox ? ' sandbox' : '';
             btns += '<button class="c-btn cash' + sb + '" data-act="setcash" data-id="' + s.id + '">'
-              + LUMEN.IAP.formatPrice(p.usd) + '</button>';
+              + LUMEN.IAP.formatPrice(p.usd, s.id) + '</button>';
           }
         }
 
@@ -1057,7 +1060,7 @@
           btns = '<button class="c-btn buy' + (afford ? '' : ' locked') + '" data-act="buy" data-id="' + it.id + '">◆ ' + price.shards.toLocaleString() + '</button>';
           if (price.usd && iapOn) {
             const sb = LUMEN.IAP.sandbox ? ' sandbox' : '';
-            btns += '<button class="c-btn cash' + sb + '" data-act="cash" data-id="' + it.id + '">' + LUMEN.IAP.formatPrice(price.usd) + '</button>';
+            btns += '<button class="c-btn cash' + sb + '" data-act="cash" data-id="' + it.id + '">' + LUMEN.IAP.formatPrice(price.usd, it.id) + '</button>';
           }
         }
         // The flavour line is the item's voice. It never carries information you
@@ -1206,7 +1209,7 @@
           sw.setAttribute('style', isTrail ? this.trailSwatch(def) : isMap ? this.mapSwatch(def) : this.skinSwatch(def));
         }
         $('checkout-name').textContent = C.name(id);
-        $('checkout-price').textContent = LUMEN.IAP.formatPrice(usd);
+        $('checkout-price').textContent = LUMEN.IAP.formatPrice(usd, id);
         const sandbox = LUMEN.IAP.sandbox;
         $('checkout-tag').textContent = sandbox ? T('sandboxTag') : '';
         $('checkout-tag').classList.toggle('hidden', !sandbox);
