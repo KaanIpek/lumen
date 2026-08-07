@@ -112,7 +112,10 @@
       // Entitlement is recorded locally. With a real provider the receipt is the
       // source of truth and restore() re-grants on a new device.
       grant();
-      this._remember(id);
+      // A consumable is bought, spent, and bought again — remembering it would
+      // put shard packs in the restore list, where a second device would
+      // "re-grant" currency the player already spent, forever, for free.
+      if (!this.pack(id)) this._remember(id);
       LUMEN.Analytics && LUMEN.Analytics.track('iap_complete', { sku: id, usd });
       return { ok: true };
     },
@@ -133,6 +136,10 @@
           const before = set.items.filter((it) => C.owned(it)).length;
           C.grantSet(sku);
           if (set.items.filter((it) => C.owned(it)).length > before) n++;
+        } else if (this.pack(sku)) {
+          continue;                       // consumable: nothing to restore
+        } else if (C && C.def && !C.def(sku)) {
+          continue;                       // an id this build does not know
         } else if (C && !C.owned(sku) && C.grant(sku)) n++;
         this._remember(sku);
       }

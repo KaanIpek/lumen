@@ -3595,6 +3595,42 @@
           ctx.closePath(); ctx.fill();
           ctx.restore();
         }
+      } else if (style === 'void') {
+        // Darkness carved OUT of the sky, not light added to it — and that is
+        // exactly why this branch has to leave `lighter`. In additive blending
+        // black is a no-op, so a void trail drew nothing and fell through to the
+        // default: an elite 9,000-shard trail, and one third of the £5.99
+        // Nightfall set, rendering byte-identical to free `dust`.
+        //
+        // A dark shape on a dark sky is invisible without a rim, so each blot
+        // gets one in the orb's own hue — the same trick the rings use.
+        ctx.globalCompositeOperation = 'source-over';
+        for (let i = n - 1; i >= 0; i--) {
+          const t = p.trail[i];
+          const k = 1 - i / n;
+          const r = p.r * (0.5 + k * 0.8);
+          ctx.globalAlpha = k * 0.82;
+          ctx.fillStyle = 'rgba(3,4,12,0.94)';
+          ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, TAU); ctx.fill();
+          ctx.globalAlpha = k * 0.5;
+          ctx.lineWidth = Math.max(0.6, p.r * 0.15 * k);
+          ctx.strokeStyle = `hsl(${hue} 92% 70%)`;
+          ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, TAU); ctx.stroke();
+        }
+      } else if (style === 'halo') {
+        // Hollow rings rather than filled dots. `halo` is the payoff for a
+        // 40-chain, so it should read as something given rather than bought —
+        // and it too was drawing the free default until now.
+        ctx.lineWidth = 1.6;
+        for (let i = 0; i < n; i += 2) {
+          const t = p.trail[i];
+          const k = 1 - i / n;
+          ctx.globalAlpha = k * 0.6;
+          ctx.strokeStyle = `hsl(${hue} 100% ${70 + k * 20}%)`;
+          ctx.beginPath(); ctx.arc(t.x, t.y, p.r * (1.15 - k * 0.3), 0, TAU); ctx.stroke();
+          ctx.globalAlpha = k * 0.26;
+          ctx.beginPath(); ctx.arc(t.x, t.y, p.r * (1.65 - k * 0.5), 0, TAU); ctx.stroke();
+        }
       } else {
         // the colour is constant per style (except prism), so resolve it once
         const baseCol = style === 'comet' ? this.orbColor(0.6)

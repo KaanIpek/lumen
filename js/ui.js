@@ -585,7 +585,12 @@
           + '<div class="c-desc">' + T('shardPack') + '</div>';
         const b = document.createElement('button');
         b.className = 'c-btn cash';
-        const live = iap.available;
+        // `available` only asks whether SOME provider is ready, and the sandbox
+        // one always is — so every price rendered as if it would charge. The
+        // rest of the shop already marks sandbox (see the cosmetic cards); the
+        // packs I added did not, which made them the only prices in the game
+        // that lied.
+        const live = iap.available && !iap.sandbox;
         b.textContent = '$' + p.usd.toFixed(2) + (live ? '' : ' ' + T('sandbox'));
         onTap(b, () => {
           this.click();
