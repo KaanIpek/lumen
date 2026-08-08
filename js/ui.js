@@ -247,7 +247,7 @@
       // registration — and a phone has no console to tell them apart. When it
       // is fine this says nothing at all.
       const d = LUMEN.IAP && LUMEN.IAP.diag;
-      if (d && d !== 'ok' && !/^ok,/.test(d)) {
+      if (d && d !== 'ok') {
         el.textContent += '  ·  store: ' + d;
       } else if (d && LUMEN.Native && LUMEN.Native.isApp) {
         el.title += '  |  ' + d;

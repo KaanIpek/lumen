@@ -2040,6 +2040,42 @@
     L.IAP.register(null);
   });
 
+  // Build 34-36 shipped with every real-money button missing on device while
+  // rewarded ads worked. The cause was here: iap.js asked for
+  // `Capacitor.registerPlugin`, which lives in the @capacitor/core bundle, and
+  // LUMEN has no bundler — the injected native bridge only ever exposes
+  // `Capacitor.Plugins`. So the store must resolve the way ads.js and native.js
+  // already do, and this test pins the bridge shape that actually reaches the
+  // WebView: Plugins present, registerPlugin absent.
+  test('IAP: the store finds its plugin on the bridge the app really injects', () => {
+    const realCap = window.Capacitor;
+    const realNative = window.LUMEN_NATIVE;
+    const realProvider = L.IAP.provider;
+    const calls = [];
+    try {
+      window.LUMEN_NATIVE = { platform: 'mobile' };
+      window.Capacitor = {                      // no registerPlugin, on purpose
+        isNativePlatform: () => true,
+        Plugins: {
+          LumenStore: {
+            products: (o) => { calls.push(o); return Promise.resolve({ products: [] }); },
+            purchase: () => Promise.resolve({ ok: false }),
+            restore: () => Promise.resolve({ owned: [] }),
+          },
+        },
+      };
+      L.IAP._resetProvider();
+      assert(L.IAP.available, 'the cash store comes up with Plugins alone');
+      assert(L.IAP.provider._storekit, 'and it is StoreKit, never the sandbox');
+      eq(calls.length, 1, 'products were asked for exactly once');
+      assert(calls[0].ids.indexOf('com.lumen.game.set.nightfall') >= 0, 'with the real ids');
+    } finally {
+      window.Capacitor = realCap;
+      window.LUMEN_NATIVE = realNative;
+      L.IAP._resetProvider(realProvider);
+    }
+  });
+
   test('Power-ups: the shield absorbs exactly one lethal hit', () => {
     freshStorage();
     const g = newGame(); g.start();

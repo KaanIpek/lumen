@@ -241,7 +241,12 @@
           if (local) priced[local] = p.price;
         });
         loaded = true;
-        IAP.diag = 'ok, ' + Object.keys(priced).length + ' of ' + Object.keys(SK_ID).length + ' products';
+        const got = Object.keys(priced).length;
+        const want = Object.keys(SK_ID).length;
+        // Plain "ok" only when every product came back. A partial answer means
+        // some tile is showing a dash instead of a price, and that has to be
+        // visible somewhere rather than reading as success.
+        IAP.diag = got === want ? 'ok' : 'ok, ' + got + ' of ' + want + ' products';
       })
       .catch((e) => {
         loaded = true;
@@ -302,6 +307,8 @@
   // the shop quietly absent with nothing on screen to say why. Deferring until
   // something actually asks removes the race entirely.
   let tried = false;
+  // Tests only: drop the one-attempt latch so a different bridge can be tried.
+  IAP._resetProvider = function (p) { tried = false; this.provider = p || null; };
   IAP.ensureProvider = function () {
     if (tried || this.provider) return;
     tried = true;
@@ -316,16 +323,25 @@
     // shop is a shard shop — a smaller failure than a price nothing can charge.
     try {
       const C = window.Capacitor;
-      if (!C) { this.diag = 'no Capacitor global'; }
-      else if (!C.registerPlugin) { this.diag = 'no registerPlugin'; }
-      else {
-        const plugin = C.registerPlugin('LumenStore');
-        if (!plugin) this.diag = 'registerPlugin returned nothing';
-        else if (!plugin.products) this.diag = 'plugin has no products()';
-        else { this.register(this.storeKitProvider(plugin)); this.diag = 'ok'; }
-      }
+      if (!C) { this.diag = 'no Capacitor global'; tried = false; return; }
+      // `Capacitor.Plugins.X` FIRST, exactly like js/ads.js and js/native.js.
+      //
+      // This is why the whole cash store was invisible on device while rewarded
+      // ads worked: `registerPlugin` belongs to the @capacitor/core JS runtime,
+      // which a bundler puts in your bundle. LUMEN has no build step, so the
+      // only Capacitor on `window` is the bridge the native shell injects — and
+      // that one exposes `Plugins`, not `registerPlugin`. Asking for the missing
+      // function returned nothing, no provider registered, `available` went
+      // false, and every price in the game hid itself without a word.
+      const plugin = (C.Plugins && C.Plugins.LumenStore) ||
+        (typeof C.registerPlugin === 'function' ? C.registerPlugin('LumenStore') : null);
+      if (!plugin) { this.diag = 'no LumenStore plugin'; tried = false; return; }
+      if (!plugin.products) { this.diag = 'plugin has no products()'; tried = false; return; }
+      this.register(this.storeKitProvider(plugin));
+      this.diag = 'ok';
     } catch (e) {
       this.diag = 'threw: ' + String((e && e.message) || e).slice(0, 80);
+      tried = false;
     }
   };
 
