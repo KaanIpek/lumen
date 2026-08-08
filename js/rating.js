@@ -35,7 +35,15 @@
     get plugin() {
       try {
         const C = window.Capacitor;
-        return C && C.registerPlugin ? C.registerPlugin('LumenStore') : null;
+        if (!C) return null;
+        // `Plugins` first — see the long note in js/iap.js. The bridge the
+        // native shell injects has no `registerPlugin`; that one belongs to the
+        // @capacitor/core bundle, and this game has no bundler. Asking for it
+        // was how the entire cash store went missing for three builds, and this
+        // file would have taken the rating prompt down with it: never a plugin,
+        // never `available`, and the sheet simply never appearing.
+        return (C.Plugins && C.Plugins.LumenStore) ||
+          (typeof C.registerPlugin === 'function' ? C.registerPlugin('LumenStore') : null);
       } catch (e) { return null; }
     },
     get available() {
