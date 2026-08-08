@@ -33,7 +33,14 @@
     provider: null,
 
     register(p) { this.provider = p || null; },
-    get available() { return !!(this.provider && this.provider.isReady && this.provider.isReady()); },
+    // Asking whether the store is open is what opens it. Every cash surface in
+    // the UI reads this getter before drawing, so registration cannot be missed
+    // by anything that matters — and it still costs one attempt, never a retry
+    // loop, because `tried` latches.
+    get available() {
+      if (this.ensureProvider) this.ensureProvider();
+      return !!(this.provider && this.provider.isReady && this.provider.isReady());
+    },
     // True while the store is running on the built-in placeholder rather than a
     // real processor. The UI must say so on every price — a player should never
     // be unsure whether they were actually charged.
@@ -283,37 +290,47 @@
   // provider, `available` is false, the cash tiles hide themselves and the shop
   // falls back to shard prices, which is the honest state until a real StoreKit
   // provider is registered.
-  const isNative = !!(window.LUMEN_NATIVE ||
+  const isNative = () => !!(window.LUMEN_NATIVE ||
     (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()));
 
-  if (!isNative) {
-    IAP.register(IAP.sandboxProvider());
-  } else {
-    // StoreKit, or nothing at all. If the plugin is missing — an older shell, a
-    // platform we have not written one for — `available` stays false, the cash
-    // tiles hide, and the shop is a shard shop. That is a smaller failure than
-    // showing a price nothing can charge.
-    // Why this records what happened: when the cash tiles fail to appear there
-    // is nothing on screen to distinguish "the plugin is missing from the build"
-    // from "StoreKit returned no products" from "an exception was swallowed
-    // here". All three look identical — an empty shop — and guessing between
-    // them from a phone you cannot attach a console to costs a build each time.
-    // Settings shows this line when it is not 'ok'.
+  // Registered LAZILY, on first use — not while this file is being parsed.
+  //
+  // js/ads.js reaches its plugin through a getter and works on device; this did
+  // it eagerly at module load and did not. The bridge Capacitor injects is not
+  // reliably on `window` at the moment our synchronous script tags run, and a
+  // miss here is silent: no provider, `available` false, and every cash tile in
+  // the shop quietly absent with nothing on screen to say why. Deferring until
+  // something actually asks removes the race entirely.
+  let tried = false;
+  IAP.ensureProvider = function () {
+    if (tried || this.provider) return;
+    tried = true;
+    if (!isNative()) {
+      // Web and desktop keep the sandbox checkout: prices show, the flow works,
+      // and nothing is ever charged.
+      this.register(this.sandboxProvider());
+      this.diag = 'sandbox (not native)';
+      return;
+    }
+    // StoreKit, or nothing at all. With no provider the cash tiles hide and the
+    // shop is a shard shop — a smaller failure than a price nothing can charge.
     try {
       const C = window.Capacitor;
-      if (!C) { IAP.diag = 'no Capacitor global'; }
-      else if (!C.registerPlugin) { IAP.diag = 'no registerPlugin'; }
+      if (!C) { this.diag = 'no Capacitor global'; }
+      else if (!C.registerPlugin) { this.diag = 'no registerPlugin'; }
       else {
         const plugin = C.registerPlugin('LumenStore');
-        if (!plugin) IAP.diag = 'registerPlugin returned nothing';
-        else if (!plugin.products) IAP.diag = 'plugin has no products()';
-        else {
-          IAP.register(IAP.storeKitProvider(plugin));
-          IAP.diag = 'ok';
-        }
+        if (!plugin) this.diag = 'registerPlugin returned nothing';
+        else if (!plugin.products) this.diag = 'plugin has no products()';
+        else { this.register(this.storeKitProvider(plugin)); this.diag = 'ok'; }
       }
     } catch (e) {
-      IAP.diag = 'threw: ' + String((e && e.message) || e).slice(0, 80);
+      this.diag = 'threw: ' + String((e && e.message) || e).slice(0, 80);
     }
-  }
+  };
+
+  // One deferred attempt so the shop is ready before anyone opens it, and a
+  // guarded one at load for the web, where there is no bridge to wait for.
+  if (!isNative()) IAP.ensureProvider();
+  else if (typeof setTimeout === 'function') setTimeout(() => IAP.ensureProvider(), 0);
 })();

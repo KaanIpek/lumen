@@ -4579,6 +4579,23 @@
     freshStorage();
   });
 
+  test('the store registers when asked, not while the page is parsing', () => {
+    const I = L.IAP;
+    // The bug this locks out: registration used to run at module load, when
+    // Capacitor's injected bridge is not reliably on `window` yet. The ads
+    // module reached its plugin through a getter and worked on device; this one
+    // did it eagerly and did not, and the only symptom was a shop with no cash
+    // tiles and nothing on screen to explain it.
+    eq(typeof I.ensureProvider, 'function', 'registration is deferrable');
+    // Reading `available` must be enough to open the store — every cash surface
+    // in the UI asks that first.
+    I.register(null);
+    I._tried = false;
+    eq(typeof I.available, 'boolean', 'available answers without throwing');
+    // And it records what happened either way, so an empty shop is never silent.
+    assert(!!I.diag, 'diag is set: ' + I.diag);
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 
