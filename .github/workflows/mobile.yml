@@ -666,6 +666,7 @@ jobs:
       # This never fails the build. It prints the answer, so the next question is
       # settled by reading rather than by another guess.
       - name: What the signed app actually claims
+        id: claims
         if: steps.keys.outputs.signed == 'true'
         run: |
           APP=$(find "$RUNNER_TEMP/export" -maxdepth 3 -name '*.app' -type d | head -1)
@@ -680,6 +681,40 @@ jobs:
           codesign -d --entitlements :- "$APP" 2>/dev/null || echo '(could not read entitlements)'
           echo '--- profile capabilities ---'
           security cms -D -i "$APP/embedded.mobileprovision" 2>/dev/null             | plutil -extract Entitlements xml1 -o - - 2>/dev/null             | grep -A3 applesignin || echo 'NO applesignin IN THE PROFILE'
+
+          # The build number this .ipa actually carries, handed to the assign
+          # step so it can name the build instead of guessing which one is newest.
+          BV=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
+          echo "bundle version: $BV"
+          echo "bundle_version=$BV" >> "$GITHUB_OUTPUT"
+
+          # Are the native plugins REALLY in this binary?
+          #
+          # Builds 34, 35 and 36 all shipped with the entire real-money store
+          # missing on device, and nothing anywhere said so — the JS asked the
+          # bridge for a plugin, got nothing, and hid every price exactly as it
+          # is designed to when there is no payment processor. A silent store is
+          # indistinguishable from a working one until a player looks.
+          #
+          # The pods link statically, so both plugin classes must appear in the
+          # main executable. If one does not, that is a broken build and it must
+          # not reach a tester.
+          EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Info.plist")
+          echo '--- native plugins in the binary ---'
+          MISSING=
+          for CLASS in LumenAds LumenStore; do
+            if nm -gU "$APP/$EXEC" 2>/dev/null | grep -q "$CLASS" \
+               || strings "$APP/$EXEC" | grep -q "$CLASS"; then
+              echo "  $CLASS: present"
+            else
+              echo "  $CLASS: MISSING"
+              MISSING="$MISSING $CLASS"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::native plugin(s) not linked into the app:$MISSING"
+            exit 1
+          fi
 
       # Uploading is deliberately a SEPARATE, manual choice. A push that
       # silently ships a build to TestFlight is how the wrong thing reaches
@@ -705,4 +740,9 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_PATH: /Users/runner/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+          # Name the build instead of guessing. Without this the script sorted a
+          # page of 20 builds Apple returns in no promised order, and on runs 62
+          # and 63 it settled on build 32 — an old one — then failed the whole
+          # job trying to assign it, after a perfectly good upload.
+          ASC_BUILD_VERSION: ${{ steps.claims.outputs.bundle_version }}
         run: node tools/asc-assign-build.js

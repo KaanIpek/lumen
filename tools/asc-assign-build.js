@@ -113,12 +113,31 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // by definition not in the group yet. And if nothing new ever shows up, say so
   // with a non-zero exit — a silent success is worse than a red step, because
   // only one of the two gets looked at.
+  //
+  // Better still: do not infer at all. The workflow reads CFBundleVersion out of
+  // the .ipa it just uploaded and passes it here, so the build can be NAMED.
+  // Guessing failed on runs 62 and 63 — Apple returned a page of twenty builds
+  // in no promised order, the newest one was not on it, and the script settled
+  // on build 32, then failed the job trying to assign a build that old. The
+  // upload had been fine both times; only this step was wrong.
+  const WANT = process.env.ASC_BUILD_VERSION || '';
+  if (WANT) console.log('looking for build ' + WANT);
+
   let build = null;
   for (let i = 0; i < 40; i++) {                       // ~20 minutes
-    const r = await api('GET', '/v1/apps/' + APP_ID + '/builds?limit=20');
-    build = [...(r.data || [])]
-      .filter((b) => !assigned.has(b.id))
-      .sort((a, b) => new Date(b.attributes.uploadedDate) - new Date(a.attributes.uploadedDate))[0] || null;
+    const r = WANT
+      ? await api('GET', '/v1/builds?filter[app]=' + APP_ID +
+                  '&filter[version]=' + encodeURIComponent(WANT) + '&limit=1')
+      : await api('GET', '/v1/apps/' + APP_ID + '/builds?limit=20');
+    build = WANT
+      ? (r.data || [])[0] || null
+      : [...(r.data || [])]
+        .filter((b) => !assigned.has(b.id))
+        .sort((a, b) => new Date(b.attributes.uploadedDate) - new Date(a.attributes.uploadedDate))[0] || null;
+    if (build && assigned.has(build.id)) {
+      console.log('build ' + build.attributes.version + ' is already in "' + group.attributes.name + '"');
+      return;
+    }
     if (!build) {
       console.log('the upload has not appeared in App Store Connect yet');
     } else {
