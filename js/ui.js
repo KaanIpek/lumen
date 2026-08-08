@@ -240,6 +240,18 @@
         : 'dev';
       el.textContent = 'build ' + pretty;
       el.title = v || 'unstamped';
+
+      // The store's own diagnosis, but only when there is something wrong. An
+      // empty shop looks the same whether the plugin is missing from the build,
+      // StoreKit returned no products, or an exception was swallowed at
+      // registration — and a phone has no console to tell them apart. When it
+      // is fine this says nothing at all.
+      const d = LUMEN.IAP && LUMEN.IAP.diag;
+      if (d && d !== 'ok' && !/^ok,/.test(d)) {
+        el.textContent += '  ·  store: ' + d;
+      } else if (d && LUMEN.Native && LUMEN.Native.isApp) {
+        el.title += '  |  ' + d;
+      }
     },
 
     // The browser will not let audio start before a gesture, so the first button

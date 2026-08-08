@@ -234,8 +234,12 @@
           if (local) priced[local] = p.price;
         });
         loaded = true;
+        IAP.diag = 'ok, ' + Object.keys(priced).length + ' of ' + Object.keys(SK_ID).length + ' products';
       })
-      .catch(() => { loaded = true; });
+      .catch((e) => {
+        loaded = true;
+        IAP.diag = 'products failed: ' + String((e && e.message) || e).slice(0, 80);
+      });
     load();
 
     return {
@@ -289,10 +293,27 @@
     // platform we have not written one for — `available` stays false, the cash
     // tiles hide, and the shop is a shard shop. That is a smaller failure than
     // showing a price nothing can charge.
+    // Why this records what happened: when the cash tiles fail to appear there
+    // is nothing on screen to distinguish "the plugin is missing from the build"
+    // from "StoreKit returned no products" from "an exception was swallowed
+    // here". All three look identical — an empty shop — and guessing between
+    // them from a phone you cannot attach a console to costs a build each time.
+    // Settings shows this line when it is not 'ok'.
     try {
       const C = window.Capacitor;
-      const plugin = C && C.registerPlugin ? C.registerPlugin('LumenStore') : null;
-      if (plugin && plugin.products) IAP.register(IAP.storeKitProvider(plugin));
-    } catch (e) { /* no store on this platform; shards only */ }
+      if (!C) { IAP.diag = 'no Capacitor global'; }
+      else if (!C.registerPlugin) { IAP.diag = 'no registerPlugin'; }
+      else {
+        const plugin = C.registerPlugin('LumenStore');
+        if (!plugin) IAP.diag = 'registerPlugin returned nothing';
+        else if (!plugin.products) IAP.diag = 'plugin has no products()';
+        else {
+          IAP.register(IAP.storeKitProvider(plugin));
+          IAP.diag = 'ok';
+        }
+      }
+    } catch (e) {
+      IAP.diag = 'threw: ' + String((e && e.message) || e).slice(0, 80);
+    }
   }
 })();
