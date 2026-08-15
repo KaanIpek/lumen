@@ -52,7 +52,23 @@
       return true;
     },
 
-    get enabled() { return !!this.url && !!this.key; },
+    // CAN sign-in actually work here, not merely is it configured.
+    //
+    // Sign in with Apple works on iOS through the native sheet, and on the web
+    // through Apple's own JS flow. On ANDROID it does neither: the community
+    // plugin ships an android/ directory whose entire implementation is an
+    // `echo` method, so `Capacitor.Plugins.SignInWithApple` EXISTS -- the button
+    // draws, the player taps it -- and then `authorize` is simply not on the
+    // object. A button that cannot work is worse than an absent feature, and on
+    // a store review it is the first thing found. So the whole account surface
+    // switches off on Android; local scores and every other screen are
+    // untouched, and the only thing lost is the online board.
+    get canSignIn() {
+      const C = window.Capacitor;
+      if (!(C && C.isNativePlatform && C.isNativePlatform())) return true;
+      return (C.getPlatform ? C.getPlatform() : '') === 'ios';
+    },
+    get enabled() { return !!this.url && !!this.key && this.canSignIn; },
     get user() { return (this.session && this.session.user) || null; },
     get userId() { return (this.user && this.user.id) || ''; },
     get token() { return (this.session && this.session.access_token) || ''; },
@@ -203,6 +219,7 @@
     get nativePlugin() {
       const C = window.Capacitor;
       if (!C || !(C.isNativePlatform && C.isNativePlatform())) return null;
+      if (!this.canSignIn) return null;   // Android's plugin is an `echo` stub
       if (C.Plugins && C.Plugins.SignInWithApple) return C.Plugins.SignInWithApple;
       if (typeof C.registerPlugin === 'function') {
         try { return C.registerPlugin('SignInWithApple'); } catch (e) { return null; }

@@ -88,6 +88,55 @@ jobs:
           npx cap add android || echo "android project already present"
           npx cap sync android
 
+      # WHAT PLAY WILL ACCEPT, not what Capacitor generates.
+      #
+      # `cap add android` writes targetSdk 34 with AGP 8.2.1. Play refuses a NEW
+      # app that targets below 35 today and below 36 from 31 Aug 2026, and it
+      # refuses it at UPLOAD -- the build succeeds, the console rejects the file,
+      # which is the slowest way to find out. compileSdk 36 in turn needs
+      # AGP >= 8.9, which needs Gradle >= 8.11.1, so all three move together.
+      #
+      # And the version: the generated app/build.gradle hardcodes versionCode 1.
+      # Play rejects any upload whose versionCode it has already seen, so a
+      # second build with the same 1 is dead on arrival. The run number is
+      # monotonic and never repeats, which is the whole requirement.
+      - name: Make the Android project Play-uploadable
+        working-directory: mobile/android
+        env:
+          VERSION_NAME: '1.0.0'
+        run: |
+          python3 - <<'PYEOF'
+          import io, os, re
+
+          def patch(path, subs):
+              s = io.open(path, encoding='utf-8').read()
+              for pattern, repl in subs:
+                  s2 = re.sub(pattern, repl, s)
+                  if s2 == s:
+                      raise SystemExit('no match for %r in %s' % (pattern, path))
+                  s = s2
+              io.open(path, 'w', encoding='utf-8').write(s)
+              print('patched', path)
+
+          patch('variables.gradle', [
+              (r'compileSdkVersion = \d+', 'compileSdkVersion = 36'),
+              (r'targetSdkVersion = \d+',  'targetSdkVersion = 36'),
+          ])
+          patch('build.gradle', [
+              (r"com\.android\.tools\.build:gradle:[\d.]+", 'com.android.tools.build:gradle:8.9.1'),
+          ])
+          patch('gradle/wrapper/gradle-wrapper.properties', [
+              (r'gradle-[\d.]+-all\.zip', 'gradle-8.11.1-all.zip'),
+          ])
+          patch('app/build.gradle', [
+              (r'versionCode \d+',    'versionCode ' + os.environ['GITHUB_RUN_NUMBER']),
+              (r'versionName "[^"]*"', 'versionName "%s"' % os.environ['VERSION_NAME']),
+          ])
+          PYEOF
+          echo '--- what the build will claim ---'
+          grep -E 'compileSdkVersion|targetSdkVersion' variables.gradle
+          grep -E 'versionCode|versionName' app/build.gradle
+
       - name: Restore the upload key
         if: steps.keys.outputs.signed == 'true'
         run: echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > mobile/android/upload.jks

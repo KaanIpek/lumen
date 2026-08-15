@@ -1363,7 +1363,12 @@
       const A = LUMEN.Auth;
       const authed = !!(A && A.signedIn);
       const gate = $('lb-gate');
-      if (gate) gate.classList.toggle('hidden', !(onlineTab && !authed));
+      // ...and only where signing in is possible at all. On Android the Apple
+      // plugin is a stub (see js/auth.js canSignIn), so offering the button
+      // there would teach the same "this screen is broken" lesson the comment
+      // above is about — just one platform further along.
+      const canAuth = !!(A && A.enabled);
+      if (gate) gate.classList.toggle('hidden', !(onlineTab && !authed && canAuth));
       if (tab === 'me') {
         note.classList.add('hidden');
         return this.renderScores();
