@@ -267,7 +267,13 @@
       purchase(sku) {
         const appleId = SK_ID[sku];
         if (!appleId) return Promise.resolve({ ok: false, reason: 'unknown_product' });
-        return plugin.purchase({ id: appleId })
+        // `consumable` matters ONLY on Play, and it matters a lot: a purchase
+        // that is not finished within three days is refunded, a consumable is
+        // finished by consuming it and everything else by acknowledging it, and
+        // the two are not interchangeable — consume a set and the player can be
+        // charged twice, acknowledge a shard pack and they can never buy shards
+        // again. StoreKit ignores the extra key.
+        return plugin.purchase({ id: appleId, consumable: !!IAP.pack(sku) })
           .then((r) => (r && r.ok
             ? { ok: true, receipt: r.transactionId }
             : { ok: false, reason: (r && r.reason) || 'failed' }))

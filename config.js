@@ -87,8 +87,15 @@
         app:      'ca-app-pub-8253427588583765~9285134085',
         rewarded: 'ca-app-pub-8253427588583765/4948489169',
       },
-      // No Android units yet: mobile/lumen-ads ships an ios/ directory and
-      // nothing else, so Ads.available is false there regardless.
+      // Android. mobile/lumen-ads now ships an android/ implementation, so the
+      // only thing standing between this and live ads is a real app id here.
+      // Leave the ids EMPTY and js/ads.js falls back to Google's test units and
+      // hides every ad surface (isTestAds), which is the honest state until the
+      // AdMob console has an Android app for com.lumen.game.
+      android: {
+        app:      '',   // ca-app-pub-8253427588583765~XXXXXXXXXX
+        rewarded: '',   // ca-app-pub-8253427588583765/XXXXXXXXXX
+      },
     },
 
     poll: {

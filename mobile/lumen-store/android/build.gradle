@@ -1,0 +1,39 @@
+// The Android half of LUMEN's in-app purchases.
+//
+// Written by hand for the same reason the iOS half was: @capacitor-community/admob
+// pulls a consent SDK this project does not use and breaks on somebody else's
+// release schedule. One ad type, from one place, is a small enough surface to own.
+ext {
+    junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
+}
+
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.9.1' }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.rldgames.lumen.store"
+    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 22
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+repositories { google(); mavenCentral() }
+
+dependencies {
+    implementation project(':capacitor-android')
+    // Billing 7.x is the current line and the one this file is written against.
+    
+    
+    implementation 'com.android.billingclient:billing:7.1.1'
+    implementation 'com.google.android.play:review:2.0.2'
+}

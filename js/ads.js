@@ -115,7 +115,9 @@
     // returns on its own; nothing else has to change. That is the whole point
     // of the seam described at the top of this file.
     get available() {
-      return !!this.native && this.platform === 'ios' && !this.isTestAds;
+      // Both platforms now: mobile/lumen-ads ships an android/ directory with
+      // the same four-method contract, so there is nothing left to gate on.
+      return !!this.native && !this.isTestAds;
     },
 
     // Whether the player let Google read the advertising identifier. Null until

@@ -39,6 +39,12 @@ name: mobile
 
 on:
   workflow_dispatch:        # run it from the Actions tab when you want a build
+    inputs:
+      platform:
+        description: 'Which half to build'
+        type: choice
+        default: both
+        options: [both, android, ios]
   push:
     tags: ['v*']            # …and automatically for a release tag
 
@@ -55,6 +61,11 @@ concurrency:
 
 jobs:
   android:
+    # Skipped when someone asked for iOS only. Dispatching this workflow used to
+    # mean BOTH jobs whatever you wanted, and since the iOS job uploads to
+    # TestFlight on any workflow_dispatch, asking for an Android build quietly
+    # shipped a new build to Apple as well.
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'ios'
     runs-on: ubuntu-latest   # no Mac needed for Android at all
     steps:
       - uses: actions/checkout@v4
@@ -174,6 +185,7 @@ jobs:
           if-no-files-found: warn
 
   ios:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'android'
     # macos-latest, not a pinned image. Apple raises the minimum SDK every year
     # and rejects the upload — not the build — when you fall behind, so pinning
     # buys reproducibility today and a dead pipeline in twelve months.

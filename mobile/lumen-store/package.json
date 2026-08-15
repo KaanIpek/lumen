@@ -4,8 +4,19 @@
   "description": "LUMEN in-app purchases over StoreKit 2",
   "main": "index.js",
   "license": "MIT",
-  "files": ["ios/", "LumenStore.podspec", "index.js", "package.json"],
+  "files": [
+    "ios/",
+    "android/",
+    "LumenStore.podspec",
+    "index.js",
+    "package.json"
+  ],
   "capacitor": {
-    "ios": { "src": "ios" }
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
   }
 }

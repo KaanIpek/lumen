@@ -1,11 +1,22 @@
 {
   "name": "lumen-ads",
   "version": "1.0.0",
-  "description": "LUMEN rewarded ads — one ad type, owned outright",
+  "description": "LUMEN rewarded ads \u2014 one ad type, owned outright",
   "main": "index.js",
   "license": "MIT",
-  "files": ["ios/", "LumenAds.podspec", "index.js", "package.json"],
+  "files": [
+    "ios/",
+    "android/",
+    "LumenAds.podspec",
+    "index.js",
+    "package.json"
+  ],
   "capacitor": {
-    "ios": { "src": "ios" }
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
   }
 }
