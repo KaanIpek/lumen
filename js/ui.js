@@ -1341,6 +1341,21 @@
     // and the two server boards. The online tabs stay visible but say plainly
     // when no server is configured, rather than pretending the feature is absent.
     setBoard(tab) {
+      // WHERE YOU CANNOT SIGN IN, THERE IS NO SHARED BOARD.
+      //
+      // On Android the Apple plugin is a stub, so Auth is off (js/auth.js
+      // canSignIn) and no score of yours can ever reach the table. Leaving the
+      // online tabs up would show a wall of other players' chosen display names
+      // that you can look at and never join — a dead end as a feature, and on
+      // Google Play a listing that has to declare it shows user-generated
+      // content and lets users interact. Neither is worth a board you cannot
+      // enter. The local top ten is untouched and is the whole screen there.
+      const canOnline = !!(LUMEN.Auth && LUMEN.Auth.enabled);
+      if (!canOnline) tab = 'me';
+      ['daily', 'all'].forEach((t) => {
+        const el = $('tab-lb-' + t);
+        if (el) el.classList.toggle('hidden', !canOnline);
+      });
       this.boardTab = tab;
       ['me', 'daily', 'all'].forEach((t) => {
         const el = $('tab-lb-' + t);

@@ -137,6 +137,11 @@ jobs:
           grep -E 'compileSdkVersion|targetSdkVersion' variables.gradle
           grep -E 'versionCode|versionName' app/build.gradle
 
+      # Written INTO mobile/android, which is where the Gradle flag below looks.
+      # These two were a directory apart ($PWD/../upload.jks resolves to
+      # mobile/upload.jks) and nothing caught it, because the signing path had
+      # never run before: with no secrets set, both steps were skipped every
+      # time and the job quietly built an unsigned debug APK instead.
       - name: Restore the upload key
         if: steps.keys.outputs.signed == 'true'
         run: echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > mobile/android/upload.jks
@@ -150,7 +155,7 @@ jobs:
           KEY_PASS:  ${{ secrets.ANDROID_KEY_PASS }}
         run: |
           ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=$PWD/../upload.jks \
+            -Pandroid.injected.signing.store.file=$PWD/upload.jks \
             -Pandroid.injected.signing.store.password="$KS_PASS" \
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$KEY_PASS"
