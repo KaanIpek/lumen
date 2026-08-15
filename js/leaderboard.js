@@ -227,6 +227,18 @@
 
     // Fire-and-forget: a failed submit must never interrupt the game.
     submitQuietly(score, combo, board) {
+      // A submit that CANNOT land must not be sent at all.
+      //
+      // The table is one row per authenticated player and row-level security
+      // keys every write to auth.uid(), so a signed-out POST is refused by the
+      // server. It was still being SENT, carrying the name the player typed —
+      // on Android, where sign-in is switched off entirely (js/auth.js
+      // canSignIn), that meant a name leaving the device on every run to be
+      // thrown away at the far end. "The server rejects it" is not a data
+      // declaration anyone should have to defend, and the request was useless
+      // on every platform anyway.
+      const A = LUMEN.Auth;
+      if (!A || !A.enabled || !A.signedIn) return;
       if (!this.enabled || !(score > 0)) return;
       this.submit(score, combo, board).catch(() => {});
     },
