@@ -153,6 +153,28 @@ jobs:
       # mobile/upload.jks) and nothing caught it, because the signing path had
       # never run before: with no secrets set, both steps were skipped every
       # time and the job quietly built an unsigned debug APK instead.
+      # The Google Mobile Ads Android SDK RAISES on start when this meta-data is
+      # absent — it does not warn, it kills the app on launch, exactly like the
+      # iOS half. It must match CONFIG.admob.android.app in config.js: the SDK
+      # reads the manifest, the ad request reads the config, and a mismatch fails
+      # at the second step with an error that points at the first.
+      - name: Declare the AdMob app id in the manifest
+        working-directory: mobile/android/app/src/main
+        run: |
+          python3 - <<'PYEOF'
+          import io, re
+          p = 'AndroidManifest.xml'
+          s = io.open(p, encoding='utf-8').read()
+          tag = '<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-8253427588583765~7519300859" />'
+          if 'gms.ads.APPLICATION_ID' in s:
+              print('already declared')
+          else:
+              s = s.replace('</application>', tag + '</application>', 1)
+              io.open(p, 'w', encoding='utf-8').write(s)
+              print('APPLICATION_ID added')
+          PYEOF
+          grep -n "APPLICATION_ID" AndroidManifest.xml
+
       - name: Restore the upload key
         if: steps.keys.outputs.signed == 'true'
         run: echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > mobile/android/upload.jks

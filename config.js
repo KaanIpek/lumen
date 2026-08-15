@@ -93,8 +93,8 @@
       // hides every ad surface (isTestAds), which is the honest state until the
       // AdMob console has an Android app for com.lumen.game.
       android: {
-        app:      '',   // ca-app-pub-8253427588583765~XXXXXXXXXX
-        rewarded: '',   // ca-app-pub-8253427588583765/XXXXXXXXXX
+        app:      'ca-app-pub-8253427588583765~7519300859',
+        rewarded: 'ca-app-pub-8253427588583765/3140383782',
       },
     },
 
