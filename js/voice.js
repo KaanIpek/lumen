@@ -54,7 +54,34 @@
 
   const Voice = {
     PHRASES,   // exposed so the suite can prove every ITEM_TYPE has a word
-    supported: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+
+    // ---- which recogniser is behind this ----------------------------------
+    // Two of them, answering the same questions.
+    //
+    // The Web Speech API is the browser one. Android's WebView DOES NOT HAVE IT
+    // — not disabled, not permission-gated, simply absent — so on the phone
+    // `supported` was false, sync() returned on its first line, the microphone
+    // was never requested, and switching the setting on did nothing at all with
+    // nothing to say why. lumen-voice is the native recogniser that fills that
+    // hole, and it is preferred wherever it exists because it is the only one
+    // that works there.
+    get webSupported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
+    get native() {
+      const C = window.Capacitor;
+      // `Capacitor.Plugins.X`, never registerPlugin — this project has no
+      // bundler, so the only Capacitor on `window` is the bridge the shell
+      // injects, and that one has no registerPlugin. (See js/iap.js, where
+      // getting this wrong hid the entire cash store for four builds.)
+      return (C && C.Plugins && C.Plugins.LumenVoice) || null;
+    },
+    // Set by probe() once the native side has answered. Undefined means "not
+    // asked yet", which is deliberately different from false.
+    _nativeOk: undefined,
+    _micGranted: false,
+    get supported() {
+      if (this.native) return this._nativeOk !== false;
+      return this.webSupported;
+    },
     listening: false,
     _rec: null,
     _wantOn: false,
@@ -90,6 +117,96 @@
       return null;
     },
 
+    // One transcript, whichever recogniser produced it.
+    //
+    // Both backends hand back the same thing — a string somebody said — so the
+    // matching, the debounce, the "your hand is empty" reply and the analytics
+    // all live here once. Splitting them was how the native path would have
+    // ended up with subtly different rules from the web one.
+    _heard(text) {
+      // Listening continues across pauses and menus so the permission prompt
+      // only ever appears once — which is exactly why a command has to be
+      // ignored unless a run is actually live.
+      const g = LUMEN.game;
+      if (!g || g.state !== 'play') return;
+      const type = this.match(text);
+      if (!type) return;
+      // debounce: one command per word burst. Partial results repeat the same
+      // words several times a second, so without this a single "shield" spends
+      // every shield the player owns.
+      const now = Date.now();
+      if (this._lastType === type && now - (this._lastAt || 0) < 900) return;
+      this._lastType = type; this._lastAt = now;
+      const name = LUMEN.t ? LUMEN.t('pw_' + type) : type;
+      if (g.useItem(type)) {
+        LUMEN.UI && LUMEN.UI.toast && LUMEN.UI.toast('🎤 ' + name);
+        LUMEN.Analytics && LUMEN.Analytics.track('voice_use', { type });
+      } else {
+        // Heard you, but your hand is empty. Saying so beats doing nothing —
+        // silence is indistinguishable from "voice control is broken".
+        LUMEN.UI && LUMEN.UI.toast && LUMEN.UI.toast('🎤 ' + (LUMEN.t ? LUMEN.t('voiceNoItem', { item: name }) : 'none held'));
+      }
+    },
+
+    // ---- the native recogniser --------------------------------------------
+
+    // Ask the phone once, at startup, whether it can recognise speech at all and
+    // whether we already hold the microphone. A device with no recognition
+    // service is a different thing from a player who has not been asked, and the
+    // settings screen shows a different row for each.
+    probe() {
+      const p = this.native;
+      if (!p || this._probed) return Promise.resolve();
+      this._probed = true;
+      this._wire();
+      return p.available()
+        .then((r) => {
+          this._nativeOk = !!(r && r.available);
+          this._micGranted = !!(r && r.granted);
+        })
+        .catch(() => { this._nativeOk = false; });
+    },
+
+    _wire() {
+      const p = this.native;
+      if (!p || this._wired || !p.addListener) return;
+      this._wired = true;
+      p.addListener('transcript', (ev) => { if (ev && ev.text) this._heard(ev.text); });
+      p.addListener('denied', () => {
+        this._denied = true;
+        this._wantOn = false;
+        this.listening = false;
+        if (LUMEN.Store) LUMEN.Store.voiceControl = false;
+        LUMEN.UI && LUMEN.UI.toast && LUMEN.UI.toast(LUMEN.t ? LUMEN.t('micDenied') : 'Microphone blocked');
+        LUMEN.UI && LUMEN.UI.renderSettings && LUMEN.UI.renderSettings();
+      });
+    },
+
+    // Raise the OS permission dialog. The game shows its own explanation first
+    // and only gets here once the player has said yes to that, because a system
+    // prompt with no stated reason is the one people refuse — and on Android a
+    // refusal twice is permanent.
+    requestMic() {
+      const p = this.native;
+      if (!p) return Promise.resolve(true);          // the web path prompts on its own
+      return p.requestMic()
+        .then((r) => { this._micGranted = !!(r && r.granted); return this._micGranted; })
+        .catch(() => false);
+    },
+
+    _startNative() {
+      const p = this.native;
+      if (!p || this.listening || this._denied || !this._micGranted) return false;
+      this.listening = true;
+      p.start({ lang: this.langTag() }).catch(() => { this.listening = false; });
+      return true;
+    },
+    _stopNative() {
+      const p = this.native;
+      this.listening = false;
+      if (p) p.stop().catch(() => {});
+    },
+
     // One recognition object for the whole page, built once and reused. Building
     // a new one is what triggers a fresh permission prompt, so a player who
     // paused and resumed used to be asked again on every single resume.
@@ -102,28 +219,9 @@
       rec.interimResults = true;
       rec.lang = this.langTag();
       rec.onresult = (e) => {
-        // We keep listening across pauses and menus so the prompt only ever
-        // appears once — so commands have to be ignored unless a run is live.
-        const g = LUMEN.game;
-        if (!g || g.state !== 'play') return;
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const alt = e.results[i][0];
-          if (!alt) continue;
-          const type = this.match(alt.transcript);
-          if (!type) continue;
-          // debounce: one command per word burst
-          const now = Date.now();
-          if (this._lastType === type && now - (this._lastAt || 0) < 900) continue;
-          this._lastType = type; this._lastAt = now;
-          const name = LUMEN.t ? LUMEN.t('pw_' + type) : type;
-          if (g.useItem(type)) {
-            LUMEN.UI && LUMEN.UI.toast && LUMEN.UI.toast('🎤 ' + name);
-            LUMEN.Analytics && LUMEN.Analytics.track('voice_use', { type });
-          } else {
-            // Heard you, but your hand is empty. Saying so beats doing nothing —
-            // silence is indistinguishable from "voice control is broken".
-            LUMEN.UI && LUMEN.UI.toast && LUMEN.UI.toast('🎤 ' + (LUMEN.t ? LUMEN.t('voiceNoItem', { item: name }) : 'none held'));
-          }
+          if (alt) this._heard(alt.transcript);
         }
       };
       rec.onerror = (ev) => {
@@ -194,6 +292,7 @@
     // later restart happens under a capture session that is already live.
     start() {
       if (!this.supported || this.listening || this._denied) return false;
+      if (this.native) return this._startNative();
       if (this._starting) return false;                 // one request in flight at a time
       this._starting = true;
       const go = () => {
@@ -215,6 +314,7 @@
     // permission bubble, which is exactly what releasing the stream would do.
     idle() {
       this._wantOn = false;
+      if (this.native) { this._stopNative(); return; }
       if (this._rec) { try { this._rec.stop(); } catch (e) {} }
       this.listening = false;
     },
@@ -251,4 +351,19 @@
   window.addEventListener('pagehide', () => Voice.release());
 
   LUMEN.Voice = Voice;
+
+  // Ask the native side what it can do, once, after the bridge has had a tick to
+  // appear — the shell injects Capacitor onto `window` slightly after our
+  // synchronous script tags run, and reading it during parse is the race that
+  // hid the cash store for four builds. Then re-sync, because a player who had
+  // the setting on last time should be listening again without touching it.
+  if (typeof setTimeout === 'function') {
+    setTimeout(() => {
+      if (!Voice.native) return;
+      Voice.probe().then(() => {
+        Voice.sync();
+        LUMEN.UI && LUMEN.UI.renderSettings && LUMEN.UI.renderSettings();
+      });
+    }, 0);
+  }
 })();

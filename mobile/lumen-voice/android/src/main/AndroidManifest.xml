@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
+      Android 11+ hides other packages unless they are named here. The speech
+      recogniser lives in another app (usually the Google app), so without this
+      SpeechRecognizer.isRecognitionAvailable() answers false on a phone that can
+      perfectly well recognise speech, and the feature hides itself for no reason.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+</manifest>

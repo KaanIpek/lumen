@@ -174,12 +174,41 @@
     // Resolves with the shards paid, or 0 if nothing was earned. It NEVER
     // rejects for an ordinary outcome — closing an ad early is a choice, not an
     // error, and treating it as one teaches players the feature is broken.
+    // ONE ad at a time, for the whole app.
+    //
+    // Loading an ad takes a few seconds on a cold network, and during those
+    // seconds the button still looked idle — so a player who thought the tap had
+    // missed tapped again, a second load/show chain started behind the first,
+    // and they were made to sit through TWO ads back to back for one reward.
+    // Every caller now joins the flight that is already running instead of
+    // starting a rival one. `busy` is public so the UI can say so on the button.
+    _flight: null,
+    get busy() { return !!this._flight; },
+    _join(run) {
+      if (this._flight) return this._flight;
+      const done = () => { this._flight = null; this.preload(); };
+      const f = run().then((v) => { done(); return v; }, (e) => { done(); throw e; });
+      this._flight = f;
+      return f;
+    },
+
+    // Fetch the next ad BEFORE it is wanted, so the tap that asks for one is
+    // answered instantly instead of after a load. Cheap and idempotent: the
+    // native side keeps a single loaded ad and resolves at once when it has one.
+    preload() {
+      const p = this.native;
+      if (!p || !p.prepare || this._flight) return Promise.resolve(false);
+      return this.init()
+        .then(() => p.prepare({ adId: this.units.rewarded }))
+        .then(() => true, () => false);
+    },
+
     watch() {
       const p = this.native;
       if (!p) return Promise.resolve(0);
       const pay = this.nextReward;
       const opts = { adId: this.units.rewarded };
-      return this.init()
+      return this._join(() => this.init()
         .then(() => p.prepare(opts))
         .then(() => p.show())
         .then((r) => {
@@ -200,7 +229,7 @@
           // report the sentence back to me.
           this.lastError = String((e && e.message) || e || 'unknown');
           return 0;
-        });
+        }));
     },
   };
 
@@ -212,11 +241,14 @@
   Ads.watchToRevive = function () {
     const p = this.native;
     if (!p) return Promise.resolve(false);
-    return this.init()
+    // Shares the one-at-a-time latch with watch(): dying and reviving is exactly
+    // where a second impatient tap is most likely, and two ads for one continue
+    // is the worst place to spend a player's patience.
+    return this._join(() => this.init()
       .then(() => p.prepare({ adId: this.units.rewarded }))
       .then(() => p.show())
       .then((r) => !!(r && r.earned))
-      .catch(() => false);
+      .catch(() => false));
   };
 
   LUMEN.Ads = Ads;

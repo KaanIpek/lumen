@@ -21,7 +21,8 @@
     "@capacitor/splash-screen": "^6.0.0",
     "@capacitor/status-bar": "^6.0.0",
     "lumen-ads": "file:./lumen-ads",
-    "lumen-store": "file:./lumen-store"
+    "lumen-store": "file:./lumen-store",
+    "lumen-voice": "file:./lumen-voice"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0"

@@ -1,0 +1,17 @@
+{
+  "name": "lumen-voice",
+  "version": "1.0.0",
+  "description": "LUMEN voice control - Android speech recognition",
+  "main": "index.js",
+  "license": "MIT",
+  "files": [
+    "android/",
+    "index.js",
+    "package.json"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

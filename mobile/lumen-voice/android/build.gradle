@@ -1,0 +1,39 @@
+// The Android half of LUMEN's voice control.
+//
+// Android WebView does NOT implement the Web Speech API — window.SpeechRecognition
+// simply is not there — so js/voice.js found nothing to talk to, never asked for
+// the microphone, and the settings toggle turned on a feature that could not
+// exist. This module is the recogniser the WebView does not provide.
+ext {
+    junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
+}
+
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.9.1' }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.rldgames.lumen.voice"
+    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 22
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+repositories { google(); mavenCentral() }
+
+dependencies {
+    implementation project(':capacitor-android')
+    // Capacitor keeps appcompat as `implementation`, so it never reaches a
+    // consumer's compile classpath and Plugin.getActivity() becomes unresolvable.
+    // Leaving this out cost build 67 (see lumen-ads/android/build.gradle).
+    implementation "androidx.appcompat:appcompat:${project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.6.1'}"
+}

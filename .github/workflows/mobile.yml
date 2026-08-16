@@ -166,7 +166,7 @@ jobs:
       # iOS half. It must match CONFIG.admob.android.app in config.js: the SDK
       # reads the manifest, the ad request reads the config, and a mismatch fails
       # at the second step with an error that points at the first.
-      - name: Declare the AdMob app id in the manifest
+      - name: Declare the AdMob app id and the microphone in the manifest
         working-directory: mobile/android/app/src/main
         run: |
           python3 - <<'PYEOF'
@@ -178,10 +178,99 @@ jobs:
               print('already declared')
           else:
               s = s.replace('</application>', tag + '</application>', 1)
-              io.open(p, 'w', encoding='utf-8').write(s)
               print('APPLICATION_ID added')
+          # Voice control needs the microphone DECLARED here or the runtime
+          # request is auto-denied with no dialog at all — which is exactly what
+          # it did: the setting toggled on, Android never asked for anything,
+          # and the feature sat there doing nothing. Capacitor's WebChromeClient
+          # asks for both of these together when the page requests audio capture,
+          # so a missing MODIFY_AUDIO_SETTINGS fails the pair.
+          perms = ['android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS']
+          for perm in perms:
+              if perm in s:
+                  print(perm + ' already declared')
+                  continue
+              s = s.replace('</manifest>', '    <uses-permission android:name="' + perm + '" />\n</manifest>', 1)
+              print(perm + ' added')
+          io.open(p, 'w', encoding='utf-8').write(s)
           PYEOF
-          grep -n "APPLICATION_ID" AndroidManifest.xml
+          grep -n "APPLICATION_ID\|uses-permission" AndroidManifest.xml
+
+      # `npx cap add android` ships CAPACITOR'S OWN launcher icon and splash, and
+      # nothing later replaces them — so the app on the phone wore a stranger's
+      # logo on the home screen AND on the launch screen, while the iOS build
+      # (which has had this step since build 12) wore the real one. Same source
+      # image for both stores, so the two can never drift apart.
+      - name: Install the Android icon and splash
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check Pillow
+          python3 - <<'PYEOF'
+          import io, os
+          from PIL import Image
+
+          root  = os.environ['GITHUB_WORKSPACE']
+          res   = os.path.join('mobile', 'android', 'app', 'src', 'main', 'res')
+          icon  = Image.open(os.path.join(root, 'assets', 'icon-1024-ios.png')).convert('RGBA')
+          # The artwork's own corner, measured rather than guessed, so the square
+          # icon pasted onto the launch screen leaves no visible seam. (The iOS
+          # splash asset is a FLAT dark square with no artwork on it at all, which
+          # is why it is not the source here — copying it would have swapped one
+          # blank launch screen for another.)
+          BG = icon.convert('RGB').getpixel((3, 3))
+
+          # Legacy + round launcher icons, one per density.
+          DENS = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
+          for d, px in DENS.items():
+              out = os.path.join(res, 'mipmap-' + d)
+              os.makedirs(out, exist_ok=True)
+              img = icon.resize((px, px), Image.LANCZOS)
+              img.save(os.path.join(out, 'ic_launcher.png'))
+              img.save(os.path.join(out, 'ic_launcher_round.png'))
+              # The adaptive foreground is drawn into a canvas 1.5x the icon and
+              # then cropped by the launcher to whatever shape the phone uses.
+              # Pasting the artwork at full size would lose its outer third to
+              # that crop, so it is inset to the safe circle first.
+              fg_px = int(px * 1.5)
+              fg = Image.new('RGBA', (fg_px, fg_px), (0, 0, 0, 0))
+              inner = icon.resize((int(fg_px * 0.62), int(fg_px * 0.62)), Image.LANCZOS)
+              off = (fg_px - inner.width) // 2
+              fg.paste(inner, (off, off), inner)
+              fg.save(os.path.join(out, 'ic_launcher_foreground.png'))
+
+          # The adaptive background is a flat colour, and white was leaving a
+          # bright square around dark artwork on every launcher that masks.
+          hexbg = '#%02X%02X%02X' % BG
+          bg = os.path.join(res, 'values', 'ic_launcher_background.xml')
+          io.open(bg, 'w', encoding='utf-8').write(
+              '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
+              '    <color name="ic_launcher_background">' + hexbg + '</color>\n</resources>\n')
+
+          # Every splash drawable Capacitor generated, portrait and landscape,
+          # overwritten with the game's mark on the game's own background.
+          SIZES = {'port': (480, 800), 'land': (800, 480)}
+          FACTOR = {'mdpi': 1.0, 'hdpi': 1.5, 'xhdpi': 2.0, 'xxhdpi': 3.0, 'xxxhdpi': 4.0}
+          def make(w, h):
+              canvas = Image.new('RGBA', (w, h), BG + (255,))
+              side = int(min(w, h) * 0.45)
+              art = icon.resize((side, side), Image.LANCZOS)
+              canvas.paste(art, ((w - side) // 2, (h - side) // 2), art)
+              return canvas
+          written = 0
+          for orient, (bw, bh) in SIZES.items():
+              for d, f in FACTOR.items():
+                  out = os.path.join(res, 'drawable-' + orient + '-' + d)
+                  if not os.path.isdir(out):
+                      continue
+                  make(int(bw * f), int(bh * f)).save(os.path.join(out, 'splash.png'))
+                  written += 1
+          # The density-less fallback the theme actually points at.
+          for d in ('drawable', 'drawable-v24'):
+              out = os.path.join(res, d)
+              if os.path.isdir(out) and os.path.exists(os.path.join(out, 'splash.png')):
+                  make(960, 1600).save(os.path.join(out, 'splash.png'))
+                  written += 1
+          print('icons written for %d densities, %d splash drawables' % (len(DENS), written))
+          PYEOF
 
       - name: Restore the upload key
         if: steps.keys.outputs.signed == 'true'

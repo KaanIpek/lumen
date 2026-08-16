@@ -565,11 +565,19 @@
         const b = document.createElement('button');
         b.className = 'c-btn buy';
         b.textContent = T('adWatch', { n: A.nextReward });
+        // Loading an ad is not instant, and a button that only greys out does not
+        // look like it is working — it looks like the tap missed. It says so
+        // instead, which is what stopped players tapping a second time and
+        // sitting through two ads for one reward.
+        const label = T('adWatch', { n: A.nextReward });
+        if (A.busy) { b.disabled = true; b.textContent = T('adLoading'); }
         onTap(b, () => {
           this.click();
           b.disabled = true;
+          b.textContent = T('adLoading');
           A.watch().then((paid) => {
             b.disabled = false;
+            b.textContent = label;
             this.toast(paid > 0 ? T('adPaid', { n: paid })
               : T('adNone') + (A.lastError ? ' — ' + A.lastError.slice(0, 90) : ''));
             this.renderShop();
@@ -761,22 +769,30 @@
         const kind = T('pollKind_' + (opt.kind || 'other'));
         const n = res ? (res.counts[opt.id] | 0) : 0;
         const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+        // A bar is only drawn when there is something to draw. Without a tally
+        // every option showed a 0% bar, which reads as "nobody voted for this"
+        // rather than "the numbers have not arrived" — and the one the player
+        // had just picked said 0% too. Their own choice is marked instead.
+        const hasTally = !!res && total > 0;
         row.innerHTML =
           '<span class="po-kind">' + esc(kind) + '</span>'
           + '<span class="po-name">' + esc(P.text(opt, 'name')) + '</span>'
           + '<span class="po-desc">' + esc(P.text(opt, 'desc')) + '</span>'
-          + ((voted || closed)
+          + (hasTally
             ? '<span class="po-bar"><i style="width:' + pct + '%"></i></span>'
               + '<span class="po-pct">' + pct + '%</span>'
-            : '');
+            : (mine === opt.id ? '<span class="po-pct">✓</span>' : ''));
         list.appendChild(row);
       }
 
       if (foot) {
+        // "Voted. 0 players so far." is what a player saw when the tally had not
+        // come back yet — a sentence that reads like the vote was thrown away.
+        // With no count to report, the count is left out.
         foot.textContent = closed
           ? T('pollClosed')
           : voted
-            ? T('pollThanks', { n: total })
+            ? (total > 0 ? T('pollThanks', { n: total }) : T('pollVoted'))
             : T('pollPick', { d: P.current.closes || '' });
       }
 
@@ -785,7 +801,19 @@
           onTap(b, () => {
             b.classList.add('mine');
             Audio && Audio.sfx('best');
-            P.vote(b.getAttribute('data-opt')).then(() => P.results(true)).then(() => this.renderPoll());
+            // Repaint TWICE, and the first one immediately.
+            //
+            // P.vote() records the choice locally before it touches the network,
+            // so the ballot is already decided here — but this used to wait for
+            // the tally fetch before redrawing, and that fetch is allowed six
+            // seconds. For those six seconds the only thing that happened was
+            // the option lighting up: no "thanks", no percentages, nothing to
+            // say the vote had counted. On a bad connection it never arrived at
+            // all and the screen simply stayed like that.
+            P.vote(b.getAttribute('data-opt')).then(() => {
+              this.renderPoll();                                    // decided, now
+              return P.results(true).then(() => this.renderPoll()); // tallies, when they land
+            });
           });
         });
       }
@@ -1795,6 +1823,27 @@
         const want = !Store.voiceControl;
         if (want && LUMEN.Voice && !LUMEN.Voice.supported) { this.toast(T('voiceUnsupported')); return; }
         if (want && LUMEN.Voice) LUMEN.Voice._denied = false;   // a fresh, deliberate opt-in
+        // The microphone, explained BEFORE it is asked for.
+        //
+        // Android's dialog says only "Allow LUMEN to record audio?", and a game
+        // asking that out of nowhere gets refused — twice and it is refused
+        // permanently, with no way back except the system settings app. So the
+        // reason goes first, in the player's own language, and the OS is only
+        // troubled once they have already agreed to it. (This whole branch used
+        // to be unreachable on Android: the WebView has no Web Speech API, so
+        // `supported` was false and the toggle did nothing at all.)
+        const V = LUMEN.Voice;
+        if (want && V && V.native && !V._micGranted) {
+          if (!window.confirm(T('micWhy'))) { Audio && Audio.sfx('ui'); return; }
+          V.requestMic().then((granted) => {
+            if (!granted) { this.toast(T('micDenied')); this.renderSettings(); return; }
+            Store.voiceControl = true;
+            V.sync();
+            this.renderSettings();
+          });
+          Audio && Audio.sfx('ui');
+          return;
+        }
         Store.voiceControl = want;
         LUMEN.Voice && LUMEN.Voice.sync();
         // On an origin the browser cannot store a permission against (a file://
