@@ -31,6 +31,12 @@ repositories { google(); mavenCentral() }
 
 dependencies {
     implementation project(':capacitor-android')
+    // Capacitor's Plugin.getActivity() returns an AppCompatActivity, and Capacitor
+    // keeps appcompat as `implementation`, so it is NOT on a consumer's compile
+    // classpath. Without this line javac cannot even see the class -- it reports
+    // "cannot access AppCompatActivity" and then, because it does not know the
+    // hierarchy, "AppCompatActivity cannot be converted to Activity" on every use.
+    implementation "androidx.appcompat:appcompat:${project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.6.1'}"
     // 23.x is the line that still uses the RewardedAd API this file is written
     // against. Pin it here, in the module that OWNS the dependency — a pin in
     // the app's build.gradle is not what resolves it.
