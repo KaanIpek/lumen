@@ -1,0 +1,17 @@
+{
+  "name": "lumen-auth",
+  "version": "1.0.0",
+  "description": "LUMEN sign-in - Google on Android",
+  "main": "index.js",
+  "license": "MIT",
+  "files": [
+    "android/",
+    "index.js",
+    "package.json"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

@@ -66,7 +66,37 @@
     get canSignIn() {
       const C = window.Capacitor;
       if (!(C && C.isNativePlatform && C.isNativePlatform())) return true;
-      return (C.getPlatform ? C.getPlatform() : '') === 'ios';
+      const p = C.getPlatform ? C.getPlatform() : '';
+      if (p === 'ios') return true;
+      // Android signs in with GOOGLE, through lumen-auth. Both halves have to be
+      // present before the button is drawn: the native plugin, and the web
+      // client id it needs. Without either, the account surface stays off rather
+      // than offering a button that cannot finish — which is exactly the state
+      // this platform was in while the Apple plugin's Android half was a stub.
+      if (p === 'android') return !!this.googlePlugin && !!this.googleClientId;
+      return false;
+    },
+
+    // Which identity provider this platform actually uses. The UI reads it to
+    // label the button, because "Sign in with Apple" on an Android phone is
+    // both wrong and, for Google, a policy problem.
+    get provider() {
+      const C = window.Capacitor;
+      const p = (C && C.getPlatform) ? C.getPlatform() : '';
+      return p === 'android' ? 'google' : 'apple';
+    },
+
+    // The WEB OAuth client id, not the Android one — see LumenAuth.java. The
+    // Android client only proves this package and certificate may ask; the token
+    // is minted for the web client, which is the audience Supabase verifies.
+    get googleClientId() {
+      const c = LUMEN.CONFIG || {};
+      return c.googleWebClientId || '';
+    },
+    get googlePlugin() {
+      const C = window.Capacitor;
+      if (!C || !(C.isNativePlatform && C.isNativePlatform())) return null;
+      return (C.Plugins && C.Plugins.LumenAuth) || null;
     },
     get enabled() { return !!this.url && !!this.key && this.canSignIn; },
     get user() { return (this.session && this.session.user) || null; },
@@ -105,10 +135,16 @@
     // Apple gives an identity token; Supabase verifies its signature against
     // Apple's public keys and mints a session. The token is single-use and
     // short-lived, so there is nothing here worth stealing.
-    signInWithAppleToken(idToken, nonce) {
+    signInWithAppleToken(idToken, nonce) { return this._idToken('apple', idToken, nonce); },
+    signInWithGoogleToken(idToken, nonce) { return this._idToken('google', idToken, nonce); },
+
+    // Both providers hand back the same thing — a signed identity token — and
+    // Supabase verifies both the same way, against the issuer's public keys. So
+    // there is one function, and `provider` is the only thing that differs.
+    _idToken(provider, idToken, nonce) {
       if (!this.enabled) return Promise.reject(new Error('auth not configured'));
       return this._post('/auth/v1/token?grant_type=id_token',
-        { provider: 'apple', id_token: idToken, nonce: nonce || undefined })
+        { provider: provider, id_token: idToken, nonce: nonce || undefined })
         .then((s) => { this._save(s); return s; });
     },
 
@@ -186,6 +222,30 @@
     // script is fetched only when someone actually presses the button — an
     // account is optional here, and a player who never signs in should never pay
     // for a third-party script they did not use.
+    // The one call the UI makes. Which provider runs is a property of the
+    // platform, not a choice the player is asked to make — offering both would
+    // mean two accounts for the same person on the same board.
+    signIn() {
+      return this.provider === 'google' ? this.signInWithGoogle() : this.signInWithApple();
+    },
+
+    // Google, through Credential Manager. Same nonce discipline as Apple: the
+    // DIGEST goes to Google, which embeds it in the token, and the raw value
+    // goes to Supabase, which re-hashes and compares. A token lifted from
+    // somewhere else carries somebody else's nonce and is refused.
+    signInWithGoogle() {
+      if (!this.enabled) return Promise.reject(new Error('auth not configured'));
+      const p = this.googlePlugin;
+      if (!p) return Promise.reject(new Error('the native sign-in plugin is missing from this build'));
+      const raw = this._nonce();
+      return this._sha256(raw)
+        .then((hashed) => p.signIn({ serverClientId: this.googleClientId, nonce: hashed }))
+        .then((r) => {
+          if (!r || !r.idToken) throw new Error('no token returned');
+          return this.signInWithGoogleToken(r.idToken, raw);
+        });
+    },
+
     signInWithApple() {
       if (!this.enabled) return Promise.reject(new Error('auth not configured'));
       // A nonce ties Apple's answer to THIS request, so a token captured

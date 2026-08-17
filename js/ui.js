@@ -1488,8 +1488,17 @@
       // nothing. Anything that changes the session has to redraw the board too.
       if (this.currentScreen === 'scores') this.setBoard(this.boardTab || 'me');
       if (who) who.textContent = inn ? T('signedInAs') : T('acctWhy');
+      // The label names the provider that will actually run. Apple's glyph on an
+      // Android phone is wrong twice over — the sheet that opens is Google's,
+      // and Google's branding rules do not allow their sign-in to be presented
+      // as somebody else's.
+      const signInKey = (A.provider === 'google') ? 'signInGoogle' : 'signInApple';
       if (btn && btn.querySelector('span')) {
-        btn.querySelector('span').textContent = inn ? T('signOut') : T('signInApple');
+        btn.querySelector('span').textContent = inn ? T('signOut') : T(signInKey);
+      }
+      const gateBtn = $('btn-lb-signin');
+      if (gateBtn && gateBtn.querySelector('span')) {
+        gateBtn.querySelector('span').textContent = T(signInKey);
       }
       // Changing your name lives HERE now, and only once there is an account to
       // attach it to. It used to sit on the leaderboard, where it read as a
@@ -1502,7 +1511,7 @@
       const A = LUMEN.Auth;
       if (!A || !A.enabled) return;
       if (A.signedIn) { A.signOut().then(() => this.onAuthChange()); return; }
-      A.signInWithApple().then(() => {
+      A.signIn().then(() => {
         this.onAuthChange();
         // Ask for a name here, once, while the player is already thinking about
         // who they are. Leaving it to a field on another screen is what made it
@@ -1517,6 +1526,9 @@
         // A cancelled sheet is not a failure and must not be reported as one.
         const msg = String((e && e.message) || '');
         if (/cancel|1001|popup_closed/i.test(msg)) return;
+        // The one failure the player can do something about, said plainly
+        // instead of as an error code they would have to look up.
+        if (/no-google-account/i.test(msg)) { this.toast(T('noGoogleAccount')); return; }
         // Say WHAT went wrong. The first version toasted one fixed sentence for
         // every cause, so the only report anybody could make was "it says it
         // didn't complete" — which is exactly as much as it told me too.

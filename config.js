@@ -60,6 +60,22 @@
     // does: on iOS the native sheet uses the bundle id and needs nothing here.
     appleServiceId: 'com.lumen.game.web',
 
+    // ---- Sign in with Google (Android) ----
+    // The WEB OAuth client id from Google Cloud, not the Android one. Both
+    // exist and they do different jobs: the Android client proves that THIS
+    // package, signed with THIS certificate, is allowed to ask; the token that
+    // comes back is minted for the WEB client, because that is the audience
+    // Supabase verifies against. Pasting the Android id here yields a token
+    // every backend refuses, with no clue as to why.
+    //
+    // Public by design, like the Apple Services ID above — it identifies the
+    // app and proves nothing. The client SECRET is not here and never will be;
+    // it lives only in Supabase's provider settings.
+    //
+    // Empty means Android has no sign-in button at all, which is the honest
+    // state: better than a button that opens a sheet and then fails.
+    googleWebClientId: '',
+
     // Only if you self-host server/leaderboard-server.js instead.
     // Leave empty when using Supabase — Supabase wins if both are set.
     leaderboardEndpoint: '',

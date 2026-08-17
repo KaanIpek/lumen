@@ -1,0 +1,50 @@
+// The Android half of LUMEN's sign-in.
+//
+// iOS signs in with Apple through the native sheet. Android has no such thing,
+// and the community apple-sign-in plugin's android/ directory is a single
+// `echo` method — the button drew and then did nothing, which is why the whole
+// account surface was switched off there. This module is the Android identity
+// provider: Google, through Credential Manager.
+ext {
+    junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
+}
+
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.9.1' }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.rldgames.lumen.auth"
+    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+    defaultConfig {
+        // Credential Manager needs 23. Capacitor's default is 22, which is
+        // Android 5.1 — a version with no measurable install base left, and the
+        // app's own minSdk is raised to match in the CI patch.
+        minSdkVersion 23
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+repositories { google(); mavenCentral() }
+
+dependencies {
+    implementation project(':capacitor-android')
+    // Capacitor keeps appcompat as `implementation`, so it never reaches a
+    // consumer's compile classpath — leaving this out cost build 67.
+    implementation "androidx.appcompat:appcompat:${project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.6.1'}"
+
+    // Credential Manager, and the Google identity option that rides on it. This
+    // is the SUPPORTED path: the older GoogleSignInClient is deprecated and on
+    // its way out, and building a new integration on it would be shipping a
+    // removal date.
+    implementation "androidx.credentials:credentials:1.3.0"
+    implementation "androidx.credentials:credentials-play-services-auth:1.3.0"
+    implementation "com.google.android.libraries.identity.googleid:googleid:1.1.1"
+}

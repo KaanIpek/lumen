@@ -132,6 +132,12 @@ jobs:
           patch('variables.gradle', [
               (r'compileSdkVersion = \d+', 'compileSdkVersion = 36'),
               (r'targetSdkVersion = \d+',  'targetSdkVersion = 36'),
+              # Credential Manager — the supported way to sign in with Google —
+              # needs 23. Capacitor generates 22, which is Android 5.1, a
+              # version with no measurable install base left. The library's own
+              # minSdk is 23 too, so leaving this at 22 fails the manifest merge
+              # rather than shipping a broken build.
+              (r'minSdkVersion = \d+',     'minSdkVersion = 23'),
           ])
           patch('build.gradle', [
               (r"com\.android\.tools\.build:gradle:[\d.]+", 'com.android.tools.build:gradle:8.9.1'),
