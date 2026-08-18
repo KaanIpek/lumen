@@ -26,7 +26,7 @@ const OUT = path.join(ROOT, 'dist');
 // Everything else in the root is developer-facing.
 // NOTICE ships because the music licence requires the attribution to travel
 // "as a part of such copies" — a deployed site is a copy.
-const FILES = ['index.html', 'privacy.html', 'manifest.json', 'sw.js', 'config.js', 'NOTICE'];
+const FILES = ['index.html', 'privacy.html', 'delete-account.html', 'manifest.json', 'sw.js', 'config.js', 'NOTICE'];
 const DIRS = ['js', 'css', 'assets'];
 
 // Store-submission material: in the repo, never in the build. Matched against

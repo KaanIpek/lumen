@@ -61,7 +61,11 @@ jobs:
       - name: Check the privacy policy is actually in the build
         # Apple and Google both require a reachable privacy policy URL, and the
         # page is easy to lose in a file list. Fail here rather than at review.
-        run: test -s dist/privacy.html && echo "privacy.html present"
+        run: |
+          test -s dist/privacy.html && echo "privacy.html present"
+          # Play's Data safety form stores this URL and fetches it; a 404
+          # here is a policy problem, not a broken link.
+          test -s dist/delete-account.html && echo "delete-account.html present"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
