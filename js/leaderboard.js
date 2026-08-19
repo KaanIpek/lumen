@@ -270,16 +270,29 @@
     // body — the polite way Postgres says "no row matched anything you are
     // allowed to touch". That looks exactly like success, so this checks what
     // actually went and reports false rather than lying to the caller.
+    // Ask before deleting, because "nothing came back" has two meanings and only
+    // one of them is a failure. A DELETE that RLS refused and a DELETE that
+    // matched no row are the same answer: 200 with an empty body. Counting rows
+    // alone therefore reports FAILURE for a player who simply never posted a
+    // score — and that is the exact path App Review takes, since a reviewer
+    // signs in, deletes the account, and never plays a run in between. It made a
+    // working deletion say "the server did not confirm" on camera.
     deleteMine() {
       const A = LUMEN.Auth;
       if (!this._sb || !A || !A.signedIn) return Promise.resolve(false);
-      return this._sbFetch('/scores?user_id=eq.' + encodeURIComponent(A.userId), {
-        method: 'DELETE',
-        headers: { Prefer: 'return=representation' },
-      }).then((rows) => {
-        this.invalidate();
-        return Array.isArray(rows) && rows.length > 0;
-      }).catch(() => false);
+      const mine = '/scores?user_id=eq.' + encodeURIComponent(A.userId);
+      return this._sbFetch(mine + '&select=user_id')
+        .then((rows) => {
+          // Nothing of theirs is on the board, so there is nothing to remove and
+          // the post-condition the caller cares about already holds.
+          if (!Array.isArray(rows) || rows.length === 0) return true;
+          return this._sbFetch(mine, {
+            method: 'DELETE',
+            headers: { Prefer: 'return=representation' },
+          }).then((gone) => Array.isArray(gone) && gone.length > 0);
+        })
+        .then((ok) => { this.invalidate(); return ok; })
+        .catch(() => false);
     },
 
     // ---- holding a best until it has a name -------------------------------

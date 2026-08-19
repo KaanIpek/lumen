@@ -69,7 +69,8 @@ one-more-run arcade.
 - Built for phones: touch, haptics, responsive, installable
 - Accessibility: colour-vision presets, high contrast, reduce-flashing,
   `prefers-reduced-motion`, screen-reader score announcements
-- Four languages, and privacy-first: opt-in telemetry, no ad SDK
+- Four languages, and privacy-first: opt-in telemetry; no ad SDK on web or
+  desktop, and on mobile rewarded video only — never a banner or interstitial
 
 ## Key art / screenshots
 

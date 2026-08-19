@@ -3856,6 +3856,58 @@
     }
   });
 
+  // App Review deletes the account it just made without ever playing a run, so
+  // the row count is zero and a delete removes nothing. That is SUCCESS. Reading
+  // it as failure is what put "the server did not confirm" on screen in the
+  // recording Apple was sent, under a rejection for App Completeness.
+  test('Account deletion: a player with no board row still deletes cleanly', async () => {
+    const LB = L.Leaderboard;
+    const realFetch = window.fetch;
+    const realSession = L.Auth.session;
+    const calls = [];
+    const json = (body) => Promise.resolve({
+      ok: true, status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve(body),
+    });
+    try {
+      LB.useSupabase('https://demo.supabase.co/', 'ANON');
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-never-played' } };
+
+      // Nobody's row: the SELECT comes back empty, so no DELETE should follow.
+      window.fetch = (url, opts) => {
+        calls.push({ url: String(url), method: (opts && opts.method) || 'GET' });
+        return json([]);
+      };
+      eq(await LB.deleteMine(), true, 'nothing to remove is not a failure');
+      eq(calls.filter((c) => c.method === 'DELETE').length, 0,
+        'and no pointless DELETE is sent');
+
+      // Now a player who does have one: the DELETE runs and its rows are checked.
+      calls.length = 0;
+      window.fetch = (url, opts) => {
+        const method = (opts && opts.method) || 'GET';
+        calls.push({ url: String(url), method });
+        return json(method === 'DELETE' ? [{ user_id: 'u-never-played' }] : [{ user_id: 'u-never-played' }]);
+      };
+      eq(await LB.deleteMine(), true, 'an owned row is removed and reported');
+      eq(calls.filter((c) => c.method === 'DELETE').length, 1, 'exactly one DELETE');
+
+      // And the case the row-count check exists for: RLS refuses, so the row is
+      // still there. That IS a failure and must not be dressed up as success.
+      calls.length = 0;
+      window.fetch = (url, opts) => {
+        const method = (opts && opts.method) || 'GET';
+        return json(method === 'DELETE' ? [] : [{ user_id: 'u-never-played' }]);
+      };
+      eq(await LB.deleteMine(), false, 'a refused delete still reports failure');
+    } finally {
+      window.fetch = realFetch;
+      L.Auth.session = realSession;
+      LB._sb = null;
+    }
+  });
+
   // The number on screen has to be the number you get. Multiplying quietly at
   // the end meant a Sprint run on Hard finished at 2.5x what you had been
   // watching for the whole run — the reward was real, the presentation was a

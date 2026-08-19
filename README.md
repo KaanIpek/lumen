@@ -173,9 +173,10 @@ stories. Stories create shares.
   card and handed to the native share sheet
 - 🏆 **Online leaderboard (optional)** — daily + all-time, with a real
   dependency-free reference server in [`server/`](server/README.md)
-- 🔒 **Privacy-first telemetry** — anonymous, opt-**in**, no personal data, no ad
-  SDK, and a written [privacy policy](privacy.html). A clean seam
-  (`LUMEN.Rewards`) is in place if you later want rewarded video
+- 🔒 **Privacy-first telemetry** — anonymous, opt-**in**, no personal data, and a
+  written [privacy policy](privacy.html). The web and desktop builds carry no ad
+  SDK at all; the mobile app adds the Google Mobile Ads SDK for **rewarded video
+  only** — no banners, no interstitials, and no ad that plays on its own
 - 🖥 **Fullscreen** (button or **F**), with graphics tiers — **Auto / High /
   Med / Low** — that also self-adjust if frames start dropping
 - ⚙️ **Settings** — grouped into Audio / Gameplay / Accessibility / Display:

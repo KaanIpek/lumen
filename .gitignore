@@ -31,3 +31,7 @@ docs/STORE_LISTING.md
 
 # A private key in the clear. Never committed, and the script says to delete it.
 signing-out/
+
+# App Review screen recordings and the frames pulled out of them. These are
+# recordings of a real phone, and this repository is public.
+review/
