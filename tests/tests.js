@@ -3828,6 +3828,7 @@
       LB.useSupabase('https://demo.supabase.co/', 'ANON');
       assert(LB.enabled, 'configuring a project turns the board on');
       LB.playerName = 'TESTER';
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-owner' } };
 
       await LB.top('alltime', 20);
       await LB.top('daily', 20);
@@ -3850,8 +3851,15 @@
         'a daily row carries its day (the table requires one)');
       assert(allTime.name.length <= 16, 'the name fits the column');
       assert(Number.isInteger(allTime.score) && Number.isInteger(allTime.combo), 'whole numbers only');
+      // Every live row came back with user_id null, because the column has no
+      // `default auth.uid()` and the client never said. An unowned row cannot be
+      // deleted by its owner, cannot be renamed, and cannot dedupe against the
+      // (user_id, board, day) index — NULLs never collide.
+      eq(allTime.user_id, 'u-owner', 'the row says who owns it');
+      eq(daily.user_id, 'u-owner', 'on both boards');
     } finally {
       window.fetch = realFetch;
+      L.Auth.session = null;
       LB._sb = null;
     }
   });

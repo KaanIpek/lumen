@@ -208,6 +208,16 @@
         board: b,
         day: b === 'daily' ? (day || null) : null,
       };
+      // Say who owns the row instead of trusting the column to default to
+      // auth.uid(). It does not, and every row on the live board came back with
+      // user_id null — which broke three things quietly and at once. The owner
+      // could not DELETE their row, so account deletion reported failure and
+      // left the entry on a public board (Guideline 5.1.1(v)). rename() could
+      // not find the rows to rewrite. And the (user_id, board, day) index could
+      // not dedupe, because NULLs never collide — which is why the same player's
+      // 5000 sits on the board twice.
+      const A = LUMEN.Auth;
+      if (A && A.userId) row.user_id = A.userId;
       // A run of your own that got onto the board is the one case where the
       // cached copy is definitely wrong, so drop it.
       const done = () => { this.invalidate(b); };
