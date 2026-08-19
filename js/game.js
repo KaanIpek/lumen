@@ -136,14 +136,6 @@
       const keys = v && typeof v === 'object' ? Object.keys(v) : [];
       this._write('lumen_pending', keys.length ? JSON.stringify(v) : '');
     },
-    // Has the record this device already held been offered to the board?
-    //
-    // Once, and only once. Offering it on every sign-in would re-send the same
-    // row for nothing — and worse, a player who signs in again after RESET
-    // PROGRESS would push their now-empty record over the real one and watch
-    // their own score on the board go DOWN.
-    get boardSeeded() { return this._read('lumen_seeded', '') === '1'; },
-    set boardSeeded(v) { this._write('lumen_seeded', v ? '1' : ''); },
     get difficulty() { return this._read('lumen_diff', 'normal'); },
     set difficulty(v) { this._write('lumen_diff', v); },
     get colorblind() { return this._read('lumen_cb', 'off'); },

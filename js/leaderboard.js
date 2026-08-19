@@ -352,12 +352,32 @@
     // it would also mean publishing a score with a combo taken from some other
     // run, and a number on a public board should have happened.
     seedFromLocalBests() {
-      if (!Store || !this.canSubmit || Store.boardSeeded) return;
-      Store.boardSeeded = true;
-      const pending = Store.pendingBest || {};
-      if (pending.alltime) return;
+      if (!Store || !this._sb || !this.canSubmit) return Promise.resolve(false);
       const best = LUMEN.Scores ? LUMEN.Scores.list('classic')[0] : null;
-      if (best && best.s > 0) this.hold(best.s, best.c, 'alltime');
+      if (!best || !(best.s > 0)) return Promise.resolve(false);
+      const A = LUMEN.Auth;
+      // ASK THE BOARD, do not remember having asked.
+      //
+      // The first version of this kept a "already offered" flag on the device,
+      // and it was wrong the moment the account changed underneath it: delete
+      // the account, sign in as somebody new, and the flag still said done
+      // while the new account's board was empty — so the player was stranded
+      // again, exactly as before, and this time by the fix.
+      //
+      // What the flag was really trying to ask is what the board already holds
+      // FOR THIS ACCOUNT. Asking that directly makes the offer idempotent by
+      // construction: it can run on every sign-in without re-sending, and it
+      // can never push a lower score over a higher one — which is what a device
+      // flag could not promise after RESET PROGRESS either.
+      return this._sbFetch('/scores?select=score&board=eq.alltime&user_id=eq.'
+        + encodeURIComponent(A.userId))
+        .then((rows) => {
+          const have = Array.isArray(rows) && rows[0] ? (+rows[0].score || 0) : 0;
+          if (best.s <= have) return false;
+          this.hold(best.s, best.c, 'alltime');
+          return true;
+        })
+        .catch(() => false);
     },
 
     hold(score, combo, board) {

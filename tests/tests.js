@@ -3872,8 +3872,15 @@
     freshStorage();
     const LB = L.Leaderboard;
     const realSb = LB._sb;
-    const sent = [];
+    const realFetch = window.fetch;
     const realSubmit = LB.submit;
+    const sent = [];
+    let boardHas = [];                     // what the board holds for this user
+    window.fetch = () => Promise.resolve({
+      ok: true, status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve(boardHas),
+    });
     LB.submit = (sc, c, b) => { sent.push({ score: sc, combo: c, board: b }); return Promise.resolve(null); };
     try {
       LB._sb = { url: 'https://test.invalid', key: 'k' };
@@ -3884,7 +3891,7 @@
       L.Scores.record(1215, 23, 'classic');
       eq(L.Store.pendingBest.alltime, undefined, 'nothing is queued yet');
 
-      LB.seedFromLocalBests();
+      await LB.seedFromLocalBests();
       eq(L.Store.pendingBest.alltime.score, 1215, 'the record they already hold is offered');
       eq(L.Store.pendingBest.alltime.combo, 23, 'with the combo from that run, not from another');
 
@@ -3892,15 +3899,32 @@
       eq(done.length, 1, 'and it goes up');
       eq(sent[0].score, 1215, 'as itself');
 
-      // Once, and only once. A player who signs in again after RESET PROGRESS
-      // would otherwise push an empty record over the real one and watch their
-      // own score on the board go down.
+      // Now the board holds it. Offering again must do nothing — this runs on
+      // every sign-in, and a device flag was the wrong way to promise that.
+      boardHas = [{ score: 1215 }];
       sent.length = 0;
+      await LB.seedFromLocalBests();
+      eq(L.Store.pendingBest.alltime, undefined, 'nothing is re-queued while the board is ahead');
+
+      // …and it must never LOWER the row. RESET PROGRESS leaves a small record
+      // behind; the board's real one has to survive it.
+      freshStorage();
+      L.Store.playerName = 'veteran';
       L.Scores.record(9, 0, 'classic');
-      LB.seedFromLocalBests();
-      eq(L.Store.pendingBest.alltime, undefined, 'nothing is re-queued afterwards');
-      eq(L.Store.boardSeeded, true, 'because the offer is remembered');
+      await LB.seedFromLocalBests();
+      eq(L.Store.pendingBest.alltime, undefined, 'a smaller local record is not offered');
+
+      // Delete the account, sign in as somebody new: that account's board is
+      // empty, so the device's record is stranded again and must be offered
+      // again. The flag this replaced said "done" here and left the player
+      // invisible — which is the bug they found.
+      boardHas = [];
+      L.Auth.session = { access_token: 't2', refresh_token: 'r2', user: { id: 'u-brand-new' } };
+      L.Scores.record(1215, 23, 'classic');
+      await LB.seedFromLocalBests();
+      eq(L.Store.pendingBest.alltime.score, 1215, 'a new account gets the offer too');
     } finally {
+      window.fetch = realFetch;
       LB.submit = realSubmit;
       L.Auth.session = null;
       LB._sb = realSb;

@@ -1521,7 +1521,7 @@
         const LB = LUMEN.Leaderboard;
         if (LB && !LB.named) this.openNameScreen('scores');
         // Signing in is the moment a held best finally has an owner.
-        if (LB) { LB.seedFromLocalBests(); LB.flushPending().catch(() => {}); }
+        if (LB) LB.seedFromLocalBests().then(() => LB.flushPending()).catch(() => {});
       }).catch((e) => {
         // A cancelled sheet is not a failure and must not be reported as one.
         const msg = String((e && e.message) || '');
@@ -1572,7 +1572,7 @@
       // Rename FIRST, then send anything held. Renaming updates the rows this
       // player already owns; sending first would put the old name up one last
       // time and leave it there.
-      LB.rename(name).catch(() => {}).then(() => { LB.seedFromLocalBests(); return LB.flushPending(); }).then((sent) => {
+      LB.rename(name).catch(() => {}).then(() => LB.seedFromLocalBests()).then(() => LB.flushPending()).then((sent) => {
         this.toast((sent && sent.length) ? T('lbNameSent', { n: name }) : T('lbNameSaved', { n: name }));
         if (this.boardTab !== 'me') this.refreshBoard();
         this.showScreen(this._nameNext || 'settings');
