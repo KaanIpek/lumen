@@ -1521,7 +1521,7 @@
         const LB = LUMEN.Leaderboard;
         if (LB && !LB.named) this.openNameScreen('scores');
         // Signing in is the moment a held best finally has an owner.
-        if (LB) LB.flushPending().catch(() => {});
+        if (LB) { LB.seedFromLocalBests(); LB.flushPending().catch(() => {}); }
       }).catch((e) => {
         // A cancelled sheet is not a failure and must not be reported as one.
         const msg = String((e && e.message) || '');
@@ -1572,7 +1572,7 @@
       // Rename FIRST, then send anything held. Renaming updates the rows this
       // player already owns; sending first would put the old name up one last
       // time and leave it there.
-      LB.rename(name).catch(() => {}).then(() => LB.flushPending()).then((sent) => {
+      LB.rename(name).catch(() => {}).then(() => { LB.seedFromLocalBests(); return LB.flushPending(); }).then((sent) => {
         this.toast((sent && sent.length) ? T('lbNameSent', { n: name }) : T('lbNameSaved', { n: name }));
         if (this.boardTab !== 'me') this.refreshBoard();
         this.showScreen(this._nameNext || 'settings');
@@ -1627,9 +1627,19 @@
       // "Why isn't my name here?" is the first question anyone asks a board, and
       // twenty rows of strangers is a slow way to answer it.
       const mine = (LUMEN.Leaderboard && LUMEN.Leaderboard.cleanName(LUMEN.Leaderboard.playerName) || '').toLowerCase();
+      // Whose row is it, by the id that owns it. Matching the NAME instead told
+      // a player that a row was theirs whenever the string happened to agree —
+      // which is how an old unowned row, left by a signed-out self, wore "(you)"
+      // on a board this player had never once been on. It would say the same of
+      // any stranger who typed their name. Rows written before accounts carry no
+      // owner at all, so those still fall back to the name: it is the only thing
+      // they have, and it is right more often than it is wrong.
+      const myId = (LUMEN.Auth && LUMEN.Auth.userId) || '';
       rows.forEach((e, i) => {
         const li = document.createElement('li');
-        const isMe = mine && String(e.name || '').toLowerCase() === mine;
+        const isMe = e.user_id
+          ? (!!myId && e.user_id === myId)
+          : (!!mine && String(e.name || '').toLowerCase() === mine);
         li.className = (i === 0 ? 'top' : '') + (isMe ? ' you' : '');
         // textContent, not innerHTML — names come from other people
         const pos = document.createElement('span'); pos.className = 'pos'; pos.textContent = i + 1;

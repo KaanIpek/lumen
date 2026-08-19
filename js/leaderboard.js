@@ -185,7 +185,13 @@
       const fetchN = Math.min(200, want * 5);
       if (this._sb) {
         // highest first; the daily board is filtered to today
-        const q = '/scores?select=name,score,combo&board=eq.' + b
+        // user_id comes back so the screen can mark the player's OWN row by the
+        // id that owns it rather than by matching the name — which tagged an
+        // unowned row "(you)" simply because a stranger, or an older signed-out
+        // self, had typed the same string. A published id is an opaque uuid and
+        // proves nothing on its own; the tidier shape is a view exposing
+        // `user_id = auth.uid()` as a boolean, which would not publish it at all.
+        const q = '/scores?select=name,score,combo,user_id&board=eq.' + b
           + (b === 'daily' && day ? '&day=eq.' + encodeURIComponent(day) : '')
           + '&order=score.desc&limit=' + fetchN;
         return this._sbFetch(q).then((rows) => ({ rows: this._dedupe(rows, want) }));
@@ -326,6 +332,32 @@
     // MY RUNS all still work signed out.
     get canSubmit() {
       return this.enabled && !!(LUMEN.Auth && LUMEN.Auth.signedIn) && this.named;
+    },
+
+    // A personal best set BEFORE there was an account is stranded, and this is
+    // not a rare edge — it is every player who played before signing in.
+    //
+    // The board only ever hears about a run that beats Store.best, so somebody
+    // whose record predates their account can never appear on it until they
+    // beat a score they set when nobody was watching. Nothing says so. The
+    // board simply never mentions them, and it reads as broken, because from
+    // where the player sits it is indistinguishable from broken.
+    //
+    // So when the board first becomes usable, offer the record they already
+    // hold. It goes through `hold`, so the existing flush path sends it and
+    // `hold` still keeps whichever run is better.
+    //
+    // The daily board is deliberately not seeded: its best resets every day, so
+    // the first daily run of any day is a best and submits by itself. Seeding
+    // it would also mean publishing a score with a combo taken from some other
+    // run, and a number on a public board should have happened.
+    seedFromLocalBests() {
+      if (!Store || !this.canSubmit || Store.boardSeeded) return;
+      Store.boardSeeded = true;
+      const pending = Store.pendingBest || {};
+      if (pending.alltime) return;
+      const best = LUMEN.Scores ? LUMEN.Scores.list('classic')[0] : null;
+      if (best && best.s > 0) this.hold(best.s, best.c, 'alltime');
     },
 
     hold(score, combo, board) {

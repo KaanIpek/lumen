@@ -3864,6 +3864,49 @@
     }
   });
 
+  // Every player who played before signing in has a personal best the board has
+  // never heard of, and the board only listens to runs that BEAT that best. So
+  // they can never appear on it until they beat a score they set when nobody was
+  // watching — and nothing tells them why their name is missing.
+  test('Leaderboard: a record set before the account still reaches the board', async () => {
+    freshStorage();
+    const LB = L.Leaderboard;
+    const realSb = LB._sb;
+    const sent = [];
+    const realSubmit = LB.submit;
+    LB.submit = (sc, c, b) => { sent.push({ score: sc, combo: c, board: b }); return Promise.resolve(null); };
+    try {
+      LB._sb = { url: 'https://test.invalid', key: 'k' };
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-old-hand' } };
+      L.Store.playerName = 'veteran';
+
+      // A record from before the account, with the combo from that same run.
+      L.Scores.record(1215, 23, 'classic');
+      eq(L.Store.pendingBest.alltime, undefined, 'nothing is queued yet');
+
+      LB.seedFromLocalBests();
+      eq(L.Store.pendingBest.alltime.score, 1215, 'the record they already hold is offered');
+      eq(L.Store.pendingBest.alltime.combo, 23, 'with the combo from that run, not from another');
+
+      const done = await LB.flushPending();
+      eq(done.length, 1, 'and it goes up');
+      eq(sent[0].score, 1215, 'as itself');
+
+      // Once, and only once. A player who signs in again after RESET PROGRESS
+      // would otherwise push an empty record over the real one and watch their
+      // own score on the board go down.
+      sent.length = 0;
+      L.Scores.record(9, 0, 'classic');
+      LB.seedFromLocalBests();
+      eq(L.Store.pendingBest.alltime, undefined, 'nothing is re-queued afterwards');
+      eq(L.Store.boardSeeded, true, 'because the offer is remembered');
+    } finally {
+      LB.submit = realSubmit;
+      L.Auth.session = null;
+      LB._sb = realSb;
+    }
+  });
+
   // App Review deletes the account it just made without ever playing a run, so
   // the row count is zero and a delete removes nothing. That is SUCCESS. Reading
   // it as failure is what put "the server did not confirm" on screen in the
