@@ -74,7 +74,7 @@
     //
     // Empty means Android has no sign-in button at all, which is the honest
     // state: better than a button that opens a sheet and then fails.
-    googleWebClientId: '',
+    googleWebClientId: '99650022222-mfp0puvim9k1ei4ha533pp33faeubu17.apps.googleusercontent.com',
 
     // Only if you self-host server/leaderboard-server.js instead.
     // Leave empty when using Supabase — Supabase wins if both are set.
