@@ -494,6 +494,15 @@
           this._tone({ type: 'sine', freq: 90, freqTo: 30, dur: 0.5, gain: 0.3, release: 0.4 }); // sub thump
           break;
         }
+        // BRITTLE: a bar breaking. Bright and short, so a chain of them reads as
+        // rhythm rather than as a series of crashes — the sound has to say
+        // "that was the good outcome", which 'crash' emphatically does not.
+        case 'shatter': {
+          this._noise({ dur: 0.18, gain: 0.16, freq: 5200, freqTo: 1800, filterType: 'bandpass', q: 1.4 });
+          this._tone({ type: 'triangle', freq: 1240, freqTo: 720, dur: 0.14, gain: 0.10, release: 0.12 });
+          this._tone({ type: 'triangle', freq: 620, freqTo: 380, dur: 0.18, gain: 0.07, release: 0.15 });
+          break;
+        }
         case 'ui': {
           this._tone({ type: 'triangle', freq: 480, freqTo: 620, dur: 0.09, gain: 0.1, release: 0.08 });
           break;

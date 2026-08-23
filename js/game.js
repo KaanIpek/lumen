@@ -1118,6 +1118,18 @@
       // `daily` is not set yet when reset() runs. The Daily always flies Deep
       // Field, so a shared course can never depend on what somebody owns.
       this.world = (LUMEN.Cosmetics && !this.daily) ? LUMEN.Cosmetics.mapDef() : null;
+      // BRITTLE's two meters are per-RUN state, and this is the one function
+      // that runs after every path has decided which mode this is — reset,
+      // startDaily, startTutorial, tutAdvance and startAttract all reach it.
+      // `elapsed` is re-written three lines up for exactly the same reason;
+      // putting them in reset() would be wrong, because reset() runs before the
+      // daily and tutorial flags exist.
+      //
+      // Never write run state onto `this.mode`: Modes.def() hands back the
+      // shared table literal, and it would leak into the next run.
+      const flt = this.mode && this.mode.fault;
+      this.nerve = flt ? flt.start : 0;
+      this.heat = 0;
     }
 
     // How long a single flow can last. Long enough to feel like a reward,
@@ -1713,10 +1725,20 @@
         let gap = target.gaps[0];
         for (const g of target.gaps) if (Math.abs(g.y - p.y) < Math.abs(gap.y - p.y)) gap = g;
         want = gap.y;
-        // a mote just off the path is worth a small detour — that's the game's soul
-        for (const m of this.motes) {
-          if (m.taken || m.x < p.x) continue;
-          if (m.x - p.x < this.W * 0.42 && Math.abs(m.y - want) < this.playH * 0.16) { want = m.y; break; }
+        // BRITTLE: the demo has to PLAY the mode, not duck it. The autopilot
+        // aims at gap centres, so without this the wallpaper behind the main
+        // menu would show the mode being played wrong, forever — which no other
+        // mode does. The gate's own mote is collected by the shatter itself, so
+        // the detour below is skipped rather than fighting the aim back to
+        // centre.
+        const fb = this.faultBand(target);
+        if (fb) want = (fb.y0 + fb.y1) * 0.5;
+        else {
+          // a mote just off the path is worth a small detour — that's the game's soul
+          for (const m of this.motes) {
+            if (m.taken || m.x < p.x) continue;
+            if (m.x - p.x < this.W * 0.42 && Math.abs(m.y - want) < this.playH * 0.16) { want = m.y; break; }
+          }
         }
       } else {
         want = this.playTop + this.playH * 0.5;
@@ -1786,6 +1808,9 @@
       if (!free) Store.shards = Store.shards - this.reviveCost;
       Store.reviveCount = Store.reviveCount + 1;
       this.revived = true;
+      // You paid for a fresh start, so you get one. Without this a revive at
+      // nerve 0.7 would end the run again at the very next gate.
+      if (this.mode && this.mode.fault) { this.nerve = this.mode.fault.nerve; this.heat = 0; }
       const p = this.player;
       p.alive = true;
       p.vy = 0;
@@ -2187,6 +2212,66 @@
       }
     }
 
+    // ---- BRITTLE: the fault ------------------------------------------------
+    // The band's height in pixels. A gate that MOVES is a moving target, so it
+    // gets a bigger one.
+    faultH(ob) {
+      const f = this.mode.fault;
+      const base = Math.max(f.band * this.playH, this.baseR * f.minR);
+      return base * (ob.kind !== 'normal' ? f.wide : 1);
+    }
+
+    // Where the fault is, right now. DERIVED ON EVERY READ, never stored — which
+    // is what makes it slide with a moving gate, breathe with a pulsing one,
+    // ride the world's tide and survive a resize, all with no extra code. Storing
+    // pixels here is the bug that traps shipped with.
+    faultBand(ob) {
+      if (!this.mode || !this.mode.fault) return null;
+      if (ob.broken || ob.faultSide == null || !ob.gaps.length) return null;
+      const g = ob.gaps[ob.faultGap] || ob.gaps[0];
+      const h = this.faultH(ob);
+      // side -1: flush ABOVE the opening's top lip, reaching toward playTop.
+      // side +1: flush BELOW its bottom lip, reaching toward playBottom.
+      // It can only ever run off the corridor edge — never into the opening,
+      // and never across a double gate's middle pillar.
+      const edge = ob.faultSide < 0 ? g.y - g.h * 0.5 : g.y + g.h * 0.5 + h;
+      return { y0: Math.max(this.playTop, edge - h),
+               y1: Math.min(this.playBottom, edge) };
+    }
+
+    // Choose the side ONCE, at spawn, in FRACTION space — never from pixels, so
+    // a seeded course lands identically on every screen — and through
+    // `this.rchance` so the daily's stream stays in step.
+    placeFault(ob) {
+      const s = ob.spec, f = this.mode.fault;
+      const need = this.faultH(ob) / this.playH;
+      // Reserve the band an opening can swing through, exactly as spawnObstacle
+      // does for its rewards: a fault that is legal at rest but illegal at the
+      // top of the gate's travel is a fault that lies.
+      const swing = (s.moveAmp || 0) + ((this.world && this.world.tide) ? this.world.tide.amp : 0);
+      let top, bot, gapIdx0 = 0, gapIdx1 = 0;
+      if (s.kind === 'double') {
+        const half = s.sep * 0.5, gh = s.doubleGapH;
+        top = s.c - half - gh * 0.5;          // above the UPPER opening
+        bot = 1 - (s.c + half + gh * 0.5);    // below the LOWER opening
+        gapIdx0 = 0; gapIdx1 = 1;             // outer lips only
+      } else {
+        top = s.c - s.gapH * 0.5;
+        bot = 1 - (s.c + s.gapH * 0.5);
+      }
+      const roomTop = top >= need + swing, roomBot = bot >= need + swing;
+      let up;
+      if (roomTop && roomBot) up = this.rchance(0.5);
+      else if (roomTop) up = true;
+      else if (roomBot) up = false;
+      // Unreachable in practice — spec.c is clamped so the larger side is always
+      // far bigger than the band — but a belt, not an argument.
+      else up = top >= bot;
+      ob.faultSide = up ? -1 : 1;
+      ob.faultGap = up ? gapIdx0 : gapIdx1;
+      ob.faultPhase = this.rrand(0, TAU);
+    }
+
     spawnObstacle() {
       // daily runs consume a pre-planned queue so every player gets the same course
       // Outlived the planned course? Extend it from the same seeded generator
@@ -2206,6 +2291,7 @@
 
       const ob = { x: this.W + this.obstacleW, w: this.obstacleW, kind: spec.kind, spec, passed: false, gaps: [] };
       this.layoutObstacle(ob);
+      if (this.mode && this.mode.fault) this.placeFault(ob);
       this.obstacles.push(ob);
 
       const g = ob.gaps.length > 1 ? ob.gaps[spec.moteGap] : ob.gaps[0];
@@ -2258,6 +2344,10 @@
 
       const ob = { x: this.W + this.obstacleW, w: this.obstacleW, kind: 'normal', spec, passed: false, gaps: [] };
       this.layoutObstacle(ob);
+      // Without this the tutorial's own mode lesson would show BRITTLE with no
+      // faults at all — a lesson made entirely of forced ducks, teaching the
+      // opposite of the mode.
+      if (this.mode && this.mode.fault) this.placeFault(ob);
       this.obstacles.push(ob);
       if (spec.mote) {
         const g = ob.gaps[0];
@@ -2372,7 +2462,15 @@
         this._srAcc = 0;
         const el = document.getElementById('sr-status');
         // the same number a sighted player is looking at, multipliers included
-        if (el) el.textContent = T('score') + ' ' + Math.floor(this.score * this.scoreMul) + ', ' + T('combo') + ' ' + this.combo;
+        // A pip row and a 2px bar are invisible to these players, and nerve and
+        // heat are state the mode REQUIRES you to track — so they are read out
+        // too, on the same cadence.
+        const flt = this.mode && this.mode.fault;
+        const extra = flt
+          ? ', ' + T('nerve') + ' ' + this.nerve.toFixed(1)
+            + ', ' + T('heat') + ' ' + Math.round(clamp(this.heat / flt.full, 0, 1) * 100) + '%'
+          : '';
+        if (el) el.textContent = T('score') + ' ' + Math.floor(this.score * this.scoreMul) + ', ' + T('combo') + ' ' + this.combo + extra;
       }
     }
 
@@ -2504,10 +2602,19 @@
             this.texts.add(p.x + 26, p.y - p.r - 14, '+6', 'hsl(150 90% 65%)', 15);
             this.particles.burst(ob.x + ob.w, p.y, 5, { color: 'hsl(150 90% 65%)', spMax: 90, lifeMax: 0.4, sizeMax: 3 });
           }
+          // BRITTLE: you got through the gap, which here is the thing you were
+          // supposed to avoid. Nothing above is taken back.
+          if (this.mode && this.mode.fault && !ob.broken && this.duck(ob)) return;
         }
         if (ob.x + ob.w < -20) this.obstacles.splice(i, 1);
+        // BRITTLE: the fault is tested BEFORE the shield, so a shield is never
+        // spent on a hit the player meant to land. shatter() does not touch
+        // this.obstacles, so the downward walk needs no adjustment. A broken
+        // gate is inert: it cannot kill, cannot be re-shattered, cannot be
+        // ducked.
+        else if (this.mode && this.mode.fault && !ob.broken && this.faultHit(p, ob)) this.shatter(ob);
         // collision
-        else if (this.hitObstacle(p, ob)) {
+        else if (!ob.broken && this.hitObstacle(p, ob)) {
           // the tutorial coaches instead of ending the run
           if (this.tutorial) { this.tutSoftFail(); return; }
           if (this.shield) { this.breakShield(ob); return; }
@@ -2604,7 +2711,15 @@
       const targetFlow = this.flowActive ? 1 : this.combo >= flowAt - 6 ? 0.5 : 0;
       this.flow += (targetFlow - this.flow) * clamp(realDt * 3, 0, 1);
       // flow and the slow power-up both dilate time; take the stronger one
-      this.timeScaleTarget = Math.min(this.flowActive ? 0.62 : 1, this.fx.slow > 0 ? 0.7 : 1);
+      // BRITTLE's LAST STAND: when you can no longer afford to duck, the world
+      // eases down. You get precision, not time. It cannot be farmed — the only
+      // exit other than death is a shatter, and a shatter is exactly what lifts
+      // nerve back over the cost, so the state ends within three gates.
+      const _flt = this.mode && this.mode.fault;
+      this.timeScaleTarget = Math.min(
+        this.flowActive ? 0.62 : 1,
+        this.fx.slow > 0 ? 0.7 : 1,
+        (_flt && !this.tutorial && !this.attract && this.nerve < _flt.cost) ? _flt.hold : 1);
       // The music's intensity belongs to scoreMusic() and nowhere else. A second
       // copy of the rule used to live here, running every frame with no attract
       // guard and its own thresholds — so it overrode the deliberately calm menu
@@ -2664,11 +2779,95 @@
       return true;
     }
 
+    // ---- BRITTLE: the three outcomes ---------------------------------------
+    // Pure geometry, and it DELIBERATELY does not read `this.invuln`.
+    // hitObstacle's first line is `if (this.invuln > 0) return false`. If the
+    // fault test went through it, every gate crossed during the post-revive or
+    // post-shield grace would become a forced DUCK draining nerve — a player who
+    // spent 60 shards to revive at nerve 1 would be dead again two seconds
+    // later. Grace protects you from DEATH; it does not switch the mode off.
+    faultHit(p, ob) {
+      const b = this.faultBand(ob);
+      if (!b) return false;
+      const rr = p.r * 0.82;                        // the same forgiveness hitObstacle grants
+      if (p.x + rr < ob.x || p.x - rr > ob.x + ob.w) return false;
+      // OVERLAP, not containment: grazing the seam counts. The mode is generous
+      // about hitting and brutal about aiming, and that is the whole feel.
+      return p.y + rr > b.y0 && p.y - rr < b.y1;
+    }
+
+    // A hit. Note what this does NOT do: splice the gate.
+    //
+    // Leaving the broken gate in the list fixes three things at once. No mote or
+    // power-up is orphaned mid-flight — deleting a gate out from under one is
+    // verbatim the bug revive() documents. The tutorial still finishes, because
+    // its gate counter lives inside the `!ob.passed` block that a spliced gate
+    // would never reach. And nothing has to juggle indices inside a loop that
+    // walks downward.
+    shatter(ob) {
+      const p = this.player, f = this.mode.fault;
+      ob.broken = true;
+      ob._brokeAt = this.elapsed;
+      this.chainUp();
+      this.score += Math.round(f.pay * this.comboMult());
+      if (!this.tutorial && !this.attract) {
+        this.nerve = Math.min(f.nerve, this.nerve + f.gain);
+        this.heat = Math.min(f.cap, this.heat + f.stoke * (1 + Math.min(1, this.combo * 0.03)));
+      }
+      // Collect the passengers. Playing this mode CORRECTLY aims a band's height
+      // off the gap centre, which is exactly where a gate's reward sits — so
+      // without this a good BRITTLE player would systematically starve the item
+      // channel by being good at the mode.
+      for (let j = this.motes.length - 1; j >= 0; j--) {
+        const m = this.motes[j];
+        if (m.ob === ob && !m.taken) { this.collectMote(m); this.motes.splice(j, 1); }
+      }
+      for (let j = this.powers.length - 1; j >= 0; j--) {
+        if (this.powers[j].ob === ob) { this.collectPower(this.powers[j]); this.powers.splice(j, 1); }
+      }
+      this.particles.burst(ob.x + ob.w * 0.5, p.y, calmVisuals() ? 9 : 18,
+        { color: this.moteColor(), spMax: 300, lifeMax: 0.6, sizeMax: 4.5, glow: true });
+      this.flash = Math.max(this.flash, calmVisuals() ? 0.12 : 0.30);
+      this.shake = Math.max(this.shake, 8);
+      haptic(12);
+      Audio && this._sfx('shatter');
+    }
+
+    // A clean pass through the opening — which in this mode is the failure to
+    // commit. Returns true if it ended the run.
+    //
+    // Everything the gate already paid stays paid: the +6, the CLOSE! bonus and
+    // nearMissRun all still fire. Suppressing them would pay literally nothing
+    // for the PRECISION skill, whose entire payload is the close window, and
+    // would make the near-miss mission unachievable in a ranked mode. It is also
+    // thematically right — CLOSE! is measured to the lip, and the lip is exactly
+    // where the fault is.
+    duck(ob) {
+      const p = this.player, f = this.mode.fault;
+      this.breakCombo();
+      this.texts.add(p.x, p.y - 34, T('ducked'), this.dangerColor(1), 17);
+      Audio && this._sfx('deflate');
+      if (this.tutorial || this.attract) return false;   // the meters are suspended there
+      this.heat = Math.max(0, this.heat - f.cool);
+      if (this.nerve < f.cost) {
+        this.nerve = 0;
+        this.texts.add(p.x, p.y - 58, T('nerveOut'), this.dangerColor(1), 24);
+        this.die();
+        return true;                                     // the ordinary die(); no new end path
+      }
+      this.nerve -= f.cost;
+      return false;
+    }
+
     // The shield eats one hit: clear the gate that got you, keep the run alive.
     breakShield(ob) {
       const p = this.player;
       this.shield = false;
       this.invuln = 1.1;
+      // The shield deletes the gate and nudges you into its opening, so that
+      // gate neither shatters nor ducks. Leave enough nerve to survive the next
+      // honest mistake.
+      if (this.mode && this.mode.fault) this.nerve = Math.max(this.nerve, this.mode.fault.cost);
       this.shake = Math.max(this.shake, 18);
       this.flash = Math.max(this.flash, 0.45);
       this.damageFlash = 0.5;
@@ -3404,6 +3603,10 @@
       // applied to every pass below — the halo, the body and both lip passes —
       // or the parts drift out of step and a "hidden" wall keeps a bright edge.
       const rv = this.mode && this.mode.reveal;
+      // BRITTLE: a shattered bar dissolves over a quarter second. Folding it in
+      // HERE means the halo, the bodies and both lip passes all fade together —
+      // the same reason DREAD's reveal is computed once, above.
+      const brk = (ob) => (ob.broken ? Math.max(0, 1 - (this.elapsed - ob._brokeAt) * 4) : 1);
       if (rv) {
         const speed = Math.max(1, this.scrollSpeed);
         for (const ob of this.obstacles) {
@@ -3411,14 +3614,15 @@
           let a = clamp((rv.at - secondsAway) / rv.fade, 0, 1);
           // the menu demo is a background, not a challenge — never a fog bank
           if (this.attract) a = Math.max(a, 0.55);
-          ob._a = a;
+          ob._a = a * brk(ob);
         }
       } else {
-        for (const ob of this.obstacles) ob._a = 1;
+        for (const ob of this.obstacles) ob._a = brk(ob);
       }
 
       const segs = [];
       for (const ob of this.obstacles) {
+        if (ob._a <= 0) continue;
         let cursor = this.playTop;
         for (const g of ob.gaps) {
           const top = g.y - g.h * 0.5, bot = g.y + g.h * 0.5;
@@ -3471,6 +3675,57 @@
           }
         }
         ctx.globalAlpha = 1;
+      }
+
+      // ---- BRITTLE: the fault ----
+      // Drawn last, on top of the bar it belongs to.
+      //
+      // The primary channel is SHAPE AND POSITION, never colour and never
+      // motion: a notched chevron biting into the opening, pointing at the gap.
+      // Nothing else in the game owns that outline — motes are diamonds,
+      // power-ups hexagons, hazards long bars — so it survives greyscale. It is
+      // filled from moteColor() while the bar keeps dangerColor(), so it rides
+      // the reward-vs-danger axis all four colour-vision presets already re-hue;
+      // no new hue is introduced anywhere.
+      if (this.mode && this.mode.fault) {
+        const calm = calmVisuals();
+        ctx.save();
+        for (const ob of this.obstacles) {
+          const b = this.faultBand(ob);
+          if (!b || ob._a <= 0) continue;
+          const h = b.y1 - b.y0;
+          if (h < 2) continue;
+          // A slow breathe when motion is allowed; a static outline when it is
+          // not. Nothing is lost either way, because the pulse was never the
+          // channel carrying the information.
+          const br = calm ? 1 : 0.86 + 0.14 * Math.sin(this.elapsed * 7.5 + (ob.faultPhase || 0));
+          ctx.globalAlpha = ob._a * (this.attract ? 0.6 : 1) * (calm ? 0.9 : br);
+          // The notch points INTO the opening, so the shape itself says which
+          // way to aim: side -1 sits above the gap and bites downward.
+          const inward = ob.faultSide < 0 ? 1 : -1;
+          const x0 = ob.x - 1, x1 = ob.x + ob.w + 1;
+          const yFlat = ob.faultSide < 0 ? b.y0 : b.y1;
+          const yTip = ob.faultSide < 0 ? b.y1 : b.y0;
+          ctx.beginPath();
+          ctx.moveTo(x0, yFlat);
+          ctx.lineTo(x1, yFlat);
+          ctx.lineTo(x1, yTip - inward * h * 0.34);
+          ctx.lineTo((x0 + x1) * 0.5, yTip);
+          ctx.lineTo(x0, yTip - inward * h * 0.34);
+          ctx.closePath();
+          ctx.fillStyle = this.moteColor();
+          ctx.fill();
+          // High contrast and every colour-vision preset get a white luminance
+          // edge, which no deficiency can lose. `crispLips` is the same flag the
+          // lip pass above already computes.
+          if (crispLips) {
+            ctx.strokeStyle = 'rgba(255,255,255,.92)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
       }
       ctx.restore();
     }
@@ -4085,11 +4340,48 @@
       // score top-centre, mic top-right, item buttons bottom-centre)
       const x = clamp(W * 0.04, 12, 40), y = H - clamp(H * 0.04, 16, 34);
       ctx.fillStyle = `hsla(${md.accent} 90% 62% / .16)`;
-      const w = ctx.measureText(label).width + 18, h = s + 12;
+      // BRITTLE's two meters ride in the badge rather than under the score: the
+      // score's bottom edge already IS the top of the playfield, which is why it
+      // had to be shrunk once. There is room here and nowhere else.
+      const flt = md.fault;
+      const w = ctx.measureText(label).width + 18 + (flt ? 34 : 0), h = s + 12;
       this.roundRect(ctx, x, y - h / 2, w, h, h / 2); ctx.fill();
       ctx.strokeStyle = `hsla(${md.accent} 90% 66% / .5)`; ctx.lineWidth = 1; ctx.stroke();
       ctx.fillStyle = `hsl(${md.accent} 90% 72%)`;
       ctx.fillText(label, x + 9, y);
+      if (flt) {
+        // NERVE, as pips: filled for each whole nerve you hold, a half-lit one
+        // for the fraction, hollow for what you have spent. Red once you can no
+        // longer afford to duck — which is also when the world slows.
+        const low = this.nerve < flt.cost;
+        const pipC = low ? this.dangerColor(1) : this.moteColor();
+        const r = s * 0.28, gapx = s * 0.8;
+        let px = x + ctx.measureText(label).width + 18;
+        for (let i = 0; i < flt.nerve; i++) {
+          const have = clamp(this.nerve - i, 0, 1);
+          ctx.beginPath(); ctx.arc(px, y, r, 0, TAU);
+          ctx.strokeStyle = pipC; ctx.lineWidth = 1.2; ctx.stroke();
+          if (have > 0) {
+            // A WEDGE, not a smaller disc. Scaling the radius by the fraction
+            // makes two thirds of a nerve look like a whole one — and this is
+            // the number the player has to decide on.
+            ctx.beginPath();
+            ctx.moveTo(px, y);
+            ctx.arc(px, y, r, -Math.PI / 2, -Math.PI / 2 + have * TAU);
+            ctx.closePath();
+            ctx.fillStyle = pipC; ctx.fill();
+          }
+          px += gapx;
+        }
+        // HEAT, as a bar along the pill's inner bottom edge. No motion, no
+        // flash: legible in a screenshot and at any contrast setting. An economy
+        // the player cannot read is not a decision.
+        const hw = (w - 8) * clamp(this.heat / flt.full, 0, 1);
+        if (hw > 0.5) {
+          ctx.fillStyle = this.dangerColor(0.8);
+          ctx.fillRect(x + 4, y + h / 2 - 3, hw, 2);
+        }
+      }
       ctx.restore();
     }
 

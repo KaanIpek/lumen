@@ -135,6 +135,47 @@
       accent: 95,
       bounce: { e: 0.70, settle: 0.08 },
     },
+    {
+      // The one mode where the BAR is the target and the gap is the coward's
+      // line.
+      //
+      // Every gate carries a FAULT: a band of solid bar flush against one lip of
+      // one opening. Smash it and you score, you chain, and you win back nerve.
+      // Thread the gap instead and you DUCK — the chain dies because you did NOT
+      // touch a bar — and you spend a nerve to cool the corridor down.
+      //
+      // The whole mode is one economy. A shatter HEATS the difficulty clock; a
+      // duck COOLS it; and nerve is fractional, so three hits buy exactly one
+      // brake. That asymmetry is the entire design: without it "always commit"
+      // is the only policy and there is no decision to make. With it, a duck at
+      // high heat converts a likely death into a certain, survivable cost — and
+      // choosing when to cash out is the game.
+      //
+      // `heat` goes to the difficulty clock (`rampT`) and NEVER to `elapsed`,
+      // which is also the time-survived stat. It cannot generate an unthreadable
+      // corridor: gapFrac, scrollSpeed and spawnInterval all clamp, and every
+      // one of those floors is already reached by t = 900s, which the
+      // threadability test already covers.
+      id: 'brittle',
+      gap: 1.18, speed: 0.88, spawn: 1.12, ramp: 0.55,
+      scoreMul: 1.9, shardMul: 1.55, ranked: true, lethal: true,
+      accent: 318,
+      fault: {
+        band: 0.05,     // band height as a fraction of playH…
+        minR: 2.6,      // …but never shorter than baseR * this
+        wide: 1.45,     // widened on any gate that is not a plain one
+        pay: 18,        // raw score per shatter, before comboMult()
+        nerve: 3,       // meter cap
+        start: 2,       // …and what a run opens with
+        gain: 1 / 3,    // nerve per shatter: three hits buy one brake
+        cost: 1,        // nerve per duck
+        stoke: 2.4,     // seconds of heat per shatter (x1..x2 with the chain)
+        cool: 9,        // seconds of heat a duck bleeds off
+        hold: 0.82,     // last stand: timeScale while you cannot afford a duck
+        full: 160,      // heat that reads as "full" on the badge bar
+        cap: 240,       // hard ceiling; the ramp saturates long before this
+      },
+    },
   ];
 
   const byId = {};

@@ -116,7 +116,14 @@
       for (const ob of g.obstacles) {
         const gp = ob.gaps.reduce((a, b) => (Math.abs(b.y - p.y) < Math.abs(a.y - p.y) ? b : a));
         const dx = (ob.x + ob.w) - p.x;
-        if (dx > -4 && dx < bd) { bd = dx; tg = gp.y; }
+        if (dx > -4 && dx < bd) {
+          bd = dx;
+          // BRITTLE inverts the target: the bar is the thing to hit. An
+          // autopilot that keeps aiming at gap centres plays the mode exactly
+          // backwards and every test built on it would measure the wrong game.
+          const fb = g.faultBand ? g.faultBand(ob) : null;
+          tg = fb ? (fb.y0 + fb.y1) * 0.5 : gp.y;
+        }
       }
       for (const m of g.motes) {
         const dx = m.x - p.x;
@@ -1088,7 +1095,9 @@
   //      it over a fully lit corridor.
   test('Tutorial: PLAY plays, and each mode teaches its own last lesson', () => {
     freshStorage();
-    for (const id of ['classic', 'vortex', 'mirror', 'sprint', 'blackout', 'precision', 'zen']) {
+    // Every mode there IS, read from the table. The hardcoded list this replaces
+    // had silently stopped covering dread, glutton and rubber the day they shipped.
+    for (const id of L.Modes.MODES.map((m) => m.id)) {
       L.Modes.setCurrent(id);
       const g = newGame();
       g.startTutorial();
@@ -1133,7 +1142,9 @@
   // and no way to finish — the tutorial simply stopped there.
   test('Tutorial can be finished by playing it, in every mode', () => {
     freshStorage();
-    for (const id of ['classic', 'vortex', 'mirror', 'sprint', 'blackout', 'precision', 'zen']) {
+    // Every mode there IS, read from the table. The hardcoded list this replaces
+    // had silently stopped covering dread, glutton and rubber the day they shipped.
+    for (const id of L.Modes.MODES.map((m) => m.id)) {
       L.Modes.setCurrent(id);
       const g = newGame();
       g.startTutorial();
@@ -2257,6 +2268,208 @@
       assert(sep(d, r) > 100, mode + ' separates hazard from reward (got ' + Math.round(sep(d, r)) + '°)');
     });
     LUMEN.Store.colorblind = 'off';
+    g.toMenu();
+  });
+
+  // ---- BRITTLE -------------------------------------------------------------
+  // The mode that inverts the game: the bar is the target, the gap is the
+  // coward's line. Everything below guards a claim the mode makes to the player.
+
+  // A fault drawn over an OPENING would be an instruction to fly into thin air
+  // and score nothing; a fault that leaves the corridor would be unreachable.
+  // It is derived from the live gap on every read precisely so that moving,
+  // pulsing, tidal and resized gates all stay honest — so test all of them.
+  test('BRITTLE: the fault is always solid bar, never an opening', () => {
+    freshStorage();
+    L.Modes.setCurrent('brittle');
+    const g = newGame();
+    g.start();
+    const seen = Object.create(null);
+    let checked = 0;
+    for (let round = 0; round < 120; round++) {
+      g.elapsed = [0, 30, 90, 300, 900][round % 5];
+      g.obstacles.length = 0;
+      g.spawnObstacle();
+      const ob = g.obstacles[0];
+      seen[ob.kind] = (seen[ob.kind] || 0) + 1;
+      // Sweep a whole motion period: a band that is legal at rest and illegal at
+      // the top of the gate's travel is a band that lies.
+      for (let k = 0; k < 24; k++) {
+        g.elapsed += 0.13;
+        if (ob.kind === 'moving') {
+          ob.gaps[0].y = ob.gaps[0].baseY =
+            ob.baseGapY + Math.sin(g.elapsed * ob.moveSpeed + ob.movePhase) * ob.moveAmp;
+        } else if (ob.kind === 'pulsing') {
+          ob.gaps[0].h = ob.baseGapH * (1 - ob.pulseAmp * (0.5 + 0.5 * Math.sin(g.elapsed * ob.moveSpeed + ob.movePhase)));
+        }
+        const b = g.faultBand(ob);
+        assert(b, ob.kind + ' gate has a fault');
+        assert(b.y0 >= g.playTop - 0.5 && b.y1 <= g.playBottom + 0.5, 'the fault stays in the corridor');
+        assert(b.y1 - b.y0 >= g.baseR * 1.6, 'and stays big enough to aim at (' + (b.y1 - b.y0).toFixed(1) + ')');
+        for (const gap of ob.gaps) {
+          const t = gap.y - gap.h * 0.5, bo = gap.y + gap.h * 0.5;
+          assert(b.y1 <= t + 0.5 || b.y0 >= bo - 0.5,
+            'the fault never overlaps an opening (' + ob.kind + ')');
+        }
+        checked++;
+      }
+    }
+    assert(checked > 2000, 'a real sweep ran');
+    assert(seen.normal && seen.double, 'and it covered more than one archetype');
+    L.Modes.setCurrent('classic');
+    g.toMenu();
+  });
+
+  // The band is derived, never stored — so a resize must not be able to strand
+  // it. This is the arm traps were missing when they shipped.
+  test('BRITTLE: the fault survives a resize', () => {
+    freshStorage();
+    L.Modes.setCurrent('brittle');
+    const g = newGame();
+    g.start();
+    for (let i = 0; i < 20; i++) g.spawnObstacle();
+    g.resize(390, 844);
+    for (const ob of g.obstacles) {
+      const b = g.faultBand(ob);
+      assert(b, 'still there after a resize');
+      assert(b.y0 >= g.playTop - 0.5 && b.y1 <= g.playBottom + 0.5, 'still inside the corridor');
+      for (const gap of ob.gaps) {
+        const t = gap.y - gap.h * 0.5, bo = gap.y + gap.h * 0.5;
+        assert(b.y1 <= t + 0.5 || b.y0 >= bo - 0.5, 'still never over an opening');
+      }
+    }
+    L.Modes.setCurrent('classic');
+    g.toMenu();
+  });
+
+  // The three outcomes, driven through real frames — the only harness that
+  // catches a wiring mistake, because frame() swallows exceptions and a broken
+  // mode presents as "nothing happens".
+  test('BRITTLE: smash it, duck it, or die on the wrong part of the bar', () => {
+    freshStorage();
+    L.Modes.setCurrent('brittle');
+    const g = newGame();
+    const f = g.mode ? null : null;
+
+    // Put a gate on the orb, with the orb wherever the caller says.
+    const stage = (aim) => {
+      g.start();
+      g.obstacles.length = 0; g.motes.length = 0; g.powers.length = 0;
+      g.spawnObstacle();
+      const ob = g.obstacles[0];
+      const p = g.player;
+      ob.x = p.x - ob.w * 0.5;
+      const b = g.faultBand(ob);
+      const gap = ob.gaps[ob.faultGap] || ob.gaps[0];
+      p.y = aim === 'fault' ? (b.y0 + b.y1) * 0.5 : gap.y;
+      p.vy = 0;
+      return { ob, p, b, gap };
+    };
+
+    // 1. SHATTER
+    let st = stage('fault');
+    const flt = g.mode.fault;
+    const nerve0 = g.nerve, score0 = g.score;
+    g.update(1 / 60);
+    assert(st.ob.broken, 'the bar breaks');
+    eq(g.state, 'play', 'and the run continues');
+    assert(g.combo >= 1, 'it feeds the chain');
+    assert(g.score > score0, 'and pays');
+    assert(Math.abs(g.nerve - (nerve0 + flt.gain)) < 1e-9, 'nerve up by exactly one third');
+    assert(g.heat > 0, 'and the corridor heats up');
+
+    // 2. DEATH — solid bar, away from the fault
+    st = stage('fault');
+    // the far lip of the OTHER side is bar, and is not the fault
+    st.p.y = st.ob.faultSide < 0 ? g.playBottom - 2 : g.playTop + 2;
+    g.update(1 / 60);
+    eq(g.state, 'dead', 'the rest of the bar still kills');
+
+    // 3. DUCK — a clean pass through the opening
+    st = stage('gap');
+    g.combo = 5;
+    const heat0 = g.heat = 40, nerveB = g.nerve = 2;
+    const scoreB = g.score;
+    st.ob.x = st.p.x - st.p.r - st.ob.w - 1;   // already behind the orb
+    g.update(1 / 60);
+    assert(st.ob.passed, 'the gate counted as passed');
+    eq(g.combo, 0, 'and the chain died because you did NOT touch a bar');
+    assert(g.nerve === nerveB - flt.cost, 'a nerve was spent');
+    assert(g.heat === heat0 - flt.cool, 'and the corridor cooled');
+    assert(g.score > scoreB, 'the gate still paid its +6 — the PRECISION skill depends on it');
+    eq(g.state, 'play', 'and with nerve left, the run goes on');
+
+    L.Modes.setCurrent('classic');
+    g.toMenu();
+  });
+
+  // The economy IS the mode. Three hits buy one brake; alternating burns down.
+  test('BRITTLE: three hits buy one brake, and the alternator starves', () => {
+    freshStorage();
+    L.Modes.setCurrent('brittle');
+    const g = newGame();
+    g.start();
+    const f = g.mode.fault;
+    eq(f.gain * 3, f.cost, 'three shatters pay for exactly one duck');
+    // Alternating shatter/duck nets -2/3 of a nerve per pair, so from the
+    // opening 2.0 the alternator is out inside three pairs. That is what stops
+    // "duck everything dangerous" from being a strategy.
+    let n = f.start;
+    let pairs = 0;
+    while (n >= f.cost) { n = Math.min(f.nerve, n + f.gain) - f.cost; pairs++; }
+    assert(pairs <= 3, 'the alternator is dead in three pairs (' + pairs + ')');
+    // …and a duck must be able to undo more heat than a shatter adds, or it is
+    // never the right answer and the mode has no decision in it.
+    assert(f.cool > f.stoke * 2, 'one duck is worth more than two shatters of heat');
+    L.Modes.setCurrent('classic');
+    g.toMenu();
+  });
+
+  // Heat pushes the DIFFICULTY clock and must never touch `elapsed`, which is
+  // also the time-survived stat the run reports.
+  test('BRITTLE: heat drives the corridor, not the clock on the wall', () => {
+    freshStorage();
+    L.Modes.setCurrent('brittle');
+    const g = newGame();
+    g.start();
+    g.elapsed = 40; g.heat = 0;
+    const cold = { t: g.rampT, gap: g.gapFrac, speed: g.scrollSpeed, spawn: g.spawnInterval };
+    g.heat = 60;
+    assert(g.elapsed === 40, 'the run clock is untouched');
+    assert(g.rampT > cold.t, 'the difficulty clock moved');
+    assert(g.gapFrac <= cold.gap && g.scrollSpeed >= cold.speed && g.spawnInterval <= cold.spawn,
+      'and the corridor actually tightened');
+    // Every other mode must be byte-identical: heat is undefined there.
+    L.Modes.setCurrent('classic');
+    const c = newGame();
+    c.start();
+    c.elapsed = 40;
+    assert(Math.abs(c.rampT - 40 * c.mode.ramp) < 1e-9, 'Classic reads exactly elapsed * ramp');
+    c.toMenu();
+  });
+
+  // Playing the mode correctly aims a band's height off the gap centre, which is
+  // exactly where a gate's reward rides. Breaking the gate must therefore hand
+  // the reward over, not delete it mid-flight — the orphaned-passenger bug.
+  test('BRITTLE: a shattered gate hands over its passengers', () => {
+    freshStorage();
+    L.Modes.setCurrent('brittle');
+    const g = newGame();
+    g.start();
+    g.obstacles.length = 0; g.motes.length = 0; g.powers.length = 0;
+    g.spawnObstacle();
+    const ob = g.obstacles[0], p = g.player;
+    const gap = ob.gaps[ob.faultGap] || ob.gaps[0];
+    g.motes.push({ x: ob.x + ob.w * 0.5, y: gap.y, r: g.baseR * 0.85, taken: false, pulse: 0, ob, gap });
+    ob.x = p.x - ob.w * 0.5;
+    const b = g.faultBand(ob);
+    p.y = (b.y0 + b.y1) * 0.5; p.vy = 0;
+    const motes0 = g.motesRun;
+    g.update(1 / 60);
+    assert(ob.broken, 'the gate broke');
+    assert(g.motesRun > motes0, 'and its mote was collected, not stranded');
+    assert(!g.motes.some((m) => m.ob === ob), 'nothing is left riding a gate that is gone');
+    L.Modes.setCurrent('classic');
     g.toMenu();
   });
 
