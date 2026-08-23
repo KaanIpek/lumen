@@ -1133,6 +1133,21 @@
       return this.elapsed > 35;
     }
 
+    // The DIFFICULTY clock, which is NOT the run clock.
+    //
+    // `elapsed` is also the time-survived stat — finalizeRun subtracts
+    // headStart from it — so a mode that wants to push the corridor forward
+    // must push HERE and never there. Three getters computed this same product
+    // independently and a fourth copy sat in the spawn call; this codebase
+    // already has three drifted copies of the gravity constant, which is the
+    // argument against a fifth of anything.
+    //
+    // `heat` is 0 (undefined) in every mode but BRITTLE, so this is
+    // byte-identical for the other ten.
+    get rampT() {
+      return this.elapsed * (this.mode ? this.mode.ramp : 1) + (this.heat || 0);
+    }
+
     get scrollSpeed() {
       // dev freeze: hold the world still so a gate can be inspected
       if (LUMEN.Cheats && LUMEN.Cheats.freeze && LUMEN.Cheats.available) return 0;
@@ -1143,7 +1158,7 @@
       const m = this.mode;
       // `ramp` scales how quickly the run tightens: Zen never tightens, Sprint
       // tightens nearly three times as fast as Classic.
-      const t = this.elapsed * (m ? m.ramp : 1);
+      const t = this.rampT;
       // A world may set its own pace too. Dividing by both puts them on the same
       // footing: >1 is faster, <1 is more reading time.
       const reaction = clamp(2.7 - t * 0.0075, 1.25, 2.7) * d.react
@@ -1153,14 +1168,14 @@
     get spawnInterval() {
       if (this.tutorial) return 2.0;
       const m = this.mode;
-      const t = this.elapsed * (m ? m.ramp : 1);
+      const t = this.rampT;
       return clamp(1.55 - t * 0.005, 0.80, 1.55) * (this.diff || DIFFICULTY.normal).spawn * (m ? m.spawn : 1) * ((this.world && this.world.spawn) || 1);
     }
     get gapFrac() {
       if (this.tutorial) return 0.42;   // generous openings while learning
       const d = this.diff || DIFFICULTY.normal;
       const m = this.mode;
-      const t = this.elapsed * (m ? m.ramp : 1);
+      const t = this.rampT;
       // The outer clamp is the safety rail: no mode multiplier may squeeze an
       // opening below what the orb can physically thread, or widen it past the
       // playfield. Precision sits right on the floor; Zen sits on the ceiling.
@@ -2185,7 +2200,7 @@
         // there is nothing for it to protect against there anyway.
         : Game.makeSpec(this.rng, this.elapsed, this.lastC,
           { gapMul: this.gapMul, minGap: this.minGapFrac,
-            rampT: this.elapsed * (this.mode ? this.mode.ramp : 1) });
+            rampT: this.rampT });
       this.lastC = spec.c;
       this._lastSpecTight = !!spec.tight;
 
@@ -3021,15 +3036,35 @@
       return true;
     }
 
-    collectMote(m) {
+    // One step of the chain, and the flow-entry moment that hangs off it.
+    //
+    // Extracted because BRITTLE feeds the same chain by SHATTERING a bar rather
+    // than by collecting a mote, and a second copy of "combo += 1, retime the
+    // window, remember the best, and fire FLOW! on exactly the right count"
+    // would drift — as three copies of the gravity constant in this file
+    // already have.
+    chainUp() {
       this.combo += 1;
-      this.motesRun += 1;
-      // a bounty counts twice: once for the chain, once again for the payout
-      if (m.bounty) this.motesRun += 1;
       // the window shrinks as the combo climbs — track the max so the HUD bar reads true
       this.comboTimerMax = clamp(3.6 - this.combo * 0.05, 2.2, 3.6) * (this.mod ? this.mod.comboTimeMul : 1);
       this.comboTimer = this.comboTimerMax;
       if (this.combo > this.bestComboRun) this.bestComboRun = this.combo;
+      // flow entry moment
+      if (this.combo === (this.mod ? this.mod.flowAt : 16)) {
+        this.shake = Math.max(this.shake, 12);
+        this.flash = 0.5;
+        this.texts.add(this.player.x, this.player.y - 46, 'FLOW!', 'hsl(300 100% 72%)', 30);
+        haptic([12, 8, 24]);
+        Audio && this._sfx('flow');
+        this.particles.burst(this.player.x, this.player.y, 30, { color: 'hsl(300 100% 72%)', spMax: 300, lifeMax: 1, sizeMax: 6, glow: true });
+      }
+    }
+
+    collectMote(m) {
+      this.chainUp();
+      this.motesRun += 1;
+      // a bounty counts twice: once for the chain, once again for the payout
+      if (m.bounty) this.motesRun += 1;
       const mult = this.comboMult();
       const pts = Math.round(10 * mult * (m.bounty ? 2 : 1) * ((this.world && this.world.moteWorth) || 1));
       this.score += pts;
@@ -3049,15 +3084,6 @@
         else if (id === 'combo' && this.combo >= this.tutStage.goal) this.tutAdvance(this.tutStage.goal);
       }
 
-      // flow entry moment
-      if (this.combo === (this.mod ? this.mod.flowAt : 16)) {
-        this.shake = Math.max(this.shake, 12);
-        this.flash = 0.5;
-        this.texts.add(this.player.x, this.player.y - 46, 'FLOW!', 'hsl(300 100% 72%)', 30);
-        haptic([12, 8, 24]);
-        Audio && this._sfx('flow');
-        this.particles.burst(this.player.x, this.player.y, 30, { color: 'hsl(300 100% 72%)', spMax: 300, lifeMax: 1, sizeMax: 6, glow: true });
-      }
       // milestone flashes
       if (this.combo % 10 === 0 && this.combo > 0) {
         this.texts.add(this.player.x, this.player.y - 40, 'x' + mult, col, 24);
