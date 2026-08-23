@@ -663,6 +663,20 @@
   // how wide the openings are, how much reaction time you get, and how often
   // gates arrive. `scoreMul` keeps the board honest — a harder run is worth more.
   const DIFFICULTY = {
+    // VERY EASY is comfort, not a discount.
+    //
+    // It exists so somebody who wants to see the eleven worlds and the ten modes
+    // can, without the reflex test in the way — so the openings are wide, the
+    // corridor gives you time, and obstacles arrive further apart.
+    //
+    // But a run you can hold almost indefinitely must not also be the fastest
+    // way to earn, or every price in the shop ends up set by the setting nobody
+    // is meant to grind on. scoreMul alone cannot do that job: an easier run
+    // simply lasts longer, so a smaller multiplier on a much bigger number can
+    // come out AHEAD. shardMul is the second brake, applied to the payout only,
+    // and this is the one difficulty that carries it — the others leave it
+    // undefined, which reads as 1 and leaves their balance exactly as it was.
+    veryeasy: { gap: 1.45, react: 1.55, spawn: 1.42, scoreMul: 0.55, shardMul: 0.35 },
     easy:   { gap: 1.20, react: 1.25, spawn: 1.18, scoreMul: 0.75 },
     normal: { gap: 1.00, react: 1.00, spawn: 1.00, scoreMul: 1.00 },
     hard:   { gap: 0.84, react: 0.84, spawn: 0.88, scoreMul: 1.40 },
@@ -1295,9 +1309,33 @@
       window.addEventListener('blur', () => { if (this.state === State.PLAY) this.pause(); });
       // blur is unreliable on mobile app-switch; visibilitychange is not. Without
       // this the player returns to a live run already on top of an obstacle.
+      //
+      // Pausing the RUN is only half of it, and the half that was missing cost a
+      // tester report: "music still playing on background when I was left the
+      // app". The menu has music too, so leaving from anywhere other than a run
+      // left LUMEN playing behind the home screen. The audio goes to sleep
+      // whatever screen we are on; only the run needs the state check.
+      const away = () => {
+        if (this.state === State.PLAY) this.pause();
+        Audio && Audio.sleep();
+      };
+      const back = () => { Audio && Audio.wake(); };
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden && this.state === State.PLAY) this.pause();
+        if (document.hidden) away(); else back();
       });
+      // Android's WebView does not reliably fire visibilitychange when the task
+      // is switched away — which is the case the tester was in. Capacitor's App
+      // plugin reports it directly, so ask it too where it exists; both paths
+      // are idempotent, so being told twice costs nothing.
+      const C = window.Capacitor;
+      const AppPlugin = C && C.Plugins && C.Plugins.App;
+      if (AppPlugin && AppPlugin.addListener) {
+        try {
+          AppPlugin.addListener('appStateChange', (st) => {
+            if (st && st.isActive) back(); else away();
+          });
+        } catch (e) { /* older bridge; visibilitychange still covers the tab */ }
+      }
     }
 
     action() {
@@ -1960,7 +1998,10 @@
       // times anything is 0) and the daily — which flies no world at all — is
       // untouched.
       const seasonMul = (LUMEN.Cosmetics && this.world) ? LUMEN.Cosmetics.seasonBonus(this.world.id) : 1;
-      const shardMul = (mode ? mode.shardMul : 1) * seasonMul;
+      // …and the difficulty's own brake, so VERY EASY cannot out-earn the
+      // setting it is easier than. Undefined on every other difficulty.
+      const diffShard = (this.diff && this.diff.shardMul != null) ? this.diff.shardMul : 1;
+      const shardMul = (mode ? mode.shardMul : 1) * seasonMul * diffShard;
       const shardsEarned = (ranked && shardMul > 0 && LUMEN.Cosmetics)
         ? LUMEN.Cosmetics.award(s, this.motesRun, this.flowSecRun, shardMul,
             1 / ((this.world && this.world.moteRate) || 1)) : 0;

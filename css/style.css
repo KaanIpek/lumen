@@ -658,11 +658,17 @@ kbd {
 /* difficulty selector */
 .diff-row { display: flex; gap: 6px; margin-bottom: 12px; }
 .diffbtn {
-  flex: 1; padding: 12px 4px; min-height: 44px; border-radius: 10px; cursor: pointer;
-  font-family: var(--font-display); font-weight: 800; letter-spacing: .08em; font-size: 12px;
+  /* Four settings now, and VERY EASY / ÇOK KOLAY / MUY FÁCIL are two words. The
+     row must not widen the menu, so the buttons share it equally, the label is
+     allowed to wrap onto a second line, and the type scales with the viewport
+     rather than overflowing a 360px phone at a fixed 12px. */
+  flex: 1 1 0; min-width: 0; padding: 10px 3px; min-height: 44px; border-radius: 10px; cursor: pointer;
+  font-family: var(--font-display); font-weight: 800; letter-spacing: .05em;
+  font-size: clamp(9px, 2.5vw, 12px); line-height: 1.15; hyphens: none;
   color: var(--muted); background: rgba(255,255,255,.05); border: 1px solid var(--panel-brd);
 }
 .diffbtn.active { color: #04121a; background: linear-gradient(135deg, var(--cyan), var(--violet)); border-color: transparent; }
+.diffbtn[data-diff="veryeasy"].active { background: linear-gradient(135deg, #7ef0c0, #4df3ff); color: #04121a; }
 .diffbtn[data-diff="hard"].active { background: linear-gradient(135deg, #ffd15c, #ff5c6e); color: #1a0008; }
 
 /* progress: achievements + skills */
@@ -705,7 +711,12 @@ kbd {
   animation: playPulse 1.6s ease-in-out infinite;
 }
 .btn-revive:hover { filter: brightness(1.08); }
-.revive-no { width: 100%; margin-top: 10px; }
+/* END RUN sits BESIDE Menu, not under it. `width: 100%` overrode the row's
+   `flex: 1 1 0` and pushed it onto a line of its own at full width, so the
+   gentler option looked like the small one and ending a run looked like the
+   thing the panel wanted you to do. Same size, same weight, and the reading
+   order in the markup does the rest. */
+.revive-no { flex: 1 1 0; }
 
 /* leaderboard */
 .scores-panel { width: min(440px, 94vw); }

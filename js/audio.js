@@ -292,6 +292,33 @@
 
     unlock() {
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      this._slept = false;
+    },
+
+    // Leaving the app has to take the sound with it.
+    //
+    // Pausing the RUN was not enough, because the menu plays too: a player who
+    // backed out to the home screen from the title screen left LUMEN's music
+    // playing behind it. A tester reported exactly that. Stopping the sequencer
+    // is not enough either — the looping world stems and the drone are separate
+    // sources and keep going on their own.
+    //
+    // Suspending the context is the one lever that covers all of them at once,
+    // and it is reversible: the sequencer's next-note time is measured against
+    // ctx.currentTime, which freezes with it, so waking up resumes mid-bar
+    // rather than replaying or skipping.
+    sleep() {
+      if (!this.ctx || this.ctx.state !== 'running') return;
+      this._slept = true;
+      try { this.ctx.suspend(); } catch (e) { /* already gone; nothing to stop */ }
+    },
+    // Only wake what WE put to sleep. A context suspended by the browser's own
+    // autoplay policy must stay suspended until a real gesture unlocks it, or
+    // the first tap after returning would be answered with silence.
+    wake() {
+      if (!this.ctx || !this._slept) return;
+      this._slept = false;
+      try { this.ctx.resume(); } catch (e) { /* the next unlock() will retry */ }
     },
 
     setMuted(m) {

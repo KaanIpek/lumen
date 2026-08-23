@@ -2268,11 +2268,60 @@
       LUMEN.Store.difficulty = d; g.start(); g.elapsed = 30;
       return { gap: g.gapFrac, speed: g.scrollSpeed, spawn: g.spawnInterval, mul: g.diff.scoreMul };
     };
-    const e = probe('easy'), n = probe('normal'), h = probe('hard');
-    assert(e.gap > n.gap && n.gap > h.gap, 'openings narrow as difficulty rises');
-    assert(e.speed < n.speed && n.speed < h.speed, 'the world speeds up as difficulty rises');
-    assert(e.spawn > n.spawn && n.spawn > h.spawn, 'gates arrive more often as difficulty rises');
-    assert(e.mul < n.mul && n.mul < h.mul, 'harder settings are worth more points');
+    const v = probe('veryeasy'), e = probe('easy'), n = probe('normal'), h = probe('hard');
+    assert(v.gap > e.gap && e.gap > n.gap && n.gap > h.gap, 'openings narrow as difficulty rises');
+    assert(v.speed < e.speed && e.speed < n.speed && n.speed < h.speed, 'the world speeds up as difficulty rises');
+    assert(v.spawn > e.spawn && e.spawn > n.spawn && n.spawn > h.spawn, 'gates arrive more often as difficulty rises');
+    assert(v.mul < e.mul && e.mul < n.mul && n.mul < h.mul, 'harder settings are worth more points');
+    LUMEN.Store.difficulty = 'normal';
+    g.toMenu();
+  });
+
+  // VERY EASY exists so the game can be seen without the reflex test. The danger
+  // is the obvious one: a run you can hold almost indefinitely becomes the best
+  // place to farm, and then every price in the shop is set by the setting nobody
+  // is meant to grind on. scoreMul alone cannot prevent that — an easier run
+  // lasts longer, so a smaller multiplier on a much larger number can come out
+  // ahead. The payout needs its own brake, and it has to actually reach award().
+  test('Difficulty: VERY EASY is the gentlest to play and the poorest to farm', () => {
+    freshStorage();
+    const D = LUMEN.DIFFICULTY;
+    assert(D.veryeasy, 'the setting exists');
+    assert(D.veryeasy.shardMul < 1, 'and it pays less per point than everything else');
+    ['easy', 'normal', 'hard'].forEach((d) => {
+      eq(D[d].shardMul, undefined, d + ' keeps the balance it always had');
+    });
+
+    // The brake has to survive the trip to the payout, not just sit in the table.
+    // Watch the multiplier that actually reaches award(): the shard TOTAL is no
+    // good here, because missions pay out in the same breath and their rewards
+    // depend on which goals happened to be rolled.
+    const g = newGame();
+    const mulFor = (d) => {
+      freshStorage();
+      LUMEN.Store.difficulty = d;
+      LUMEN.Modes.setCurrent('classic');
+      const real = LUMEN.Cosmetics.award;
+      let seen = null;
+      LUMEN.Cosmetics.award = function (score, motes, flow, mul, mw) {
+        seen = mul;
+        return real.call(this, score, motes, flow, mul, mw);
+      };
+      try {
+        g.start();
+        g.score = 6000; g.motesRun = 40; g.flowSecRun = 12;
+        g.finalizeRun();
+      } finally {
+        LUMEN.Cosmetics.award = real;
+      }
+      g.toMenu();
+      return seen;
+    };
+    const veryEasy = mulFor('veryeasy'), normal = mulFor('normal');
+    assert(veryEasy != null && normal != null, 'both runs reached the payout');
+    assert(veryEasy < normal,
+      'VERY EASY pays a smaller share of the same run (' + veryEasy + ' vs ' + normal + ')');
+    eq(normal, 1, 'and Normal is untouched');
     LUMEN.Store.difficulty = 'normal';
     g.toMenu();
   });
