@@ -2271,6 +2271,59 @@
     g.toMenu();
   });
 
+  // Guideline 5.1.2, and the reason 1.0 was rejected a second time: consent has
+  // to come BEFORE the upload. Signing in is consent to having an account; it is
+  // not consent to being published on a board strangers read.
+  // Guideline 5.1.2, and the reason 1.0 was rejected a second time: consent has
+  // to come BEFORE the upload. Signing in is consent to having an account; it is
+  // not consent to being published on a board strangers read.
+  //
+  // Declared async, not merely promise-returning: the runner only defers and
+  // awaits an AsyncFunction, so a plain function that returns a promise is
+  // marked passed immediately and leaks its stubs into the next test.
+  test('Leaderboard: nothing is published until the player says so', async () => {
+    freshStorage();
+    const LB = L.Leaderboard;
+    const sent = [];
+    const realSubmit = LB.submit;
+    const realFetch = window.fetch;
+    window.fetch = () => Promise.resolve({
+      ok: true, status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve([]),
+    });
+    LB.submit = (sc) => { sent.push(sc); return Promise.resolve(null); };
+    try {
+      LB._sb = { url: 'https://test.invalid', key: 'k' };
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-quiet' } };
+      L.Store.playerName = 'tester';
+      L.Store.boardConsent = false;
+
+      // Everything else a submit needs is in place — an account, a name, a board.
+      assert(LB.enabled && L.Auth.signedIn && LB.named, 'the upload is otherwise ready');
+      eq(LB.canSubmit, false, 'and it still refuses, because nobody agreed to it');
+
+      LB.submitQuietly(4000, 9, 'alltime');
+      LB.hold(4000, 9, 'alltime');
+      const none = await LB.flushPending();
+      eq(sent.length, 0, 'a run that beat a record still went nowhere');
+      eq(none.length, 0, 'and the held best stayed held');
+
+      // Saving the name is the affirmative act, with the disclosure above it.
+      L.Store.boardConsent = true;
+      eq(LB.canSubmit, true, 'now it may go up');
+      const done = await LB.flushPending();
+      eq(done.length, 1, 'and what was held goes with it');
+      eq(sent[0], 4000, 'the same run, unchanged');
+    } finally {
+      window.fetch = realFetch;
+      LB.submit = realSubmit;
+      L.Auth.session = null;
+      LB._sb = null;
+      L.Store.boardConsent = false;
+    }
+  });
+
   // ---- BRITTLE -------------------------------------------------------------
   // The mode that inverts the game: the bar is the target, the gap is the
   // coward's line. Everything below guards a claim the mode makes to the player.
@@ -4132,6 +4185,7 @@
   // watching — and nothing tells them why their name is missing.
   test('Leaderboard: a record set before the account still reaches the board', async () => {
     freshStorage();
+    L.Store.boardConsent = true;   // this test is about the record, not the consent
     const LB = L.Leaderboard;
     const realSb = LB._sb;
     const realFetch = window.fetch;
@@ -4171,6 +4225,7 @@
       // …and it must never LOWER the row. RESET PROGRESS leaves a small record
       // behind; the board's real one has to survive it.
       freshStorage();
+      L.Store.boardConsent = true;   // RESET PROGRESS clears it too; re-grant
       L.Store.playerName = 'veteran';
       L.Scores.record(9, 0, 'classic');
       await LB.seedFromLocalBests();
@@ -4189,7 +4244,7 @@
       window.fetch = realFetch;
       LB.submit = realSubmit;
       L.Auth.session = null;
-      LB._sb = realSb;
+      LB._sb = null;
     }
   });
 
@@ -4297,6 +4352,7 @@
   // of the run you are proudest of.
   test('Only personal bests go to the shared board; every run stays local', () => {
     freshStorage();
+    L.Store.boardConsent = true;   // the consent gate has its own test
     const LB = L.Leaderboard;
     const realSubmit = LB.submitQuietly;
     const sent = [];
@@ -4342,6 +4398,7 @@
   // were all "anon" for exactly this reason.
   test('A best is held until there is BOTH a name and an account', async () => {
     freshStorage();
+    L.Store.boardConsent = true;   // …and consent, which is tested separately
     const LB = L.Leaderboard;
     const realSubmit = LB.submit;
     const realSb = LB._sb;
@@ -4384,7 +4441,7 @@
       eq(L.Store.pendingBest.alltime.score, 2000, 'and the run is still queued for next time');
     } finally {
       LB.submit = realSubmit;
-      LB._sb = realSb;
+      LB._sb = null;
       L.Auth.session = null;
       L.Store.playerName = '';
       L.Modes.setCurrent('classic');

@@ -331,7 +331,14 @@
     // whole reason an account exists here. Play, shop, daily, achievements and
     // MY RUNS all still work signed out.
     get canSubmit() {
-      return this.enabled && !!(LUMEN.Auth && LUMEN.Auth.signedIn) && this.named;
+      // …and consent, which is the one of these four that is not about whether
+      // the upload CAN work. A name and an account make a row possible; only
+      // this says the player asked for it. It is checked here rather than at
+      // each call site because there are five of them — submitQuietly, the
+      // flush, the seed, the rename and the board screen — and a new one added
+      // later would otherwise ship without a gate.
+      return this.enabled && !!(LUMEN.Auth && LUMEN.Auth.signedIn) && this.named
+        && !!(Store && Store.boardConsent);
     },
 
     // A personal best set BEFORE there was an account is stranded, and this is

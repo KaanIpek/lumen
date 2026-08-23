@@ -125,6 +125,14 @@
     // moved backwards cannot mint extra ad views.
     get adsToday() { return this._read('lumen_ads', ''); },
     set adsToday(v) { this._write('lumen_ads', String(v || '')); },
+    // Did the player agree to their name and scores being published?
+    //
+    // Guideline 5.1.2: consent has to come BEFORE the upload, not be implied by
+    // having signed in. Nothing reaches the board without this — canSubmit gates
+    // every path on it, including the pending-best flush and the seeding of a
+    // record set before the account existed.
+    get boardConsent() { return this._read('lumen_board_ok', '') === '1'; },
+    set boardConsent(v) { this._write('lumen_board_ok', v ? '1' : ''); },
     get playerName() { return this._read('lumen_name', ''); },
     set playerName(v) { this._write('lumen_name', v); },
     // Bests that have no name to go up under yet, keyed by board.

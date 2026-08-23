@@ -1569,6 +1569,12 @@
       const name = LB.cleanName(input.value);
       input.value = name;                       // show what was actually accepted
       if (!name) { this.toast(T('lbNameEmpty')); return; }
+      // CONSENT, recorded at the one moment the player asks for their name to go
+      // up, and before any request is made. The disclosure naming exactly what
+      // is uploaded and who can see it sits directly above this button; pressing
+      // it is the affirmative act. Set it here rather than after the network
+      // calls below, because rename() is itself a request.
+      Store.boardConsent = true;
       // Rename FIRST, then send anything held. Renaming updates the rows this
       // player already owns; sending first would put the old name up one last
       // time and leave it there.

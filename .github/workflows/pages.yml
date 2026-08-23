@@ -66,6 +66,9 @@ jobs:
           # Play's Data safety form stores this URL and fetches it; a 404
           # here is a policy problem, not a broken link.
           test -s dist/delete-account.html && echo "delete-account.html present"
+          # The Support URL App Review checks. Shipping without it is a 1.5
+          # rejection, which is exactly how it was found.
+          test -s dist/support.html && echo "support.html present"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
