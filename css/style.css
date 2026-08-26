@@ -167,6 +167,34 @@ body.no-blur .icon-btn { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 .btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: var(--cyan); color: #fff; }
 
+/* The lesson button, for somebody who has never played.
+   
+   The first run used to be hijacked: PLAY relabelled itself "START — LEARN TO
+   PLAY" and then delivered a full-speed scored run. That was reversed, and the
+   replacement was supposed to be this class on HOW TO PLAY — except the rule
+   was never written, so `classList.toggle('nudge', …)` has been setting a class
+   that styles nothing. A new player has been getting no signal at all, which is
+   indistinguishable from "the tutorial is broken", and was reported as exactly
+   that.
+
+   Colour is not the only channel: the border and the glow change together, and
+   the label brightens. The breathing is the least of it, and it stops entirely
+   for anyone who asked for less motion. */
+.btn-ghost.nudge {
+  border-color: var(--cyan);
+  color: #fff;
+  background: rgba(77, 243, 255, 0.10);
+  box-shadow: 0 0 0 1px rgba(77,243,255,.35), 0 0 18px rgba(77,243,255,.28);
+  animation: nudge-breathe 2.4s ease-in-out infinite;
+}
+@keyframes nudge-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(77,243,255,.30), 0 0 14px rgba(77,243,255,.20); }
+  50%      { box-shadow: 0 0 0 1px rgba(77,243,255,.55), 0 0 26px rgba(77,243,255,.45); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-ghost.nudge { animation: none; }
+}
+
 .btn-row { display: flex; gap: 12px; margin-top: 12px; }
 /* Halve the row and let the label wrap inside its own button. Without this the
    buttons size to their text, so a long word in ANY language (ACHIEVEMENTS,

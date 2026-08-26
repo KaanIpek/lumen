@@ -2324,6 +2324,38 @@
     }
   });
 
+  // A class that styles nothing is indistinguishable from a feature that was
+  // never built. The first run used to be hijacked into a lesson; that was
+  // reversed and replaced with `nudge` on HOW TO PLAY — but the CSS rule was
+  // never written, so for every new player the button looked like every other
+  // button and the lesson may as well not have existed. It was reported as
+  // "the tutorial doesn't open".
+  test('A new player is actually pointed at the lesson', async () => {
+    // The real markup AND the real stylesheet — the whole point is whether the
+    // class paints anything, which browser defaults cannot answer.
+    await loadGameMarkup();
+    freshStorage();
+    const tut = document.getElementById('btn-tutorial');
+    assert(tut, 'the lesson button exists');
+
+    L.Store.tutorialDone = false;
+    L.UI.refreshMenu();
+    assert(tut.classList.contains('nudge'), 'a new player gets the class');
+    const lit = getComputedStyle(tut);
+    const litBorder = lit.borderColor, litShadow = lit.boxShadow;
+
+    L.Store.tutorialDone = true;
+    L.UI.refreshMenu();
+    assert(!tut.classList.contains('nudge'), 'and a graduate does not');
+    const plain = getComputedStyle(tut);
+
+    // The point of the test: the class has to CHANGE something a player can see.
+    assert(litBorder !== plain.borderColor || litShadow !== plain.boxShadow,
+      'and the class visibly changes the button (border ' + litBorder + ' vs ' + plain.borderColor + ')');
+    L.Store.tutorialDone = false;
+    L.UI.refreshMenu();
+  });
+
   // ---- BRITTLE -------------------------------------------------------------
   // The mode that inverts the game: the bar is the target, the gap is the
   // coward's line. Everything below guards a claim the mode makes to the player.
