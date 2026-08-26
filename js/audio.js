@@ -292,7 +292,11 @@
 
     unlock() {
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
-      this._slept = false;
+      // Every caller of this is a real gesture — a tap, a run starting, an
+      // unmute. Once one has happened the autoplay policy is satisfied for the
+      // life of this context, and a suspended context is ours to resume from
+      // then on. `wake()` is the only thing that reads it; see the note there.
+      if (this.ctx) this._gestured = true;
     },
 
     // Leaving the app has to take the sound with it.
@@ -309,15 +313,26 @@
     // rather than replaying or skipping.
     sleep() {
       if (!this.ctx || this.ctx.state !== 'running') return;
-      this._slept = true;
       try { this.ctx.suspend(); } catch (e) { /* already gone; nothing to stop */ }
     },
-    // Only wake what WE put to sleep. A context suspended by the browser's own
-    // autoplay policy must stay suspended until a real gesture unlocks it, or
-    // the first tap after returning would be answered with silence.
+    // Resume a suspended context, once anything has ever unlocked this one.
+    //
+    // This used to resume only what `sleep()` had suspended, tracked with a flag
+    // — and the flag was set INSIDE a guard that returns early when the context
+    // is not already running. A fullscreen rewarded ad takes the audio session
+    // away from the page and leaves the context suspended by itself, so leaving
+    // the app during an ad reached a `sleep()` that found nothing to stop,
+    // returned without setting the flag, and a `wake()` that then refused to
+    // touch it. Every sound in the game was gone for the rest of the launch and
+    // nothing but a relaunch brought it back.
+    //
+    // The rule that flag was protecting is real and still here: a context that
+    // has NEVER run must wait for a gesture, or the first tap after returning is
+    // answered with silence. `_gestured` says that directly instead of inferring
+    // it from who suspended what.
     wake() {
-      if (!this.ctx || !this._slept) return;
-      this._slept = false;
+      if (!this.ctx || !this._gestured) return;
+      if (this.ctx.state === 'running') return;
       try { this.ctx.resume(); } catch (e) { /* the next unlock() will retry */ }
     },
 

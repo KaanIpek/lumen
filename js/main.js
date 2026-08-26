@@ -89,7 +89,13 @@
     }
     // Rewarded ads. No-op anywhere there is no native plugin, so the web build
     // and the test page are untouched.
-    if (LUMEN.Ads) LUMEN.Ads.init();
+    //
+    // …and fetch the FIRST one now. `preload()` existed but was called from
+    // exactly one place — after an ad had already been watched — so the first ad
+    // of every launch was the one nobody had prepared, and the tap that asked
+    // for it waited out a cold SDK plus a full network load. That is the ad
+    // every player meets and the only one most of them ever see.
+    if (LUMEN.Ads) LUMEN.Ads.init().then(() => LUMEN.Ads.preload()).catch(() => {});
     // The next-update vote rides the same Supabase project as the board. No
     // poll in the config means no button, no screen and no requests.
     if (LUMEN.Poll && c.supabaseUrl && c.supabaseAnonKey) {

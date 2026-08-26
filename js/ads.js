@@ -186,7 +186,14 @@
     get busy() { return !!this._flight; },
     _join(run) {
       if (this._flight) return this._flight;
-      const done = () => { this._flight = null; this.preload(); };
+      const done = () => {
+        this._flight = null;
+        // A fullscreen ad takes the audio session and hands back a suspended
+        // AudioContext. Nothing else in the app would notice, so the game came
+        // back silent from an ad even without leaving it. See Audio.wake().
+        try { LUMEN.Audio && LUMEN.Audio.wake && LUMEN.Audio.wake(); } catch (e) { /* no audio here */ }
+        this.preload();
+      };
       const f = run().then((v) => { done(); return v; }, (e) => { done(); throw e; });
       this._flight = f;
       return f;

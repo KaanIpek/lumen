@@ -789,6 +789,86 @@
   });
 
   // ---- regressions from the audit ------------------------------------------
+  // A fullscreen rewarded ad takes the audio session away from the page, so the
+  // AudioContext comes back suspended by something that is not us. sleep() used
+  // to return early on a context that was already stopped -- without setting the
+  // flag wake() checked -- so leaving the app during an ad killed every sound
+  // for the rest of the launch. The context is real here; this drives the actual
+  // suspend/resume, not a stand-in for it.
+  test('Audio: an ad suspending the context does not silence the game forever', async () => {
+    const A = L.Audio;
+    A.init();
+    if (!A.ctx) return;                             // headless: no Web Audio to drive
+    A.unlock();                                     // a real gesture, as the game does
+
+    // Count the ATTEMPT, not the outcome. `resume()` is asynchronous and a
+    // background tab may never complete it — asserting on ctx.state after a
+    // timeout made this test pass and fail on identical code. What the bug was
+    // ever about is whether wake() decides to try.
+    const ctx = A.ctx;
+    const realResume = ctx.resume.bind(ctx);
+    let tried = 0;
+    ctx.resume = function () { tried++; return realResume(); };
+    try {
+      // THE AD. Not us — the platform takes the audio session behind our back.
+      try { await ctx.suspend(); } catch (e) { /* already stopped is fine */ }
+      eq(ctx.state, 'suspended', 'the context is stopped and we never asked for it');
+
+      // Leaving the app. sleep() finds nothing running, and must not conclude
+      // from that that there is nothing to wake later.
+      tried = 0;
+      A.sleep();
+      A.wake();
+      assert(tried === 1, 'coming back from the ad asks for the sound back (' + tried + ' attempts)');
+
+      // The rule the old flag protected is real and still here: a context that
+      // has NEVER been unlocked waits for a gesture, or the first tap after
+      // returning is answered with silence.
+      const gestured = A._gestured;
+      A._gestured = false;
+      try { await ctx.suspend(); } catch (e) { /* fine */ }
+      tried = 0;
+      A.wake();
+      eq(tried, 0, 'an ungestured context is still left for unlock() to handle');
+      A._gestured = gestured;
+    } finally {
+      delete ctx.resume;
+      try { await ctx.resume(); } catch (e) { /* leave it as we found it */ }
+    }
+  });
+
+  // The same suspension happens with no backgrounding at all: the ad ends, the
+  // page gets its context back stopped, and nothing in the app would notice.
+  test('Ads: finishing an ad hands the audio back', async () => {
+    const Ads = L.Ads;
+    const A = L.Audio;
+    if (!Ads) return;
+    const realNative = Object.getOwnPropertyDescriptor(Ads, 'native');
+    let woke = 0;
+    const realWake = A.wake;
+    A.wake = function () { woke++; return realWake.apply(this, arguments); };
+    Object.defineProperty(Ads, 'native', {
+      configurable: true,
+      value: {
+        initialize: () => Promise.resolve(),
+        requestTracking: () => Promise.resolve({ status: 'unavailable', tracking: true }),
+        prepare: () => Promise.resolve(),
+        show: () => Promise.resolve({ earned: false }),
+      },
+    });
+    try {
+      Ads._ready = true;
+      await Ads.watch();
+      assert(woke > 0, 'the ad finishing is what asks for the sound back');
+    } finally {
+      A.wake = realWake;
+      delete Ads.native;
+      if (realNative) Object.defineProperty(Ads, 'native', realNative);
+      Ads._ready = false;
+      Ads._flight = null;
+    }
+  });
+
   test('Audio: muting goes through Store so the memo cache stays truthful', () => {
     freshStorage();
     const A = LUMEN.Audio;

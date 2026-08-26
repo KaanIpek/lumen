@@ -33,6 +33,12 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
     private var rewarded: GADRewardedAd?
     private var pending: CAPPluginCall?
     private var earned = false
+    // One load in flight, and everybody who asked while it was running. Without
+    // this, a preload and a tap that arrives during it start two separate loads
+    // of the same unit, and the slower one's completion overwrites the ad the
+    // faster one already handed over.
+    private var loading = false
+    private var waiting: [CAPPluginCall] = []
 
     @objc func initialize(_ call: CAPPluginCall) {
         GADMobileAds.sharedInstance().start(completionHandler: nil)
@@ -77,25 +83,42 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
         }
     }
 
+    // ANSWER AT ONCE IF ONE IS ALREADY LOADED, and that is the whole point.
+    //
+    // This used to call GADRewardedAd.load unconditionally, which made the
+    // JavaScript side's preload pure waste: every tap on WATCH AN AD paid for a
+    // full network load before anything could be presented. Players reported it
+    // as "you have to press a few times and it comes very slowly" — and pressing
+    // again did not help, because the second tap joins the first flight. The
+    // comment in js/ads.js promising that "the native side keeps a single loaded
+    // ad and resolves at once when it has one" described an intention nothing
+    // implemented.
     @objc func prepare(_ call: CAPPluginCall) {
         let unit = call.getString("adId") ?? ""
         if unit.isEmpty { call.reject("no ad unit"); return }
         // Loading on main too: the SDK delivers its callbacks there, and the
         // delegate assignment below touches state the presentation path reads.
         DispatchQueue.main.async {
+        if self.rewarded != nil { call.resolve(); return }
+        self.waiting.append(call)
+        if self.loading { return }
+        self.loading = true
         let request = GADRequest()
         GADRewardedAd.load(withAdUnitID: unit, request: request) { [weak self] ad, error in
             guard let self = self else { return }
+            self.loading = false
+            let asked = self.waiting
+            self.waiting = []
             if let error = error {
                 // A missing ad is ordinary — no fill, no network, a unit that is
                 // not serving yet. The caller turns this into "try again
                 // shortly", never into an error the player has to think about.
-                call.reject("load failed: \(error.localizedDescription)")
+                for c in asked { c.reject("load failed: \(error.localizedDescription)") }
                 return
             }
             ad?.fullScreenContentDelegate = self
             self.rewarded = ad
-            call.resolve()
+            for c in asked { c.resolve() }
         }
         }
     }
