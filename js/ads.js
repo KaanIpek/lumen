@@ -202,13 +202,33 @@
     // Fetch the next ad BEFORE it is wanted, so the tap that asks for one is
     // answered instantly instead of after a load. Cheap and idempotent: the
     // native side keeps a single loaded ad and resolves at once when it has one.
-    preload() {
+    preload(tries) {
       const p = this.native;
       if (!p || !p.prepare || this._flight) return Promise.resolve(false);
+      const left = tries == null ? this.PRELOAD_TRIES : tries;
       return this.init()
         .then(() => p.prepare({ adId: this.units.rewarded }))
-        .then(() => true, () => false);
+        .then(() => true, () => {
+          // A FAILED preload used to be the end of it, and that is the other
+          // half of "you have to press it a few times".
+          //
+          // preload() is reached from exactly two places: boot, and the tail of
+          // an ad that was watched. So a launch whose first fetch came back
+          // empty — no fill, no network yet, a phone still joining wifi — had
+          // nothing ready and nothing trying, for the rest of the session. Every
+          // tap then paid for a cold load of its own, and the presses that
+          // "finally worked" were not queueing behind each other, they were each
+          // starting over until one of them happened to fill.
+          //
+          // A few widening attempts, then stop. Ads are not worth hammering a
+          // network for, and Google counts unfilled requests.
+          if (left <= 1) return false;
+          const wait = (this.PRELOAD_TRIES - left + 1) * this.PRELOAD_BACKOFF;
+          return new Promise((r) => setTimeout(r, wait)).then(() => this.preload(left - 1));
+        });
     },
+    PRELOAD_TRIES: 3,
+    PRELOAD_BACKOFF: 20000,
 
     watch() {
       const p = this.native;

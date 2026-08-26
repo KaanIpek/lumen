@@ -837,6 +837,59 @@
     }
   });
 
+  // preload() is reachable from two places only: boot, and the tail of an ad that
+  // was watched. So a launch whose first fetch came back empty had nothing ready
+  // and nothing trying for the rest of the session, and every tap paid for a cold
+  // load of its own — which is what "you have to press it a few times" was.
+  test('Ads: a preload that comes back empty tries again', async () => {
+    const Ads = L.Ads;
+    if (!Ads) return;
+    const realNative = Object.getOwnPropertyDescriptor(Ads, 'native');
+    const realBackoff = Ads.PRELOAD_BACKOFF;
+    let asked = 0;
+    Ads.PRELOAD_BACKOFF = 1;                        // the schedule, not the wall clock
+    Object.defineProperty(Ads, 'native', {
+      configurable: true,
+      value: {
+        initialize: () => Promise.resolve(),
+        requestTracking: () => Promise.resolve({ status: 'unavailable', tracking: true }),
+        // Empty twice, then a fill — exactly the sequence a player was pressing
+        // through by hand.
+        prepare: () => { asked++; return asked < 3 ? Promise.reject(new Error('no fill')) : Promise.resolve(); },
+        show: () => Promise.resolve({ earned: false }),
+      },
+    });
+    try {
+      Ads._ready = true;
+      Ads._flight = null;
+      const got = await Ads.preload();
+      eq(asked, 3, 'it kept asking until one filled');
+      assert(got === true, 'and reports that one is ready');
+
+      // …and it stops. An unfilled request still costs Google something and a
+      // phone with no network must not be hammered for the whole session.
+      asked = 0;
+      Object.defineProperty(Ads, 'native', {
+        configurable: true,
+        value: {
+          initialize: () => Promise.resolve(),
+          requestTracking: () => Promise.resolve({ status: 'unavailable', tracking: true }),
+          prepare: () => { asked++; return Promise.reject(new Error('no fill')); },
+          show: () => Promise.resolve({ earned: false }),
+        },
+      });
+      const none = await Ads.preload();
+      eq(asked, Ads.PRELOAD_TRIES, 'a phone with nothing to serve is asked a bounded number of times');
+      assert(none === false, 'and the answer is honest');
+    } finally {
+      Ads.PRELOAD_BACKOFF = realBackoff;
+      delete Ads.native;
+      if (realNative) Object.defineProperty(Ads, 'native', realNative);
+      Ads._ready = false;
+      Ads._flight = null;
+    }
+  });
+
   // The same suspension happens with no backgrounding at all: the ad ends, the
   // page gets its context back stopped, and nothing in the app would notice.
   test('Ads: finishing an ad hands the audio back', async () => {
