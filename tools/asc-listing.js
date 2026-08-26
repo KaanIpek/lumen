@@ -44,6 +44,16 @@ const BUNDLE_ID = 'com.lumen.game';
 
 const APPLY = process.argv.includes('--apply');
 const WITH_SHOTS = process.argv.includes('--screenshots');
+// Replace the artwork that is already there instead of stepping around it.
+//
+// Leaving existing screenshots alone is the right default -- a re-run should not
+// silently churn a live listing -- but it made the ONE case that matters
+// impossible from here: a version inherits the previous release's three
+// screenshots into every locale the moment that locale is created, so a new
+// locale is never empty and never gets the new set. And App Store Connect's own
+// Delete All refuses to fire on the iPad panel in an automated browser, which is
+// how this flag came to exist.
+const REPLACE_SHOTS = process.argv.includes('--replace-screenshots');
 
 // Apple's locale codes for the four languages the game speaks.
 const LOCALES = { en: 'en-US', tr: 'tr', es: 'es-ES', zh: 'zh-Hans' };
@@ -100,12 +110,31 @@ function readListing() {
     out[k].keywords = section.slice(f + 3, e).trim();
   }
 
+  // Release notes, one fenced block per locale, same shape as the keywords.
+  //
+  // Apple asks for these PER LOCALE on every update, and a version whose other
+  // three languages are blank is a version those players are shown nothing for.
+  // The first run of this script left exactly that: en-US had 935 characters and
+  // tr, es-ES and zh-Hans had none, because nothing here read them.
+  const wAt = md.indexOf("## What's new");
+  if (wAt < 0) throw new Error('no release-notes heading');
+  const wRest = md.slice(wAt + 1);
+  const wNext = wRest.search(/^## /m);
+  const wSection = wNext < 0 ? md.slice(wAt) : md.slice(wAt, wAt + 1 + wNext);
+  for (const k of Object.keys(LOCALES)) {
+    const at = wSection.indexOf('**' + k + '**');
+    if (at < 0) throw new Error('no release notes for ' + k);
+    const f = wSection.indexOf('```', at), e = wSection.indexOf('```', f + 3);
+    if (f < 0 || e < 0) throw new Error('no fenced release notes for ' + k);
+    out[k].whatsNew = wSection.slice(f + 3, e).replace(/^\r?\n/, '').trimEnd();
+  }
+
   return out;
 }
 
 // Apple rejects anything over the limit with a validation error that names the
 // field but not the language, so check here where we can say exactly which.
-const LIMITS = { subtitle: 30, promo: 170, description: 4000, keywords: 100 };
+const LIMITS = { subtitle: 30, promo: 170, description: 4000, keywords: 100, whatsNew: 4000 };
 function checkLimits(listing) {
   const bad = [];
   for (const [lang, f] of Object.entries(listing)) {
@@ -264,9 +293,15 @@ async function uploadOneSet(en, spec) {
   if (set) {
     const existing = await api('GET', '/v1/appScreenshotSets/' + set.id + '/appScreenshots?limit=20');
     if ((existing.data || []).length) {
-      console.log('  ' + existing.data.length + ' already uploaded — leaving them alone.');
-      console.log('  Delete them in App Store Connect first if you want to replace them.');
-      return;
+      if (!REPLACE_SHOTS) {
+        console.log('  ' + existing.data.length + ' already uploaded — leaving them alone.');
+        console.log('  Pass --replace-screenshots to swap them.');
+        return;
+      }
+      for (const shot of existing.data) {
+        await api('DELETE', '/v1/appScreenshots/' + shot.id);
+      }
+      console.log('  removed ' + existing.data.length + ' existing');
     }
   } else {
     const made = await api('POST', '/v1/appScreenshotSets', {
@@ -362,6 +397,7 @@ async function uploadOneSet(en, spec) {
       description: f.description,
       keywords: f.keywords,
       promotionalText: f.promo,
+      whatsNew: f.whatsNew,
       supportUrl: 'https://kaanipek.github.io/lumen/',
       marketingUrl: 'https://kaanipek.github.io/lumen/',
     };
@@ -383,9 +419,25 @@ async function uploadOneSet(en, spec) {
   }
 
   // --- name and subtitle live on the APP INFO, not the version -----------
+  // An app with a released version carries TWO appInfos: the one frozen against
+  // the live version, and an editable one that exists while a version is being
+  // prepared. This used to take [0] and got whichever the API listed first —
+  // once 1.0 was live that was the frozen one, and every write came back 409
+  // "The field 'name' can not be modified in the current state", which reads
+  // like a naming problem and is really the wrong record.
   const infos = await api('GET', '/v1/apps/' + app.id + '/appInfos?limit=5');
-  const info = (infos.data || [])[0];
+  const EDITABLE = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED', 'METADATA_REJECTED', 'WAITING_FOR_REVIEW'];
+  const all = infos.data || [];
+  const info =
+    all.find((i) => EDITABLE.includes(i.attributes.appStoreState)) ||
+    all.find((i) => EDITABLE.includes(i.attributes.state)) ||
+    all[0];
   if (info) {
+    console.log(
+      '\nApp info ' + info.id +
+        ' (' + (info.attributes.appStoreState || info.attributes.state || 'state unknown') + ')' +
+        (all.length > 1 ? '  — ' + all.length + ' records, picked the editable one' : '')
+    );
     const iLocs = await api('GET', '/v1/appInfos/' + info.id + '/appInfoLocalizations?limit=50');
     const iBy = Object.fromEntries((iLocs.data || []).map((l) => [l.attributes.locale, l]));
     for (const [lang, f] of Object.entries(listing)) {
