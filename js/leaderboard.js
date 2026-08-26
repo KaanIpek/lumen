@@ -358,10 +358,35 @@
     // the first daily run of any day is a best and submits by itself. Seeding
     // it would also mean publishing a score with a combo taken from some other
     // run, and a number on a public board should have happened.
+    //
+    // AND READ THE RIGHT LOCAL NUMBER. This asked LUMEN.Scores for the best run
+    // in the history, which is not the record — js/scores.js keeps the last
+    // FIFTY runs and pins the all-time best separately, precisely so that a good
+    // week months ago cannot lock MY RUNS forever. Both halves of that design
+    // are right; reading only one of them here was not.
+    //
+    // A player whose record predates their last fifty runs got seeded with the
+    // best of those fifty instead — a smaller number — and then every run
+    // afterwards was measured against the PINNED best by the gate in game.js,
+    // which nothing below the record can pass. So the board froze at whatever
+    // the seed happened to offer, and no amount of playing could move it: the
+    // one path that could correct it ran only at sign-in, and it was the path
+    // with the bug. Reported as "my best score does not drop onto the
+    // leaderboard, it does not show even if I refresh", which is exactly what it
+    // looks like from outside.
+    //
+    // The combo travels only with the run it belongs to. Store.bestCombo is the
+    // best chain across ALL runs, not the chain of the best run, so pairing it
+    // with the pinned score would put a number on a public board that never
+    // happened — the same objection that keeps the daily out of this function.
     seedFromLocalBests() {
       if (!Store || !this._sb || !this.canSubmit) return Promise.resolve(false);
-      const best = LUMEN.Scores ? LUMEN.Scores.list('classic')[0] : null;
-      if (!best || !(best.s > 0)) return Promise.resolve(false);
+      const hist = LUMEN.Scores ? LUMEN.Scores.list('classic')[0] : null;
+      const pinned = Math.max(0, Math.floor(+Store.best || 0));
+      const score = Math.max(pinned, hist ? hist.s : 0);
+      const combo = (hist && hist.s === score) ? hist.c : 0;
+      const best = score > 0 ? { s: score, c: combo } : null;
+      if (!best) return Promise.resolve(false);
       const A = LUMEN.Auth;
       // ASK THE BOARD, do not remember having asked.
       //

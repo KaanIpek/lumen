@@ -2575,6 +2575,82 @@
     g.toMenu();
   });
 
+  // Players did not say the game was hard, they said the ORB was too fast up and
+  // down. The fix is a CEILING on speed, and the whole point of choosing a
+  // ceiling over weaker gravity is that it buys the drop without paying for it
+  // anywhere else. All three halves of that claim are checked here, driven
+  // through the real integrator rather than the formula it came from -- a
+  // clamp written after the position update, or before the acceleration, would
+  // satisfy the arithmetic and not the game.
+  test('Speed ceiling: caps the whip, leaves gravity and the gaps alone', () => {
+    freshStorage();
+    L.Modes.setCurrent('classic');
+
+    // Drop from the top wall and report what ACTUALLY happens on the way down.
+    const drop = (diff, dist) => {
+      L.Store.difficulty = diff;
+      const g = newGame(390, 844);
+      g.start();
+      g.obstacles.length = 0; g.motes.length = 0; g.powers.length = 0;
+      const p = g.player;
+      p.y = g.playTop + p.r; p.vy = 0; p.dir = 1;
+      const y0 = p.y;
+      let t = 0, peak = 0;
+      for (let i = 0; i < 3000; i++) {
+        g.obstacles.length = 0;               // nothing to hit; this is a physics rig
+        g.updatePlay(1 / 60, 1 / 60);
+        t += 1 / 60;
+        peak = Math.max(peak, Math.abs(p.vy));
+        if (p.y - y0 >= dist || p.y > g.playBottom - p.r) break;
+      }
+      const out = { t, peak, cap: g.vMax, spawn: g.spawnInterval, cross: g.CROSS_TIME };
+      g.toMenu();
+      return out;
+    };
+
+    // 1. The ceiling is real, and it is the ceiling that was asked for.
+    for (const d of ['veryeasy', 'easy', 'normal']) {
+      const r = drop(d, 10000);
+      assert(r.cap < Infinity, d + ' declares a ceiling');
+      assert(r.peak <= r.cap + 1, d + ' never exceeds it (' + Math.round(r.peak) + ' vs ' + Math.round(r.cap) + ')');
+      assert(r.peak > r.cap - 30, d + ' actually REACHES it, so the test is measuring the clamp');
+    }
+    const hard = drop('hard', 10000);
+    eq(hard.cap, Infinity, 'HARD has no ceiling');
+    assert(hard.peak > 1500, 'and still hits full speed (' + Math.round(hard.peak) + ')');
+
+    // 2. Gravity is untouched. A short correction -- the thing a player does
+    //    hundreds of times a run -- must take the SAME time on the gentlest
+    //    setting as on the harshest. If someone "fixes" this by lowering
+    //    gravity instead, this is the assertion that fails.
+    const shortVE = drop('veryeasy', 120).t, shortHard = drop('hard', 120).t;
+    assert(Math.abs(shortVE - shortHard) < 0.02,
+      'a 120px correction costs the same at both ends (' + shortVE.toFixed(3) + ' vs ' + shortHard.toFixed(3) + ')');
+
+    // 3. The distances between gates are NOT part of this. The ceiling must not
+    //    leak into spawn spacing: that would be making the game easier, which is
+    //    a different decision from making the orb slower.
+    const ratio = (d) => drop(d, 1).spawn / drop('hard', 1).spawn;
+    assert(Math.abs(ratio('veryeasy') - (1.42 / 0.88)) < 1e-6, 'VERY EASY spacing is exactly its own `spawn`, nothing else');
+    assert(Math.abs(ratio('normal') - (1.00 / 0.88)) < 1e-6, 'NORMAL spacing is exactly its own `spawn`, nothing else');
+
+    // 4. DREAD's fairness rule survives the ceiling: an unseen gate must stay
+    //    visible for longer than it takes to cross to it.
+    for (const d of ['veryeasy', 'easy', 'normal', 'hard']) {
+      L.Store.difficulty = d;
+      L.Modes.setCurrent('dread');
+      const g = newGame(390, 844);
+      g.start();
+      const budget = g.mode.reveal.at * (g.crossSeconds / g.CROSS_TIME);
+      assert(budget > g.crossSeconds,
+        'DREAD warns for longer than the crossing takes on ' + d
+        + ' (' + budget.toFixed(2) + 's vs ' + g.crossSeconds.toFixed(2) + 's)');
+      g.toMenu();
+    }
+    L.Modes.setCurrent('classic');
+    L.Store.difficulty = 'normal';
+  });
+
   // VERY EASY exists so the game can be seen without the reflex test. The danger
   // is the obvious one: a run you can hold almost indefinitely becomes the best
   // place to farm, and then every price in the shop is set by the setting nobody
@@ -4272,6 +4348,70 @@
       L.Scores.record(1215, 23, 'classic');
       await LB.seedFromLocalBests();
       eq(L.Store.pendingBest.alltime.score, 1215, 'a new account gets the offer too');
+    } finally {
+      window.fetch = realFetch;
+      LB.submit = realSubmit;
+      L.Auth.session = null;
+      LB._sb = null;
+    }
+  });
+
+  // js/scores.js stores two different numbers on purpose: the last FIFTY runs,
+  // and the all-time record pinned separately so a good week months ago cannot
+  // freeze MY RUNS. The seed read the first one. For a player whose record is
+  // older than their last fifty runs those two numbers disagree, and the smaller
+  // one is what reached the board — after which the gate in game.js, which
+  // measures every run against the PINNED record, could never send anything
+  // again. The board froze below the player's real best and no amount of playing
+  // moved it.
+  test('Leaderboard: a record older than the last fifty runs still reaches the board', async () => {
+    freshStorage();
+    L.Store.boardConsent = true;
+    const LB = L.Leaderboard;
+    const realFetch = window.fetch;
+    const realSubmit = LB.submit;
+    let boardHas = [];
+    window.fetch = () => Promise.resolve({
+      ok: true, status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve(boardHas),
+    });
+    LB.submit = () => Promise.resolve(null);
+    try {
+      LB._sb = { url: 'https://test.invalid', key: 'k' };
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-long-player' } };
+      L.Store.playerName = 'veteran';
+
+      // The record, pinned months ago…
+      L.Store.best = 1211;
+      // …and enough runs since to push it out of the kept history entirely.
+      for (let i = 0; i < L.Scores.KEEP + 5; i++) L.Scores.record(600 + (i % 40) * 5, 4, 'classic');
+      const histTop = L.Scores.list('classic')[0].s;
+      assert(histTop < 1211, 'the history no longer holds the record (' + histTop + ')');
+      assert(L.Store.best === 1211, 'but the pin still does');
+
+      await LB.seedFromLocalBests();
+      eq(L.Store.pendingBest.alltime.score, 1211, 'the PINNED record is what is offered');
+      eq(L.Store.pendingBest.alltime.combo, 0,
+        'and it carries no combo, because no run still on this device owns that score');
+
+      // The board catching up must end the offers, exactly as before.
+      boardHas = [{ score: 1211 }];
+      L.Store.pendingBest = {};
+      await LB.seedFromLocalBests();
+      eq(L.Store.pendingBest.alltime, undefined, 'nothing is re-offered once the board holds it');
+
+      // And when the history DOES still hold the record, the combo goes with it —
+      // the pin must not strip a real run's chain off a real run's score.
+      freshStorage();
+      L.Store.boardConsent = true;
+      L.Store.playerName = 'veteran';
+      boardHas = [];
+      L.Store.best = 1400;
+      L.Scores.record(1400, 31, 'classic');
+      await LB.seedFromLocalBests();
+      eq(L.Store.pendingBest.alltime.score, 1400, 'same score from both places');
+      eq(L.Store.pendingBest.alltime.combo, 31, 'so the run keeps its own combo');
     } finally {
       window.fetch = realFetch;
       LB.submit = realSubmit;

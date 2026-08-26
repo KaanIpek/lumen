@@ -1363,7 +1363,33 @@
     },
 
     // ---- leaderboard -----------------------------------------------------
-    openScores() { this.setBoard(this.boardTab || 'me'); this.showScreen('scores'); },
+    openScores() {
+      this.setBoard(this.boardTab || 'me');
+      this.showScreen('scores');
+      // Close the gap between what this device knows and what the board holds,
+      // every single time the board is opened.
+      //
+      // This used to run at sign-in and at rename only, which meant one missed
+      // submit — a flight, a dropped request, an account swapped underneath —
+      // left the two disagreeing forever, and the only place that could notice
+      // was a screen the player had already been through. Doing it on the way IN
+      // costs one small request and makes the disagreement self-correcting:
+      // looking at the board is what fixes the board. It cannot push a lower
+      // score over a higher one, because it asks the board first.
+      const LB = LUMEN.Leaderboard;
+      if (LB && LB.canSubmit) {
+        LB.seedFromLocalBests()
+          .then((offered) => (offered ? LB.flushPending() : null))
+          .then((sent) => {
+            // Repaint only if something actually went up AND the player is still
+            // looking, so this never yanks a screen they have moved on from.
+            if (sent && sent.length && this.currentScreen === 'scores') {
+              this.setBoard(this.boardTab || 'me');
+            }
+          })
+          .catch(() => {});
+      }
+    },
 
     // Three boards behind one screen: your own runs (always available, offline)
     // and the two server boards. The online tabs stay visible but say plainly

@@ -670,11 +670,6 @@
   // Multipliers on the three knobs that actually decide how hard a run is:
   // how wide the openings are, how much reaction time you get, and how often
   // gates arrive. `scoreMul` keeps the board honest — a harder run is worth more.
-  // Seconds to fall wall-to-wall at NORMAL. Higher is floatier and more
-  // forgiving to a late tap; lower is whippier. Difficulty scales it — see
-  // `slowdown` below and the getter that reads it.
-  const CROSS_BASE = 0.78;
-
   const DIFFICULTY = {
     // VERY EASY is comfort, not a discount.
     //
@@ -690,26 +685,26 @@
     // and this is the one difficulty that carries it — the others leave it
     // undefined, which reads as 1 and leaves their balance exactly as it was.
     //
-    // `slowdown` slows the WHOLE run down: gravity and the spacing between gates,
-    // by the same factor, and it must stay that way. Players asked for a
-    // gentler orb, and lowering gravity alone does not deliver one — it makes
-    // the orb sluggish instead. Crossing the corridor is a fall, so halving
-    // gravity does not halve the speed, it stretches the CROSSING TIME by
-    // 1/sqrt(2) — and the time available to reach the next opening is fixed by
-    // `spawn`. Measured on a 390x844 phone at 150s into a Classic run, the
-    // worst gate leaves only 21% slack at NORMAL and 6% at HARD. Take gravity
-    // down 10% there without touching anything else and that margin is gone:
-    // the corridor starts serving openings the orb cannot physically reach,
-    // which reads to a player as the game cheating.
+    // `topSpeed` is a CEILING on how fast the orb may travel, as a fraction of
+    // the 1770 px/s a free fall across the corridor would reach. It is the
+    // answer to "the ball goes up and down too fast", and it is deliberately
+    // not a gravity change.
     //
-    // So the two move together, and `spawnInterval` multiplies by this for
-    // exactly that reason. The ratio between them — the thing that decides
-    // whether a gate is reachable — comes out identical, while everything the
-    // player sees and touches is slower. That is what "easier" was supposed to
-    // mean. HARD leaves it undefined, which reads as 1.
-    veryeasy: { gap: 1.45, react: 1.55, spawn: 1.42, scoreMul: 0.55, shardMul: 0.35, slowdown: 1.45 },
-    easy:   { gap: 1.20, react: 1.25, spawn: 1.18, scoreMul: 0.75, slowdown: 1.28 },
-    normal: { gap: 1.00, react: 1.00, spawn: 1.00, scoreMul: 1.00, slowdown: 1.10 },
+    // Gravity is what gets you to the next opening in time. Measured on a
+    // 390x844 phone 150s into a Classic run, the worst gate already leaves only
+    // 21% slack at NORMAL and 6% at HARD, so there is very little of it to
+    // spend. Taking the peak down 44% by weakening gravity would stretch every
+    // crossing by 79% and start serving openings the orb cannot physically
+    // reach. The same 44% off the ceiling costs 17%, and costs it only on a
+    // FULL crossing -- a 350px move, which is the 95th percentile of what the
+    // corridor actually asks for, gets 3% slower. The first half of every fall,
+    // where the short corrections live, is untouched: gravity is unchanged, so
+    // a tap answers exactly as fast as it did.
+    //
+    // HARD leaves it undefined, which reads as 1 and means no ceiling at all.
+    veryeasy: { gap: 1.45, react: 1.55, spawn: 1.42, scoreMul: 0.55, shardMul: 0.35, topSpeed: 0.56 },
+    easy:   { gap: 1.20, react: 1.25, spawn: 1.18, scoreMul: 0.75, topSpeed: 0.65 },
+    normal: { gap: 1.00, react: 1.00, spawn: 1.00, scoreMul: 1.00, topSpeed: 0.76 },
     hard:   { gap: 0.84, react: 0.84, spawn: 0.88, scoreMul: 1.40 },
   };
   LUMEN.DIFFICULTY = DIFFICULTY;
@@ -902,6 +897,7 @@
       this.timeScale = 1;
       this.timeScaleTarget = 1;
       this.hueBase = 190;
+      this.CROSS_TIME = 0.78; // seconds to fall wall-to-wall (higher = floatier / more forgiving)
       this.flow = 0;          // 0..1 smoothed flow amount
       this.modalOpen = false; // true while a menu-level modal (shop) is open
       this._bind();
@@ -1190,12 +1186,27 @@
       return this.elapsed * (this.mode ? this.mode.ramp : 1) + (this.heat || 0);
     }
 
-    // Seconds to cross the corridor. Four places compute gravity from this and
-    // the autopilot in the test suite is a fifth, so it is a getter rather than
-    // a field: one edit here reaches all of them, which is the rule this file
-    // already learned the hard way about the gravity constant.
-    get CROSS_TIME() {
-      return CROSS_BASE * ((this.diff && this.diff.slowdown) || 1);
+    // The orb's top speed, and the seconds a full crossing actually takes.
+    //
+    // Players did not report the game being hard, they reported the ORB being
+    // too fast up and down. Those are different complaints and they have
+    // different fixes. Free fall across the corridor peaks at 2*playH/CROSS_TIME
+    // -- about 1770 px/s on a phone -- and that peak is the whip they are
+    // describing. Lowering gravity would take it down, but gravity is also what
+    // gets you to the next opening in time: dropping the peak 44% that way
+    // stretches every crossing by 79%, and the corridor starts serving gaps the
+    // orb cannot reach. A CEILING on the speed drops the same 44% for 17%,
+    // because it only touches the tail of a long fall and leaves the first half
+    // -- where the short corrections live -- exactly as responsive as before.
+    //
+    // Closed form, with k = topSpeed: the crossing takes CROSS_TIME*(1+k^2)/2k.
+    get vMax() {
+      const k = (this.diff && this.diff.topSpeed) || 1;
+      return k >= 1 ? Infinity : (2 * this.playH) / this.CROSS_TIME * k;
+    }
+    get crossSeconds() {
+      const k = (this.diff && this.diff.topSpeed) || 1;
+      return this.CROSS_TIME * (1 + k * k) / (2 * k);
     }
 
     get scrollSpeed() {
@@ -1219,10 +1230,7 @@
       if (this.tutorial) return 2.0;
       const m = this.mode;
       const t = this.rampT;
-      const d = this.diff || DIFFICULTY.normal;
-      // `slowdown` is here as well as in CROSS_TIME on purpose: the two are one
-      // setting, and splitting them is what would make a gate unreachable.
-      return clamp(1.55 - t * 0.005, 0.80, 1.55) * d.spawn * (d.slowdown || 1) * (m ? m.spawn : 1) * ((this.world && this.world.spawn) || 1);
+      return clamp(1.55 - t * 0.005, 0.80, 1.55) * (this.diff || DIFFICULTY.normal).spawn * (m ? m.spawn : 1) * ((this.world && this.world.spawn) || 1);
     }
     get gapFrac() {
       if (this.tutorial) return 0.42;   // generous openings while learning
@@ -2533,6 +2541,11 @@
       const bias = (this.world && this.world.gravityBias) || 0;
       const G = (2 * this.playH) / (this.CROSS_TIME * this.CROSS_TIME) * gMul; // wall-to-wall in CROSS_TIME
       p.vy += (p.dir + bias) * G * gdt;
+      // The ceiling. It goes AFTER the acceleration and BEFORE the move, so the
+      // orb still answers a tap on the next frame and simply stops winding up
+      // past the limit. `vMax` is Infinity on HARD, where this is a no-op.
+      const vc = this.vMax;
+      if (p.vy > vc) p.vy = vc; else if (p.vy < -vc) p.vy = -vc;
       p.y += p.vy * gdt;
       // RUBBER: the walls throw you back instead of catching you. `p.dir` is
       // deliberately untouched — flipping direction on a bounce would change the
@@ -3652,13 +3665,13 @@
         const speed = Math.max(1, this.scrollSpeed);
         // DREAD's whole fairness rule is that the warning lasts longer than the
         // crossing does — 1.25s of sight against 0.78s to cross the playfield at
-        // NORMAL. An easier difficulty stretches the crossing (DIFFICULTY
-        // .slowdown), so the warning has to stretch with it. Leave this fixed
-        // and VERY EASY shows a gate for barely longer than it takes to reach:
+        // NORMAL. The speed ceiling stretches a full crossing (DIFFICULTY
+        // .topSpeed), so the warning stretches with it. Leave this fixed and
+        // VERY EASY shows a gate for barely longer than it takes to reach it:
         // the one mode built on not seeing what is coming becomes the one mode
         // that is unfair, at the setting chosen by the players least able to
         // absorb it.
-        const at = rv.at * (this.CROSS_TIME / CROSS_BASE);
+        const at = rv.at * (this.crossSeconds / this.CROSS_TIME);
         for (const ob of this.obstacles) {
           const secondsAway = (ob.x - this.player.x) / speed;
           let a = clamp((at - secondsAway) / rv.fade, 0, 1);
