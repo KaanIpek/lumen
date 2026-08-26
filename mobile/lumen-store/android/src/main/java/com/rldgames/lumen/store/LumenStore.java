@@ -1,6 +1,7 @@
 package com.rldgames.lumen.store;
 
 import android.app.Activity;
+import android.util.Log;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -41,6 +42,7 @@ import java.util.Map;
 @CapacitorPlugin(name = "LumenStore")
 public class LumenStore extends Plugin {
 
+    private static final String TAG = "LumenStore";
     private BillingClient billing;
     private final Map<String, ProductDetails> details = new HashMap<>();
     private PluginCall pendingPurchase;
@@ -118,9 +120,19 @@ public class LumenStore extends Plugin {
                         call.reject("could not load products: " + result.getDebugMessage());
                         return;
                     }
+                    // Billing 8 replaced the plain List with a result object. The
+                    // reason it is worth more than a compile fix: v7 SILENTLY
+                    // dropped any product it could not fetch, so a SKU that was
+                    // mistyped or not yet active in Play Console came back as an
+                    // empty shop with no error anywhere. v8 hands those back in a
+                    // second list with a reason, so say so instead of shrugging.
+                    for (UnfetchedProduct u : found.getUnfetchedProductList()) {
+                        Log.w(TAG, "product not fetched: " + u.getProductId()
+                                + " (status " + u.getStatusCode() + ")");
+                    }
                     JSArray out = new JSArray();
                     details.clear();
-                    for (ProductDetails d : found) {
+                    for (ProductDetails d : found.getProductDetailsList()) {
                         details.put(d.getProductId(), d);
                         ProductDetails.OneTimePurchaseOfferDetails offer = d.getOneTimePurchaseOfferDetails();
                         JSObject o = new JSObject();

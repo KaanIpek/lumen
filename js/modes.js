@@ -99,9 +99,12 @@
       // Horror. The corridor is there, you simply are not shown it until late.
       //
       // The reveal is a TIME budget, not a pixel one: 1.25s of warning at every
-      // screen size, every difficulty and every point on the ramp. CROSS_TIME is
-      // 0.72s, so a gate is always visible for longer than it takes to cross the
-      // playfield — the fairness rule holds by construction rather than tuning.
+      // screen size and every point on the ramp. Crossing the playfield takes
+      // 0.78s at NORMAL, so a gate is always visible for longer than it takes to
+      // cross — the fairness rule holds by construction rather than tuning. The
+      // easier difficulties slow the orb down, and game.js scales this budget by
+      // the same factor so the rule survives them; it is not a bare 1.25 at the
+      // point of use.
       id: 'dread',
       // The mode owns the soundtrack on every map — see SONGS.abandon. Losing the
       // dread because you happen to be on the pretty green world would be losing

@@ -670,6 +670,11 @@
   // Multipliers on the three knobs that actually decide how hard a run is:
   // how wide the openings are, how much reaction time you get, and how often
   // gates arrive. `scoreMul` keeps the board honest — a harder run is worth more.
+  // Seconds to fall wall-to-wall at NORMAL. Higher is floatier and more
+  // forgiving to a late tap; lower is whippier. Difficulty scales it — see
+  // `slowdown` below and the getter that reads it.
+  const CROSS_BASE = 0.78;
+
   const DIFFICULTY = {
     // VERY EASY is comfort, not a discount.
     //
@@ -684,9 +689,27 @@
     // come out AHEAD. shardMul is the second brake, applied to the payout only,
     // and this is the one difficulty that carries it — the others leave it
     // undefined, which reads as 1 and leaves their balance exactly as it was.
-    veryeasy: { gap: 1.45, react: 1.55, spawn: 1.42, scoreMul: 0.55, shardMul: 0.35 },
-    easy:   { gap: 1.20, react: 1.25, spawn: 1.18, scoreMul: 0.75 },
-    normal: { gap: 1.00, react: 1.00, spawn: 1.00, scoreMul: 1.00 },
+    //
+    // `slowdown` slows the WHOLE run down: gravity and the spacing between gates,
+    // by the same factor, and it must stay that way. Players asked for a
+    // gentler orb, and lowering gravity alone does not deliver one — it makes
+    // the orb sluggish instead. Crossing the corridor is a fall, so halving
+    // gravity does not halve the speed, it stretches the CROSSING TIME by
+    // 1/sqrt(2) — and the time available to reach the next opening is fixed by
+    // `spawn`. Measured on a 390x844 phone at 150s into a Classic run, the
+    // worst gate leaves only 21% slack at NORMAL and 6% at HARD. Take gravity
+    // down 10% there without touching anything else and that margin is gone:
+    // the corridor starts serving openings the orb cannot physically reach,
+    // which reads to a player as the game cheating.
+    //
+    // So the two move together, and `spawnInterval` multiplies by this for
+    // exactly that reason. The ratio between them — the thing that decides
+    // whether a gate is reachable — comes out identical, while everything the
+    // player sees and touches is slower. That is what "easier" was supposed to
+    // mean. HARD leaves it undefined, which reads as 1.
+    veryeasy: { gap: 1.45, react: 1.55, spawn: 1.42, scoreMul: 0.55, shardMul: 0.35, slowdown: 1.45 },
+    easy:   { gap: 1.20, react: 1.25, spawn: 1.18, scoreMul: 0.75, slowdown: 1.28 },
+    normal: { gap: 1.00, react: 1.00, spawn: 1.00, scoreMul: 1.00, slowdown: 1.10 },
     hard:   { gap: 0.84, react: 0.84, spawn: 0.88, scoreMul: 1.40 },
   };
   LUMEN.DIFFICULTY = DIFFICULTY;
@@ -880,7 +903,6 @@
       this.timeScaleTarget = 1;
       this.hueBase = 190;
       this.flow = 0;          // 0..1 smoothed flow amount
-      this.CROSS_TIME = 0.78; // seconds to fall wall-to-wall (higher = floatier / more forgiving)
       this.modalOpen = false; // true while a menu-level modal (shop) is open
       this._bind();
       this.resize();
@@ -1168,6 +1190,14 @@
       return this.elapsed * (this.mode ? this.mode.ramp : 1) + (this.heat || 0);
     }
 
+    // Seconds to cross the corridor. Four places compute gravity from this and
+    // the autopilot in the test suite is a fifth, so it is a getter rather than
+    // a field: one edit here reaches all of them, which is the rule this file
+    // already learned the hard way about the gravity constant.
+    get CROSS_TIME() {
+      return CROSS_BASE * ((this.diff && this.diff.slowdown) || 1);
+    }
+
     get scrollSpeed() {
       // dev freeze: hold the world still so a gate can be inspected
       if (LUMEN.Cheats && LUMEN.Cheats.freeze && LUMEN.Cheats.available) return 0;
@@ -1189,7 +1219,10 @@
       if (this.tutorial) return 2.0;
       const m = this.mode;
       const t = this.rampT;
-      return clamp(1.55 - t * 0.005, 0.80, 1.55) * (this.diff || DIFFICULTY.normal).spawn * (m ? m.spawn : 1) * ((this.world && this.world.spawn) || 1);
+      const d = this.diff || DIFFICULTY.normal;
+      // `slowdown` is here as well as in CROSS_TIME on purpose: the two are one
+      // setting, and splitting them is what would make a gate unreachable.
+      return clamp(1.55 - t * 0.005, 0.80, 1.55) * d.spawn * (d.slowdown || 1) * (m ? m.spawn : 1) * ((this.world && this.world.spawn) || 1);
     }
     get gapFrac() {
       if (this.tutorial) return 0.42;   // generous openings while learning
@@ -3617,9 +3650,18 @@
       const brk = (ob) => (ob.broken ? Math.max(0, 1 - (this.elapsed - ob._brokeAt) * 4) : 1);
       if (rv) {
         const speed = Math.max(1, this.scrollSpeed);
+        // DREAD's whole fairness rule is that the warning lasts longer than the
+        // crossing does — 1.25s of sight against 0.78s to cross the playfield at
+        // NORMAL. An easier difficulty stretches the crossing (DIFFICULTY
+        // .slowdown), so the warning has to stretch with it. Leave this fixed
+        // and VERY EASY shows a gate for barely longer than it takes to reach:
+        // the one mode built on not seeing what is coming becomes the one mode
+        // that is unfair, at the setting chosen by the players least able to
+        // absorb it.
+        const at = rv.at * (this.CROSS_TIME / CROSS_BASE);
         for (const ob of this.obstacles) {
           const secondsAway = (ob.x - this.player.x) / speed;
-          let a = clamp((rv.at - secondsAway) / rv.fade, 0, 1);
+          let a = clamp((at - secondsAway) / rv.fade, 0, 1);
           // the menu demo is a background, not a challenge — never a fog bank
           if (this.attract) a = Math.max(a, 0.55);
           ob._a = a * brk(ob);
