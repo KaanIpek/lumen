@@ -322,6 +322,26 @@
     // sends it the moment a name exists.
     get named() { return !!this.cleanName(this.playerName); },
 
+    // Is there still something standing between this player and the board?
+    //
+    // `named` used to be asked in place of this, and the two stopped meaning the
+    // same thing on 23 August, when consent became a separate flag (bb9f623,
+    // "Ask before publishing anyone" -- App Store 5.1.2). `lumen_name` has
+    // existed since the first commit; `lumen_board_ok` is written in exactly one
+    // place, the SAVE button on the name screen. So every player who had already
+    // typed a name arrived at that release with a name and no consent, which is
+    // `named` true and `canSubmit` false -- and the one line that would have
+    // re-asked them, `if (!LB.named) openNameScreen()`, is guarded on the half
+    // they already had. Their personal bests went to `hold()` instead of the
+    // board, forever, with nothing on screen to say so.
+    //
+    // Asking the whole question in one place is what stops that recurring: a
+    // third condition added later has one obvious home, and every caller gets it
+    // for free.
+    get needsSetup() {
+      return !this.named || !(Store && Store.boardConsent);
+    },
+
     // The shared board needs an account; the game does not.
     //
     // A name alone was never enough to own a row. Anyone could type any name,

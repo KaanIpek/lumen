@@ -1377,6 +1377,21 @@
       // looking at the board is what fixes the board. It cannot push a lower
       // score over a higher one, because it asks the board first.
       const LB = LUMEN.Leaderboard;
+      // The players this rescues are ALREADY signed in, so fixing the sign-in
+      // prompt alone would never reach them -- they have no reason to sign in
+      // again. The board is the one screen they do come back to, so the question
+      // gets asked here too, with their existing name already in the field: one
+      // tap of SAVE and they are publishing again.
+      //
+      // Once per launch, and never persisted. Declining has to be free or this
+      // is a trap rather than a question, and a player who says no should not
+      // have to say it twice in one sitting -- but should be asked again next
+      // time, because the board is still not carrying them.
+      if (LB && LB.enabled && LUMEN.Auth && LUMEN.Auth.signedIn && LB.needsSetup && !this._askedSetup) {
+        this._askedSetup = true;
+        this.openNameScreen('scores');
+        return;
+      }
       if (LB && LB.canSubmit) {
         LB.seedFromLocalBests()
           .then((offered) => (offered ? LB.flushPending() : null))
@@ -1544,8 +1559,12 @@
         // look like an extra chore nobody had asked for -- and a board full of
         // people who never found it.
         // Asked once, here, and it returns to the board afterwards.
+        //
+        // `needsSetup`, not `!named`: the name screen is also where consent is
+        // given, and those two have been separate things since 23 August. A
+        // player who typed a name before that has the first and not the second.
         const LB = LUMEN.Leaderboard;
-        if (LB && !LB.named) this.openNameScreen('scores');
+        if (LB && LB.needsSetup) this.openNameScreen('scores');
         // Signing in is the moment a held best finally has an owner.
         if (LB) LB.seedFromLocalBests().then(() => LB.flushPending()).catch(() => {});
       }).catch((e) => {

@@ -4356,6 +4356,95 @@
     }
   });
 
+  // Consent became its own flag on 23 August (bb9f623, App Store 5.1.2). The name
+  // did not: `lumen_name` has existed since the first commit. Nothing migrated
+  // the players who were already between the two, and nothing re-asked them --
+  // `openNameScreen` was guarded on `!named`, which is precisely the half they
+  // already had. Result: `named` true, `canSubmit` false, every personal best
+  // quietly diverted to hold(), no error anywhere, forever.
+  test('Leaderboard: a player who named themselves before consent existed is asked again', () => {
+    freshStorage();
+    const LB = L.Leaderboard;
+    const realSession = L.Auth.session;
+    const realSb = LB._sb;
+    try {
+      LB._sb = { url: 'https://test.invalid', key: 'k' };
+      // Exactly the state a pre-23-August device wakes up in.
+      L.Store.playerName = 'veteran';
+      L.Store.boardConsent = false;
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-veteran' } };
+
+      assert(LB.named, 'they have a name');
+      assert(!LB.canSubmit, 'and cannot publish — which is correct, they never agreed to');
+      assert(LB.needsSetup, 'so something IS still owed, and one question says so');
+
+      // The old guard. If this ever comes back, the player is stranded again.
+      assert(!(!LB.named), 'the old `!named` guard is false here — it would skip them');
+
+      // Consent alone, without a name, must also count as owing something.
+      L.Store.playerName = '';
+      L.Store.boardConsent = true;
+      assert(LB.needsSetup, 'a nameless player owes a name');
+
+      // Both present is the only settled state.
+      L.Store.playerName = 'veteran';
+      assert(!LB.needsSetup, 'name and consent together, and nothing is owed');
+      assert(LB.canSubmit, 'and only then can anything be published');
+    } finally {
+      L.Auth.session = realSession;
+      LB._sb = realSb;
+    }
+  });
+
+  // The rescue has to reach a player who is ALREADY signed in, because that is
+  // who is stuck: they will never see the sign-in prompt again.
+  test('Leaderboard: opening the board asks the stranded player, once per launch', async () => {
+    freshStorage();
+    const UI = L.UI;
+    if (!UI || !UI.openScores) return;                 // headless page, nothing to drive
+    const realOpenName = UI.openNameScreen;
+    const realShow = UI.showScreen;
+    const realSetBoard = UI.setBoard;
+    const realSession = L.Auth.session;
+    const realSb = L.Leaderboard._sb;
+    L.Leaderboard._sb = { url: 'https://test.invalid', key: 'k' };
+    let asked = 0;
+    UI.openNameScreen = () => { asked++; };
+    UI.showScreen = () => {};
+    UI.setBoard = () => {};
+    UI._askedSetup = false;
+    try {
+      L.Store.playerName = 'veteran';
+      L.Store.boardConsent = false;
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-veteran' } };
+
+      UI.openScores();
+      eq(asked, 1, 'the board asks the question the sign-in prompt can no longer ask');
+      UI.openScores();
+      eq(asked, 1, 'and does not ask twice in one sitting — declining has to be free');
+
+      // Once they consent, the board stops asking and starts working.
+      UI._askedSetup = false;
+      L.Store.boardConsent = true;
+      UI.openScores();
+      eq(asked, 1, 'a settled player is never interrupted');
+
+      // A signed-OUT player is not asked either: there is nothing to publish to.
+      UI._askedSetup = false;
+      L.Store.boardConsent = false;
+      L.Auth.session = null;
+      UI.openScores();
+      eq(asked, 1, 'and neither is somebody with no account');
+    } finally {
+      UI.openNameScreen = realOpenName;
+      UI.showScreen = realShow;
+      UI.setBoard = realSetBoard;
+      UI._askedSetup = false;
+      L.Auth.session = realSession;
+      L.Leaderboard._sb = realSb;
+    }
+  });
+
   // js/scores.js stores two different numbers on purpose: the last FIFTY runs,
   // and the all-time record pinned separately so a good week months ago cannot
   // freeze MY RUNS. The seed read the first one. For a player whose record is
