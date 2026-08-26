@@ -39,6 +39,13 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
     // faster one already handed over.
     private var loading = false
     private var waiting: [CAPPluginCall] = []
+    // When the held ad was loaded. Google expires a rewarded ad about an hour
+    // after it arrives, and a plugin that answers "I have one" without checking
+    // hands back an ad that then refuses to present.
+    private var loadedAt: Date?
+    // Ten minutes under Google's hour, so a tap that arrives just before the
+    // boundary is still answered with something that will present.
+    private static let adLifetime: TimeInterval = 50 * 60
 
     @objc func initialize(_ call: CAPPluginCall) {
         GADMobileAds.sharedInstance().start(completionHandler: nil)
@@ -99,7 +106,16 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
         // Loading on main too: the SDK delivers its callbacks there, and the
         // delegate assignment below touches state the presentation path reads.
         DispatchQueue.main.async {
-        if self.rewarded != nil { call.resolve(); return }
+        // Holding one is not the same as holding a USABLE one. An app that sat
+        // in the background overnight would otherwise answer the next tap
+        // instantly with an expired ad, `show()` would be refused, and the
+        // player would get "no ad right now" followed by a second tap that
+        // works — which is exactly the symptom this cache exists to remove.
+        if self.rewarded != nil, let at = self.loadedAt, Date().timeIntervalSince(at) < LumenAds.adLifetime {
+            call.resolve(); return
+        }
+        self.rewarded = nil
+        self.loadedAt = nil
         self.waiting.append(call)
         if self.loading { return }
         self.loading = true
@@ -118,6 +134,7 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
             }
             ad?.fullScreenContentDelegate = self
             self.rewarded = ad
+            self.loadedAt = Date()
             for c in asked { c.resolve() }
         }
         }
@@ -169,6 +186,7 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
     // "no ad right now" with nothing after it. The reason has to survive.
     public func ad(_ ad: GADFullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
         rewarded = nil
+        loadedAt = nil
         guard let call = pending else { return }
         pending = nil
         call.reject("present failed: \(error.localizedDescription)")
@@ -177,6 +195,7 @@ public class LumenAds: CAPPlugin, GADFullScreenContentDelegate {
 
     private func finish() {
         rewarded = nil
+        loadedAt = nil
         guard let call = pending else { return }
         pending = nil
         call.resolve(["earned": earned])

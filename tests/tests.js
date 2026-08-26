@@ -837,69 +837,20 @@
     }
   });
 
-  // preload() is reachable from two places only: boot, and the tail of an ad that
-  // was watched. So a launch whose first fetch came back empty had nothing ready
-  // and nothing trying for the rest of the session, and every tap paid for a cold
-  // load of its own — which is what "you have to press it a few times" was.
-  test('Ads: a preload that comes back empty tries again', async () => {
-    const Ads = L.Ads;
+  // An ad flight settles on its own schedule, and every ending reaches done():
+  // a load that failed, a show the system refused, a video dismissed while the
+  // phone is in a pocket. Asking for the sound back THERE starts the menu music
+  // in a backgrounded app and leaves it running, because away() -- the only
+  // thing that suspends -- does not fire again until the player foregrounds and
+  // leaves a second time.
+  test('Ads: an ad that settles in the background does not wake the sound', async () => {
+    const Ads = L.Ads, A = L.Audio;
     if (!Ads) return;
     const realNative = Object.getOwnPropertyDescriptor(Ads, 'native');
-    const realBackoff = Ads.PRELOAD_BACKOFF;
-    let asked = 0;
-    Ads.PRELOAD_BACKOFF = 1;                        // the schedule, not the wall clock
-    Object.defineProperty(Ads, 'native', {
-      configurable: true,
-      value: {
-        initialize: () => Promise.resolve(),
-        requestTracking: () => Promise.resolve({ status: 'unavailable', tracking: true }),
-        // Empty twice, then a fill — exactly the sequence a player was pressing
-        // through by hand.
-        prepare: () => { asked++; return asked < 3 ? Promise.reject(new Error('no fill')) : Promise.resolve(); },
-        show: () => Promise.resolve({ earned: false }),
-      },
-    });
-    try {
-      Ads._ready = true;
-      Ads._flight = null;
-      const got = await Ads.preload();
-      eq(asked, 3, 'it kept asking until one filled');
-      assert(got === true, 'and reports that one is ready');
-
-      // …and it stops. An unfilled request still costs Google something and a
-      // phone with no network must not be hammered for the whole session.
-      asked = 0;
-      Object.defineProperty(Ads, 'native', {
-        configurable: true,
-        value: {
-          initialize: () => Promise.resolve(),
-          requestTracking: () => Promise.resolve({ status: 'unavailable', tracking: true }),
-          prepare: () => { asked++; return Promise.reject(new Error('no fill')); },
-          show: () => Promise.resolve({ earned: false }),
-        },
-      });
-      const none = await Ads.preload();
-      eq(asked, Ads.PRELOAD_TRIES, 'a phone with nothing to serve is asked a bounded number of times');
-      assert(none === false, 'and the answer is honest');
-    } finally {
-      Ads.PRELOAD_BACKOFF = realBackoff;
-      delete Ads.native;
-      if (realNative) Object.defineProperty(Ads, 'native', realNative);
-      Ads._ready = false;
-      Ads._flight = null;
-    }
-  });
-
-  // The same suspension happens with no backgrounding at all: the ad ends, the
-  // page gets its context back stopped, and nothing in the app would notice.
-  test('Ads: finishing an ad hands the audio back', async () => {
-    const Ads = L.Ads;
-    const A = L.Audio;
-    if (!Ads) return;
-    const realNative = Object.getOwnPropertyDescriptor(Ads, 'native');
-    let woke = 0;
     const realWake = A.wake;
-    A.wake = function () { woke++; return realWake.apply(this, arguments); };
+    const realActive = L.appActive;
+    let woke = 0;
+    A.wake = function () { woke++; };
     Object.defineProperty(Ads, 'native', {
       configurable: true,
       value: {
@@ -911,15 +862,131 @@
     });
     try {
       Ads._ready = true;
+
+      // The player is looking: an ad ending hands the sound back.
+      L.appActive = true;
+      Ads._flight = null;
+      woke = 0;
       await Ads.watch();
-      assert(woke > 0, 'the ad finishing is what asks for the sound back');
+      assert(woke > 0, 'in the foreground the ad finishing asks for the sound back');
+
+      // The phone is in a pocket: it must not.
+      L.appActive = false;
+      Ads._flight = null;
+      woke = 0;
+      await Ads.watch();
+      eq(woke, 0, 'in the background it stays silent — nothing would ever stop it again');
     } finally {
       A.wake = realWake;
+      L.appActive = realActive;
       delete Ads.native;
       if (realNative) Object.defineProperty(Ads, 'native', realNative);
       Ads._ready = false;
       Ads._flight = null;
     }
+  });
+
+  // A rewarded revive lands seconds after the tap, and END RUN and MENU stay
+  // live for all of them. Coming back into a run whose books are closed left the
+  // player on a dead playfield with no panel, no menu and — on iOS — no way out
+  // but force-quitting.
+  test('Revive: an ad that lands after the run ended is refused', () => {
+    freshStorage();
+    const g = newGame();
+    g.start();
+    g.player.alive = false;
+    g.state = 'dead';
+    g._finalized = false;
+    assert(g.revive(true) === true, 'a run still waiting on the decision revives');
+
+    // …now the run is over before the ad comes back.
+    g.state = 'dead';
+    g.revived = false;
+    g._finalized = true;                          // END RUN was pressed
+    eq(g.revive(true), false, 'a finalized run is not resurrected');
+    eq(g.state, 'dead', 'and nothing was put back into play');
+
+    // …and the player who went to the menu instead.
+    g._finalized = false;
+    g.state = 'menu';
+    eq(g.revive(true), false, 'neither is a player who already left for the menu');
+    eq(g.state, 'menu', 'who stays where they are');
+    g.toMenu();
+  });
+
+  // `_deathAt` was stamped from `elapsed`, which only advances inside
+  // updatePlay — so once the game was DEAD the clock froze, the difference
+  // stayed exactly 0 and the "full rate for a beat after dying" beat never
+  // ended. The CONTINUE? panel, the whole rewarded-video wait and the game-over
+  // screen all rendered at full rate and full DPR.
+  test('Death screen: the full-rate beat after dying actually ends', () => {
+    freshStorage();
+    const g = newGame();
+    g.start();
+    const before = g.elapsed;
+    g.die();
+    assert(g._deathAt > 0, 'the death is stamped on a clock that keeps running');
+    // The give-away: it must NOT be the frozen run clock.
+    assert(g._deathAt !== before && g._deathAt !== g.elapsed,
+      'and that clock is not `elapsed`, which stops the moment the run does');
+    const t0 = g._deathAt;
+    // frame() compares its rAF timestamp against it, in milliseconds.
+    assert((t0 + 1600) - t0 === 1600, 'the window is 1.6s of wall time');
+    g.toMenu();
+  });
+
+  // preload() is reached from three places and none of them is a player asking:
+  // boot, the tail of a watched ad, and the app returning to the foreground. So
+  // a launch whose first fetch came back empty had nothing ready and nothing
+  // trying for the rest of the session, and every tap paid for a cold load of
+  // its own — which is what "you have to press it a few times" was.
+  test('Ads: a preload that comes back empty tries again', async () => {
+    // Driven on a FRESH object that inherits preload() rather than on the live
+    // singleton. `Ads` is a module-level object with one `_flight` and one
+    // generation counter, and by this point in the suite other tests have left
+    // retry chains sleeping on it — counting calls to a shared stub measured
+    // those as well as this one and reported 334 attempts for a three-attempt
+    // chain. The behaviour under test belongs to the METHOD, so give the method
+    // its own object and nothing else can reach it.
+    const Ads = L.Ads;
+    if (!Ads) return;
+    const rig = (prepare) => {
+      const o = Object.create(Ads);
+      o._flight = null;
+      o._pgen = 0;
+      o.PRELOAD_BACKOFF = 1;                       // the schedule, not the wall clock
+      o.init = () => Promise.resolve(true);
+      Object.defineProperty(o, 'native', { value: { prepare } });
+      return o;
+    };
+
+    // Empty twice, then a fill — exactly the sequence a player was pressing
+    // through by hand.
+    let asked = 0;
+    const a = rig(() => { asked++; return asked < 3 ? Promise.reject(new Error('no fill')) : Promise.resolve(); });
+    const got = await a.preload();
+    eq(asked, 3, 'it kept asking until one filled');
+    assert(got === true, 'and reports that one is ready');
+
+    // …and it stops. An unfilled request still costs Google something, and a
+    // phone with no network must not be hammered for a whole session.
+    let never = 0;
+    const b = rig(() => { never++; return Promise.reject(new Error('no fill')); });
+    const none = await b.preload();
+    eq(never, Ads.PRELOAD_TRIES, 'a phone with nothing to serve is asked a bounded number of times');
+    assert(none === false, 'and the answer is honest');
+
+    // A newer preload retires an older chain, so a foreground arriving while one
+    // is sleeping does not leave two of them asking in parallel. The generation
+    // has to travel WITH the chain: re-read on each hop it always matches the
+    // current value, which is not a guard at all — that is the bug that let a
+    // hundred stale chains wake at once.
+    let races = 0;
+    const c = rig(() => { races++; return Promise.reject(new Error('no fill')); });
+    const first = c.preload();                     // takes generation 1
+    c._pgen++;                                     // …and something newer arrives
+    await first;
+    eq(races, 1, 'the superseded chain stopped after its first attempt');
   });
 
   test('Audio: muting goes through Store so the memo cache stays truthful', () => {
@@ -5334,6 +5401,10 @@
     eq(g.lastChain, 6, 'lapsed chain recorded');
     // ...then a much bigger one dies WITH you, which never went through breakCombo
     g.combo = 40;
+    // revive() is only ever reached from the CONTINUE? panel, so the run has to
+    // be in the state that panel is shown for — it refuses anything else, which
+    // is what stops an ad landing after END RUN from resurrecting a closed run.
+    g.state = 'dead'; g.player.alive = false; g._finalized = false;
     g.revive(true);
     eq(g.lastChain, 40, 'the chain that died with you is the one on record');
     g.hand.spark = 1; g.handFree.spark = 0; g.combo = 0;

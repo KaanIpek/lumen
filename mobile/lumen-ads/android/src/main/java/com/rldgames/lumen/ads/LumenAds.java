@@ -51,6 +51,12 @@ public class LumenAds extends Plugin {
     // unit and the slower completion overwrites the ad the faster one gave out.
     private boolean loading;
     private final List<PluginCall> waiting = new ArrayList<>();
+    // When the held ad arrived. Google expires a rewarded ad about an hour
+    // later, and a plugin that answers "I have one" without checking hands back
+    // an ad that then refuses to present. Ten minutes under the hour, so a tap
+    // arriving just before the boundary still gets something that will show.
+    private long loadedAt;
+    private static final long AD_LIFETIME_MS = 50L * 60L * 1000L;
 
     @PluginMethod
     public void initialize(PluginCall call) {
@@ -90,7 +96,17 @@ public class LumenAds extends Plugin {
         // could be shown, reported as "you have to press a few times and it
         // comes very slowly".
         activity.runOnUiThread(() -> {
-            if (rewarded != null) { call.resolve(); return; }
+            // Holding one is not the same as holding a USABLE one. An app
+            // that sat in the background overnight would otherwise answer the
+            // next tap instantly with an expired ad, show() would be refused,
+            // and the player would get "no ad right now" followed by a second
+            // tap that works -- exactly the symptom this cache removes.
+            if (rewarded != null
+                    && android.os.SystemClock.elapsedRealtime() - loadedAt < AD_LIFETIME_MS) {
+                call.resolve();
+                return;
+            }
+            rewarded = null;
             waiting.add(call);
             if (loading) return;
             loading = true;
@@ -100,6 +116,7 @@ public class LumenAds extends Plugin {
                     @Override public void onAdLoaded(RewardedAd ad) {
                         loading = false;
                         rewarded = ad;
+                        loadedAt = android.os.SystemClock.elapsedRealtime();
                         for (PluginCall c : drain()) c.resolve();
                     }
                     @Override public void onAdFailedToLoad(LoadAdError error) {
@@ -133,6 +150,7 @@ public class LumenAds extends Plugin {
                     // nothing" — reporting it as the latter is what left the iOS
                     // side saying "no ad right now" with nothing after it.
                     rewarded = null;
+                    loadedAt = 0;
                     PluginCall c = pending;
                     pending = null;
                     if (c != null) { c.reject("present failed: " + error.getMessage()); c.setKeepAlive(false); }
@@ -153,6 +171,7 @@ public class LumenAds extends Plugin {
 
     private void finish() {
         rewarded = null;
+        loadedAt = 0;
         PluginCall c = pending;
         pending = null;
         if (c == null) return;

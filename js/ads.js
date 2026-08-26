@@ -191,7 +191,22 @@
         // A fullscreen ad takes the audio session and hands back a suspended
         // AudioContext. Nothing else in the app would notice, so the game came
         // back silent from an ad even without leaving it. See Audio.wake().
-        try { LUMEN.Audio && LUMEN.Audio.wake && LUMEN.Audio.wake(); } catch (e) { /* no audio here */ }
+        //
+        // ONLY IF THE PLAYER IS LOOKING. A flight settles on its own schedule --
+        // a load that failed, a show the system refused, an ad dismissed while
+        // the phone is in a pocket -- and every one of those paths arrives here.
+        // Resuming in the background would put the menu music back into a
+        // pocketed phone and leave it there: `away()` is the only thing that
+        // suspends, and it does not fire again until the player foregrounds the
+        // app and leaves it a second time. That is verbatim the tester report
+        // `away()` was written to fix.
+        // `LUMEN.appActive` is maintained by the away()/back() pair in game.js,
+        // which is driven by BOTH visibilitychange and Capacitor's
+        // appStateChange — Android's WebView does not reliably report the first.
+        // Falling back to document.hidden covers the web build and the test
+        // page, where no Game has been constructed to maintain it.
+        const looking = LUMEN.appActive != null ? LUMEN.appActive : !document.hidden;
+        try { if (looking && LUMEN.Audio && LUMEN.Audio.wake) LUMEN.Audio.wake(); } catch (e) { /* no audio here */ }
         this.preload();
       };
       const f = run().then((v) => { done(); return v; }, (e) => { done(); throw e; });
@@ -202,18 +217,30 @@
     // Fetch the next ad BEFORE it is wanted, so the tap that asks for one is
     // answered instantly instead of after a load. Cheap and idempotent: the
     // native side keeps a single loaded ad and resolves at once when it has one.
-    preload(tries) {
+    preload(tries, gen) {
       const p = this.native;
       if (!p || !p.prepare || this._flight) return Promise.resolve(false);
       const left = tries == null ? this.PRELOAD_TRIES : tries;
+      // Only the newest attempt gets to retry. `back()` starts one on every
+      // foreground and a finished ad starts another, so without this a phone
+      // with no fill accumulates overlapping retry chains that each keep asking.
+      //
+      // The generation is CARRIED DOWN the chain, not re-read on each hop. Read
+      // afresh it always equals the current value, so a chain sleeping out its
+      // backoff would wake up matching whatever generation had replaced it and
+      // carry on regardless — which is not a guard, it is a comment. Measured
+      // with a 1ms backoff: a hundred-odd stale chains woke at once and asked
+      // 337 times for one ad.
+      const mine = gen == null ? ++this._pgen : gen;
       return this.init()
         .then(() => p.prepare({ adId: this.units.rewarded }))
         .then(() => true, () => {
           // A FAILED preload used to be the end of it, and that is the other
           // half of "you have to press it a few times".
           //
-          // preload() is reached from exactly two places: boot, and the tail of
-          // an ad that was watched. So a launch whose first fetch came back
+          // preload() is reached from three places, and none of them is a
+          // player asking: boot, the tail of a watched ad, and the app coming
+          // back to the foreground. So a launch whose first fetch came back
           // empty — no fill, no network yet, a phone still joining wifi — had
           // nothing ready and nothing trying, for the rest of the session. Every
           // tap then paid for a cold load of its own, and the presses that
@@ -222,11 +249,12 @@
           //
           // A few widening attempts, then stop. Ads are not worth hammering a
           // network for, and Google counts unfilled requests.
-          if (left <= 1) return false;
+          if (left <= 1 || this._pgen !== mine) return false;
           const wait = (this.PRELOAD_TRIES - left + 1) * this.PRELOAD_BACKOFF;
-          return new Promise((r) => setTimeout(r, wait)).then(() => this.preload(left - 1));
+          return new Promise((r) => setTimeout(r, wait)).then(() => this.preload(left - 1, mine));
         });
     },
+    _pgen: 0,
     PRELOAD_TRIES: 3,
     PRELOAD_BACKOFF: 20000,
 

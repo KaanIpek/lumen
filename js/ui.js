@@ -1760,7 +1760,13 @@
         if (btn) btn.disabled = false;
         if (!ok) { this.toast(T('adNone')); return; }
         g.adRevived = true;
-        if (!g.revive(true)) g.finalizeRun();
+        // The run can have moved on while the video played: END RUN and MENU
+        // were live the whole time. revive() refuses those now — and finalizing
+        // them would be worse than doing nothing, because toMenu() calls reset()
+        // which clears the already-recorded guard, so a finalize from the menu
+        // banks the same run a second time.
+        if (g.revive(true)) return;
+        if (g.state === 'dead') g.finalizeRun();
       });
     },
 

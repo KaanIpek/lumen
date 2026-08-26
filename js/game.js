@@ -1391,11 +1391,32 @@
       // app". The menu has music too, so leaving from anywhere other than a run
       // left LUMEN playing behind the home screen. The audio goes to sleep
       // whatever screen we are on; only the run needs the state check.
+      // One place that knows whether the player is looking at us.
+      //
+      // js/ads.js needs it: a rewarded flight settles on its own schedule, and
+      // if it settles while the app is in the background, asking for the sound
+      // back there would start the menu music in a pocketed phone -- with
+      // nothing to stop it, because `away()` does not fire again until the
+      // player foregrounds and leaves a second time. `document.hidden` alone is
+      // not enough on Android, which is the whole reason the App plugin is
+      // wired up below.
+      LUMEN.appActive = !document.hidden;
       const away = () => {
+        LUMEN.appActive = false;
         if (this.state === State.PLAY) this.pause();
         Audio && Audio.sleep();
       };
-      const back = () => { Audio && Audio.wake(); };
+      const back = () => {
+        LUMEN.appActive = true;
+        Audio && Audio.wake();
+        // Re-arm the ad. A held rewarded ad goes stale after about an hour and
+        // both natives short-circuit on merely HOLDING one, so an app that sat
+        // in the background overnight would answer the next tap instantly with
+        // an ad that then refuses to present -- "no ad right now", and the
+        // second tap works. That is the "press it a few times" symptom again,
+        // caused by the cache that was meant to end it.
+        if (LUMEN.Ads && LUMEN.Ads.preload) { try { LUMEN.Ads.preload(); } catch (e) { /* no ads here */ } }
+      };
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) away(); else back();
       });
@@ -1853,6 +1874,21 @@
     // canRevive() — which asks whether you can AFFORD it — must not stand in the
     // way of a player who just watched an ad precisely because they could not.
     revive(free) {
+      // Is this run still WAITING on the decision?
+      //
+      // A rewarded revive lands seconds after the tap, and the CONTINUE? panel
+      // stays live for all of them — END RUN, MENU and the Android back button
+      // were never disabled. `free` skipped every check, so an ad that finished
+      // after the player had already pressed END RUN put them back into a run
+      // whose books were closed. Dying again then found `revived` true, so no
+      // second offer, and `finalizeRun()` returned at its own guard because the
+      // run was already recorded: no CONTINUE? panel, no game-over panel, no
+      // menu. A dead orb on an empty playfield, a pause button that does
+      // nothing, and on iOS no way out but force-quitting the app.
+      //
+      // Pressing MENU during the flight was the same shape: `toMenu()` starts
+      // the attract demo, then the revive hid every screen behind it.
+      if (this.state !== State.DEAD || this._finalized) return false;
       if (!free && !this.canRevive()) return false;
       if (!free) Store.shards = Store.shards - this.reviveCost;
       Store.reviveCount = Store.reviveCount + 1;
@@ -1940,7 +1976,18 @@
       p.alive = false;
       this.state = State.DEAD;
       LUMEN.Voice && LUMEN.Voice.sync();
-      this._deathAt = this.elapsed;   // keeps the crash rendering at full frame rate
+      // Keeps the crash rendering at full frame rate — for a beat, which is what
+      // this used to fail at. It stamped `elapsed`, and `elapsed` only advances
+      // inside updatePlay, which does not run once the state is DEAD. So the
+      // clock froze at the instant of death, `elapsed - _deathAt` stayed exactly
+      // 0, and the "beat" never ended: the CONTINUE? panel, the whole
+      // rewarded-video wait and the game-over screen all rendered at full rate
+      // and full DPR. On iOS the ad is a view controller over a WebView that
+      // never backgrounds, so a thirty-second video played on top of a canvas
+      // still painting every frame behind it. Wall time cannot freeze.
+      // Milliseconds, from the same origin the rAF timestamp uses, so `frame`
+      // can subtract the two directly.
+      this._deathAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       this.shake = 26;
       this.flash = 0.7;
       this.damageFlash = 1;
@@ -4572,7 +4619,7 @@
       // (the compositor is busy re-blurring the panel backdrop). Throttle to ~24fps.
       // The death explosion is the most-replayed moment in the game — keep it at
       // full rate for a beat after dying, then fall back to the idle throttle.
-      const justDied = this.state === State.DEAD && (this.elapsed - (this._deathAt || -99)) < 1.6;
+      const justDied = this.state === State.DEAD && (now - (this._deathAt || -1e9)) < 1600;
       // The attract demo is still "the menu": it must not cost what a real run
       // costs, or the panel taps go laggy again behind a blurred backdrop. Half
       // rate reads as perfectly smooth for scenery and halves the fill cost.
