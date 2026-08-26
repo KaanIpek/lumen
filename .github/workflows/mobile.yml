@@ -59,6 +59,20 @@ concurrency:
   group: mobile
   cancel-in-progress: false
 
+# ONE version number, for both stores.
+#
+# It used to be two: the Android job carried '1.0.0' and the iOS job carried
+# nothing at all, so iOS shipped whatever Capacitor generates by default, which
+# is 1.0. That was invisible until 1.0 was APPROVED on the App Store, at which
+# point every further upload was refused -- "must contain a higher version than
+# that of the previously approved version [1.0]" -- and the refusal came from
+# altool at the very end of a fifteen-minute macOS build.
+#
+# Bump this on every store release. The BUILD number underneath it is the run
+# number and looks after itself; this is the number a player sees.
+env:
+  VERSION_NAME: '1.0.1'
+
 jobs:
   android:
     # Skipped when someone asked for iOS only. Dispatching this workflow used to
@@ -113,8 +127,6 @@ jobs:
       # monotonic and never repeats, which is the whole requirement.
       - name: Make the Android project Play-uploadable
         working-directory: mobile/android
-        env:
-          VERSION_NAME: '1.0.0'
         run: |
           python3 - <<'PYEOF'
           import io, os, re
@@ -529,6 +541,34 @@ jobs:
               if n == 0:
                   raise SystemExit('found no build configuration to attach it to')
           PY
+
+      # The version, which this job never set.
+      #
+      # Capacitor generates the iOS project on this runner, and its default is
+      # MARKETING_VERSION 1.0 / CURRENT_PROJECT_VERSION 1. Those are build
+      # SETTINGS: Info.plist holds $(MARKETING_VERSION), so writing the plist
+      # would be overwritten at compile time and only the pbxproj is worth
+      # editing. The build number is the run number for the same reason Android's
+      # versionCode is -- it is monotonic and never repeats, and Apple refuses a
+      # build number it has already seen just as firmly as Play does.
+      - name: Stamp the version into the Xcode project
+        working-directory: mobile/ios/App
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import io, os, re
+          p = 'App.xcodeproj/project.pbxproj'
+          s = io.open(p, encoding='utf-8').read()
+          v, b = os.environ['VERSION_NAME'], os.environ['BUILD_NUMBER']
+          s, n1 = re.subn(r'MARKETING_VERSION = [^;]+;', 'MARKETING_VERSION = %s;' % v, s)
+          s, n2 = re.subn(r'CURRENT_PROJECT_VERSION = [^;]+;', 'CURRENT_PROJECT_VERSION = %s;' % b, s)
+          io.open(p, 'w', encoding='utf-8').write(s)
+          print('MARKETING_VERSION=%s in %d configs, CURRENT_PROJECT_VERSION=%s in %d' % (v, n1, b, n2))
+          if n1 == 0 or n2 == 0:
+              raise SystemExit('the generated project did not carry the settings this edits')
+          PY
+          grep -E 'MARKETING_VERSION|CURRENT_PROJECT_VERSION' App.xcodeproj/project.pbxproj | sort -u
 
       # Without the API key there is nothing to sign with, so build the app
       # WITHOUT signing. That still proves the project compiles, which is most
