@@ -82,13 +82,23 @@ function readListing() {
     out[k].description = md.slice(fence + 3, end).replace(/^\n/, '').trimEnd();
   }
 
-  // Keywords: the single fenced block under the Keywords heading. Apple applies
-  // them per-locale, and these are latin words a Turkish or Spanish speaker
-  // types too, so the same list goes to every locale.
+  // Keywords: one fenced block per locale under the Keywords heading, each
+  // introduced by **<lang>**. They used to be a single latin list copied to all
+  // four languages; most people search in their own, so English in the Chinese
+  // store bought nothing. Scoped to the section so the **en** here is not
+  // confused with the promotional-text lines above, which use the same marker.
   const kAt = md.indexOf('## Keywords');
-  const kF = md.indexOf('```', kAt), kE = md.indexOf('```', kF + 3);
-  const keywords = md.slice(kF + 3, kE).trim();
-  for (const k of Object.keys(LOCALES)) out[k].keywords = keywords;
+  if (kAt < 0) throw new Error('no Keywords heading');
+  const rest = md.slice(kAt + 1);
+  const nextHead = rest.search(/^## /m);
+  const section = nextHead < 0 ? md.slice(kAt) : md.slice(kAt, kAt + 1 + nextHead);
+  for (const k of Object.keys(LOCALES)) {
+    const at = section.indexOf('**' + k + '**');
+    if (at < 0) throw new Error('no keywords for ' + k);
+    const f = section.indexOf('```', at), e = section.indexOf('```', f + 3);
+    if (f < 0 || e < 0) throw new Error('no fenced keywords for ' + k);
+    out[k].keywords = section.slice(f + 3, e).trim();
+  }
 
   return out;
 }
@@ -195,12 +205,17 @@ function api(method, p, body) {
 // artwork for each device family it is offered on. A single-set uploader was
 // fine while this was an iPhone-only build and became a submission blocker the
 // moment iPad went back in.
+// Eight per slot, not three. Apple allows ten, and the old three were raw
+// gameplay from the same world — at the size a search result renders them they
+// were one purple smear with nothing to read. The numbered files carry a caption
+// and each one is a different world; `tools/caption-shots.js` builds them. The
+// -a/-b/-c originals are left in assets/store as a fallback.
 const SHOT_SETS = [
   { type: 'APP_IPHONE_67',
-    files: ['apple-67-a.png', 'apple-67-b.png', 'apple-67-c.png'] },
+    files: Array.from({ length: 8 }, (_, i) => `apple-67-${i + 1}.png`) },
   // 2048x2732 is the 12.9"/13" iPad slot.
   { type: 'APP_IPAD_PRO_3GEN_129',
-    files: ['apple-ipad13-a.png', 'apple-ipad13-b.png', 'apple-ipad13-c.png'] },
+    files: Array.from({ length: 8 }, (_, i) => `apple-ipad13-${i + 1}.png`) },
 ];
 
 function putBytes(op, buf) {
