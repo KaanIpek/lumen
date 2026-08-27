@@ -1074,7 +1074,10 @@ kbd {
 /* The code field sits in the same row as the transfer buttons and has to hold
    its own beside them rather than collapse to nothing on a narrow phone. */
 .code-input {
-  flex: 1 1 0;
+  /* Two shares to the button's one. At 1:1 the Spanish placeholder — "Escribe
+     el código" — was clipped on a 320px phone, which leaves that field with no
+     instruction at all in the language that needed the longest one. */
+  flex: 2 1 0;
   min-width: 0;
   padding: 10px 12px;
   border-radius: 10px;

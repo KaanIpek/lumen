@@ -180,7 +180,9 @@
       if (codeBox) {
         codeBox.addEventListener('keydown', (e) => {
           e.stopPropagation();                       // never flip the orb
-          if (e.key === 'Enter') { e.preventDefault(); this.redeemCode(); }
+          // The button disables itself while a redeem is in flight; Enter went
+          // straight past that and could fire a second one.
+          if (e.key === 'Enter') { e.preventDefault(); if (!this._redeeming) this.redeemCode(); }
         });
       }
       onTap($('btn-save-export'), () => this.exportSave());
@@ -1970,15 +1972,20 @@
       const btn = $('btn-code-redeem');
       if (!R || !box) return;
       const typed = box.value.trim();
-      if (!typed) return;
+      if (!typed || this._redeeming) return;
+      this._redeeming = true;
       if (btn) btn.disabled = true;
       R.redeem(typed).then((res) => {
+        this._redeeming = false;
         if (btn) btn.disabled = false;
         if (!res.ok) {
           // Every reason is a sentence the player can act on, in their own
-          // language, rather than a code they would have to look up.
-          const key = 'code' + res.reason.charAt(0).toUpperCase() + res.reason.slice(1);
-          this.toast(T(key));
+          // language. A reason this build does not know about must still say
+          // SOMETHING — building the key blind put a raw i18n key on screen
+          // the first time the server learned a new word.
+          const KNOWN = ['signin', 'unknown', 'expired', 'usedup', 'already', 'offline'];
+          const r = KNOWN.indexOf(String(res.reason)) >= 0 ? String(res.reason) : 'unknown';
+          this.toast(T('code' + r.charAt(0).toUpperCase() + r.slice(1)));
           return;
         }
         box.value = '';
@@ -1988,7 +1995,10 @@
         this.toast(T('codeOk', { what: bits.join(' · ') }));
         this.renderSettings();
         this.refreshMenu();
-        this.renderShop && this.renderShop();
+        // Only when it is actually on screen: renderShop starts the signature
+        // preview rAF loop, and starting it behind a closed shop animates
+        // canvases nobody is looking at until something else stops it.
+        if (this.currentScreen === 'shop') this.renderShop && this.renderShop();
       });
     },
 
@@ -1998,10 +2008,19 @@
     openDaily() {
       const R = LUMEN.Perks;
       if (!R) return;
+      // A generation counter, because status() is slow and COLLECT is fast: an
+      // answer from before the claim would otherwise land afterwards and
+      // re-enable a button for a day that is already collected.
+      const gen = ++this._dailyGen;
       this.showScreen('daily');
       this._paintDaily({ loading: true });
-      R.status().then((st) => this._paintDaily(st));
+      R.status().then((st) => {
+        if (gen !== this._dailyGen || this.currentScreen !== 'daily') return;
+        this._paintDaily(st);
+        if (st && st.recovered) this.toast(T('dailyGot', { n: st.recovered, d: st.streak }));
+      });
     },
+    _dailyGen: 0,
 
     _paintDaily(st) {
       const line = $('daily-line');
@@ -2033,11 +2052,20 @@
       const btn = $('btn-daily-claim');
       if (!R) return;
       if (btn) btn.disabled = true;
+      const gen = ++this._dailyGen;
       R.claim().then((res) => {
+        if (gen !== this._dailyGen) return;
         if (!res.ok) {
-          this._paintDaily(res.reason === 'today' ? null : res);
+          // 'today' means the server already has it — a true, ordinary answer,
+          // and telling the player "no connection" for it was simply wrong.
+          if (res.reason === 'today') {
+            this._paintDaily({ ok: true, claimed: true, streak: res.streak, next: res.next });
+            this.toast(T('dailyAlready'));
+            return;
+          }
+          this._paintDaily(res);
           this.toast(T(res.reason === 'signin' ? 'dailySignin' : 'dailyOffline'));
-          return R.status().then((st) => this._paintDaily(st));
+          return;
         }
         this.toast(T('dailyGot', { n: res.shards, d: res.streak }));
         this._paintDaily({ ok: true, claimed: true, streak: res.streak, next: res.next });

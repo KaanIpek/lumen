@@ -4749,7 +4749,7 @@
       return Promise.resolve({
         ok: true, status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
-        json: () => Promise.resolve({ ok: true, code: 'LUMENALL', grant: { shards: 250 } }),
+        json: () => Promise.resolve({ ok: true, code: 'NOTAREALCODE', grant: { shards: 250 } }),
       });
     };
     const realSb = L.Leaderboard._sb;
@@ -4758,14 +4758,14 @@
 
       // Signed out it does not even ask — and says why, rather than failing.
       L.Auth.session = null;
-      let res = await R.redeem('LUMENALL');
+      let res = await R.redeem('NOTAREALCODE');
       eq(res.ok, false, 'signed out, nothing is redeemed');
       eq(res.reason, 'signin', 'and the reason is one the player can act on');
       eq(calls.length, 0, 'no request was made at all');
 
       L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-me' } };
       const before = L.Store.shards;
-      res = await R.redeem('  lumenall  ');
+      res = await R.redeem('  notarealcode  ');
       eq(res.ok, true, 'a real code is accepted');
       eq(L.Store.shards, before + 250, 'and the grant is applied');
 
@@ -4774,7 +4774,7 @@
         'to the FUNCTION, never to a table (' + calls[0].url + ')');
       // The typed string goes up untouched. Trimming and case-folding belong to
       // the server, because the server is the only thing that holds the list.
-      eq(calls[0].body.p_code, 'lumenall', 'the code travels as typed, minus the spaces');
+      eq(calls[0].body.p_code, 'notarealcode', 'the code travels as typed, minus the spaces');
     } finally {
       window.fetch = realFetch;
       L.Auth.session = realSession;
@@ -4789,10 +4789,19 @@
     const R = L.Perks;
     if (!R) return;
     const src = await fetch('../js/perks.js?t=' + Date.now()).then((r) => r.text());
-    // The example codes from the SQL must not appear anywhere in the shipped JS.
-    for (const code of ['LUMENALL', 'SHARDS5K', 'FIRSTFLIP']) {
-      assert(src.indexOf(code) < 0, code + ' must not be in the client');
-    }
+    // A code must never appear in the shipped client. The first version of this
+    // test named the three real codes to check for — in a test file committed to
+    // the same public repository, so the guard published the secret it guarded.
+    // Check the SHAPE instead: nothing here should look like a code at all.
+    const CODEISH = /['"][A-Z0-9]{6,32}['"]/g;
+    const looksLikeCodes = (src.match(CODEISH) || [])
+      // the module names its own storage keys and reasons; those are lowercase
+      .filter((m) => !/^['"](LUMEN1|POST|PATCH|GET|DELETE)['"]$/.test(m));
+    eq(looksLikeCodes.length, 0,
+      'no code-shaped literal in the client (' + looksLikeCodes.join(', ') + ')');
+    // …and the module must not compare a typed string against anything.
+    assert(src.indexOf('p_code') > 0, 'the typed string is sent to the server');
+    assert(!/typed\s*(===|==)\s*['"]/.test(src), 'and never compared here');
     assert(!/redeem\s*\(\s*[^)]*\)\s*{[^}]*(===|==)\s*['"][A-Z0-9]{4,}['"]/.test(src),
       'and no code is compared against a literal either');
     // The reward ladder IS in the client, for drawing only — so it must match
@@ -4870,6 +4879,96 @@
     const shards = L.Store.shards;
     R.apply({ shards: 0 });
     assert(L.Store.shards >= shards, 'a later, smaller grant cannot undo an earlier one');
+  });
+
+  // Both RPCs COMMIT before they answer, so a reply lost in a tunnel leaves the
+  // server certain the reward was given and the player holding nothing. Shards
+  // are sold for money, so what that destroys is purchase-equivalent goods.
+  test('Perks: a reward whose reply was lost is settled on the next open', async () => {
+    freshStorage();
+    const R = L.Perks;
+    if (!R) return;
+    const realFetch = window.fetch, realSession = L.Auth.session, realSb = L.Leaderboard._sb;
+    let reply = null;
+    window.fetch = () => Promise.resolve({
+      ok: true, status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve(reply),
+    });
+    try {
+      L.Leaderboard._sb = { url: 'https://test.invalid', key: 'k' };
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u' } };
+
+      // The server took the day and paid 120; this device never heard.
+      const before = L.Store.shards;
+      reply = { ok: true, claimed: true, streak: 3, shards: 120, next: 170, day: '2026-08-27' };
+      let st = await R.status();
+      eq(L.Store.shards, before + 120, 'the missing payment is settled');
+      eq(st.recovered, 120, 'and the caller is told, so it can say so');
+
+      // …exactly once. Opening the screen again must not pay a second time.
+      st = await R.status();
+      eq(L.Store.shards, before + 120, 'and only once, however often the screen is opened');
+      assert(!st.recovered, 'the second open reports no recovery');
+
+      // Same shape for a code: the redemption committed, the reply was lost, and
+      // "already used" is what the player would otherwise be left with.
+      const s2 = L.Store.shards;
+      reply = { ok: false, reason: 'already', code: 'NOTAREALCODE', grant: { shards: 750 } };
+      let res = await R.redeem('notarealcode');
+      eq(res.ok, true, 'the burnt code pays what it was worth');
+      eq(res.recovered, true, 'flagged as a recovery rather than a fresh redeem');
+      eq(L.Store.shards, s2 + 750, 'and the shards arrive');
+
+      // …and cannot be farmed by typing it again.
+      res = await R.redeem('notarealcode');
+      eq(res.ok, false, 'a second attempt is refused');
+      eq(res.reason, 'already', 'with the honest reason');
+      eq(L.Store.shards, s2 + 750, 'and pays nothing more');
+    } finally {
+      window.fetch = realFetch; L.Auth.session = realSession; L.Leaderboard._sb = realSb;
+    }
+  });
+
+  // An access token lasts an hour. Nothing refreshed it, so both screens died
+  // part-way through a long session and said "no connection", which was untrue.
+  test('Perks: an expired token is refreshed once, not reported as no connection', async () => {
+    freshStorage();
+    const R = L.Perks;
+    if (!R) return;
+    const realFetch = window.fetch, realSession = L.Auth.session;
+    const realSb = L.Leaderboard._sb, realRefresh = L.Auth.refresh;
+    let calls = 0, refreshes = 0, refreshWorks = true;
+    window.fetch = () => {
+      calls++;
+      const expired = calls === 1;
+      return Promise.resolve({
+        ok: !expired, status: expired ? 401 : 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve({ ok: true, claimed: false, streak: 1, shards: 60, day: '2026-08-27' }),
+      });
+    };
+    L.Auth.refresh = () => { refreshes++; return refreshWorks ? Promise.resolve({}) : Promise.reject(new Error('gone')); };
+    try {
+      L.Leaderboard._sb = { url: 'https://test.invalid', key: 'k' };
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u' } };
+
+      const st = await R.status();
+      eq(refreshes, 1, 'the token is refreshed');
+      eq(calls, 2, 'and the call is retried exactly once');
+      eq(st.ok, true, 'so the screen works instead of dying for the session');
+
+      // A refresh that fails is a sign-in problem, and must say so rather than
+      // blaming the network — the player can act on one and not the other.
+      calls = 0; refreshes = 0; refreshWorks = false;
+      const bad = await R.status();
+      eq(bad.ok, false, 'a dead session still fails');
+      eq(bad.reason, 'signin', 'but with the reason the player can act on');
+      eq(refreshes, 1, 'and it does not retry the refresh forever');
+    } finally {
+      window.fetch = realFetch; L.Auth.session = realSession;
+      L.Leaderboard._sb = realSb; L.Auth.refresh = realRefresh;
+    }
   });
 
   // js/scores.js stores two different numbers on purpose: the last FIFTY runs,

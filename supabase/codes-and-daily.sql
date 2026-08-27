@@ -86,7 +86,14 @@ begin
   end if;
   if exists (select 1 from public.promo_redemptions r
               where r.user_id = uid and r.code = c.code) then
-    return jsonb_build_object('ok', false, 'reason', 'already');
+    -- The grant travels with the refusal. The redemption COMMITS before this
+    -- function answers, so a reply lost in transit burns the code and pays
+    -- nothing; returning what it was worth lets the client notice it never
+    -- applied this one and settle it. It cannot be used to farm: the client
+    -- records which codes it has applied, and the row here is what stops a
+    -- second redemption regardless.
+    return jsonb_build_object('ok', false, 'reason', 'already', 'grant', c.grant_json,
+                              'code', c.code);
   end if;
 
   insert into public.promo_redemptions (user_id, code) values (uid, c.code);
@@ -148,7 +155,13 @@ begin
   if found and last.day = today then
     -- Already collected. Say what tomorrow is worth, so the screen has
     -- something true to show rather than a blank.
+    -- `shards` as well as `next`: the claim COMMITS before it answers, so a
+    -- reply lost to a tunnel leaves the day taken and the player unpaid. This
+    -- is the only way back — the client compares it against what it has
+    -- recorded receiving and settles the difference. Without it the reward is
+    -- destroyed, and shards are sold for money.
     return jsonb_build_object('ok', true, 'claimed', true, 'streak', last.streak,
+                              'shards', last.shards,
                               'next', public.daily_reward(last.streak + 1), 'day', today);
   end if;
   if found and last.day = today - 1 then n := last.streak + 1; else n := 1; end if;
@@ -179,7 +192,9 @@ begin
   select * into last from public.daily_claims d
     where d.user_id = uid order by d.day desc limit 1;
   if found and last.day = today then
-    return jsonb_build_object('ok', false, 'reason', 'today', 'streak', last.streak);
+    return jsonb_build_object('ok', false, 'reason', 'today', 'streak', last.streak,
+                              'shards', last.shards,
+                              'next', public.daily_reward(last.streak + 1));
   end if;
   if found and last.day = today - 1 then n := last.streak + 1; else n := 1; end if;
   pay := public.daily_reward(n);
@@ -201,17 +216,38 @@ revoke all on function public.claim_daily() from public, anon;
 grant execute on function public.claim_daily() to authenticated;
 
 -- ------------------------------------------------------------- the codes ---
--- Yours. Change them to anything you like. They are typed by a person, so keep
--- them short and unambiguous -- no O next to 0, no I next to 1. `max_uses = 0`
--- is unlimited, and a code can only ever be redeemed ONCE PER ACCOUNT anyway.
+--
+-- THIS FILE DELIBERATELY CONTAINS NO CODES, and the first version of it did.
+--
+-- The header above argues that a code cannot live in js/ because this
+-- repository is public. It is the same repository. Writing three codes here --
+-- one of them unlimited and granting every cosmetic plus 999,999 shards --
+-- published them to the world in the same commit that explained why they must
+-- never be published. A test meant to guard against exactly that hardcoded all
+-- three as well, so the guard leaked the secret it guarded.
+--
+-- So: add yours BY HAND in the SQL editor, and never commit them. The template
+-- is below; the values in it are not usable codes.
+--
+--   insert into public.promo_codes (code, grant_json, max_uses, expires_at, note)
+--   values ('PICK-YOUR-OWN',
+--           '{"unlockAll": true, "shards": 999999}'::jsonb,
+--           5,                       -- a real limit, never 0 for a grant like this
+--           now() + interval '30 days',
+--           'what it is for');
+--
+-- Rules worth keeping:
+--   * `max_uses = 0` is unlimited. Only ever use it for something you would be
+--     happy to see on a forum -- a small shard gift, never `unlockAll`.
+--   * Set `expires_at` on anything valuable. A code with no expiry is a
+--     permanent liability the day it leaks.
+--   * To retire a code, do NOT delete it: the foreign key on
+--     promo_redemptions cascades, which erases the record of who used it, and
+--     re-running this file would not remove it anyway. Expire it:
+--         update public.promo_codes set expires_at = now() where code = 'X';
+--   * Codes are typed by people. Avoid O next to 0 and I next to 1.
 
-insert into public.promo_codes (code, grant_json, max_uses, note) values
-  ('LUMENALL',  '{"unlockAll": true, "shards": 999999}'::jsonb, 0, 'everything - for you and testers'),
-  ('SHARDS5K',  '{"shards": 5000}'::jsonb,                      0, 'a shard top-up'),
-  ('FIRSTFLIP', '{"shards": 750}'::jsonb,                       0, 'a welcome gift, safe to hand out publicly')
-on conflict (code) do nothing;
-
--- Check. Expect three codes, four functions, and policies ONLY on the two
+-- Check. Expect NO codes yet, four functions, and policies ONLY on the two
 -- tables a player may read from -- promo_codes must have none.
 select code, max_uses, uses, grant_json from public.promo_codes order by code;
 select routine_name, security_type from information_schema.routines
