@@ -35,3 +35,8 @@ signing-out/
 # App Review screen recordings and the frames pulled out of them. These are
 # recordings of a real phone, and this repository is public.
 review/
+
+# Scratch: save transfers, capture output, listing dumps. Personal data and
+# nothing a build needs — and this repository is public.
+work/
+build-out/

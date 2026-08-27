@@ -4458,15 +4458,32 @@
       await LB.submit(4321, 12, 'alltime');
       await LB.submit(99, 3, 'daily');
 
-      eq(calls.length, 4, 'four requests');
+      // Six: two board reads, then each submit looks up the row it owns before
+      // writing. Selecting the writes BY METHOD rather than by index is the
+      // point — the old version indexed into calls[2]/calls[3], so adding the
+      // lookup broke a test that was still describing correct behaviour.
+      eq(calls.length, 6, 'two reads, two ownership lookups, two writes');
       calls.forEach((c) => assert(c.headers.apikey === 'ANON', 'every call carries the anon key'));
 
-      assert(/order=score\.desc/.test(calls[0].url), 'the board is ordered by score');
-      assert(!/day=/.test(calls[0].url), 'the all-time board is not filtered to a day');
-      assert(/day=eq\./.test(calls[1].url), 'the daily board is');
+      const reads = calls.filter((c) => c.method === 'GET');
+      const writes = calls.filter((c) => c.method !== 'GET');
+      eq(writes.length, 2, 'one write per submit, never two');
 
-      const allTime = JSON.parse(calls[2].body);
-      const daily = JSON.parse(calls[3].body);
+      assert(/order=score\.desc/.test(reads[0].url), 'the board is ordered by score');
+      assert(!/day=/.test(reads[0].url), 'the all-time board is not filtered to a day');
+      assert(/day=eq\./.test(reads[1].url), 'the daily board is');
+
+      // The lookups ask only for the caller's own row, which is what makes the
+      // write that follows a replacement rather than a second entry.
+      const lookups = reads.slice(2);
+      eq(lookups.length, 2, 'each submit asks what it already owns');
+      lookups.forEach((c) => assert(/user_id=eq\.u-owner/.test(c.url),
+        'and asks only about its own row (' + c.url + ')'));
+      assert(/day=is\.null/.test(lookups[0].url), 'the all-time lookup matches the null day');
+      assert(/day=eq\./.test(lookups[1].url), 'the daily lookup matches the day');
+
+      const allTime = JSON.parse(writes[0].body);
+      const daily = JSON.parse(writes[1].body);
       eq(allTime.board, 'alltime', 'board recorded');
       eq(allTime.day, null, 'an all-time row carries no day (the table rejects one)');
       eq(daily.board, 'daily', 'daily board recorded');
@@ -4642,6 +4659,76 @@
       UI._askedSetup = false;
       L.Auth.session = realSession;
       L.Leaderboard._sb = realSb;
+    }
+  });
+
+  // The board is one row per (user, board, day) and the client was told to
+  // upsert into it. It never did: `resolution=merge-duplicates` with no
+  // `on_conflict=` aims the clause at the primary key, the payload carries no
+  // id, so the clause cannot fire and every submit ran as a plain insert. The
+  // first one lands; every one after it is a 23505 that submitQuietly drops.
+  // Your first score becomes your permanent score.
+  test('Leaderboard: a better score REPLACES the row you already own', async () => {
+    freshStorage();
+    L.Store.boardConsent = true;
+    const LB = L.Leaderboard;
+    const realFetch = window.fetch;
+    const realSb = LB._sb;
+    const realSession = L.Auth.session;
+    const calls = [];
+    let existing = [{ id: 25, score: 1211 }];          // the row already on the board
+    window.fetch = (url, opts) => {
+      const method = (opts && opts.method) || 'GET';
+      calls.push({ url: String(url), method, body: opts && opts.body ? JSON.parse(opts.body) : null });
+      let payload = [];
+      if (method === 'GET') payload = existing;
+      return Promise.resolve({
+        ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve(payload),
+      });
+    };
+    try {
+      LB._sb = { url: 'https://test.invalid', key: 'k' };
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-me' } };
+      L.Store.playerName = 'veteran';
+
+      // A run worth 2000 against a board holding 1211.
+      await LB.submit(2000, 30, 'alltime');
+      const writes = calls.filter((c) => c.method !== 'GET');
+      eq(writes.length, 1, 'exactly one write');
+      eq(writes[0].method, 'PATCH', 'and it UPDATES the row rather than inserting a second one');
+      assert(/id=eq\.25/.test(writes[0].url), 'the row it owns, by id (' + writes[0].url + ')');
+      eq(writes[0].body.score, 2000, 'with the new score');
+
+      // The board must never move backwards.
+      calls.length = 0;
+      existing = [{ id: 25, score: 2000 }];
+      await LB.submit(900, 4, 'alltime');
+      eq(calls.filter((c) => c.method !== 'GET').length, 0,
+        'a score below the one on the board is not written at all');
+
+      // …and with no row yet, it still inserts.
+      calls.length = 0;
+      existing = [];
+      await LB.submit(500, 6, 'alltime');
+      const first = calls.filter((c) => c.method !== 'GET');
+      eq(first.length, 1, 'one write for a player with no row');
+      eq(first[0].method, 'POST', 'and that one is an insert');
+      eq(first[0].body.score, 500, 'carrying the score');
+      eq(first[0].body.user_id, 'u-me', 'and the owner, so RLS can attribute it');
+
+      // The DAILY board is keyed on the day, so it is looked up by day.
+      calls.length = 0;
+      existing = [];
+      await LB.submit(300, 3, 'daily');
+      const look = calls.find((c) => c.method === 'GET');
+      assert(/board=eq\.daily/.test(look.url) && /day=eq\./.test(look.url),
+        'the daily row is found by day, not by is.null (' + look.url + ')');
+    } finally {
+      window.fetch = realFetch;
+      LB._sb = realSb;
+      L.Auth.session = realSession;
     }
   });
 

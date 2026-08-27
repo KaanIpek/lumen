@@ -228,14 +228,59 @@
       // cached copy is definitely wrong, so drop it.
       const done = () => { this.invalidate(b); };
       if (this._sb) {
-        // Upsert, not insert. The table has one row per (user, board, day), so
-        // a second personal best REPLACES the first instead of leaving a trail
-        // of a player's own older scores across the board.
-        return this._sbFetch('/scores', {
-          method: 'POST',
-          headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
-          body: JSON.stringify(row),
-        }).then((r) => { done(); return r; });
+        // UPDATE THE ROW WE OWN, and insert only when there is not one.
+        //
+        // This used to POST with `Prefer: resolution=merge-duplicates` and no
+        // `on_conflict=`, described in the comment above as an upsert. It was
+        // not one. PostgREST aims that clause at the PRIMARY KEY when no target
+        // is named, and the payload never carries an `id`, so the clause could
+        // never fire — every submit ran as a plain insert.
+        //
+        // Which is fine exactly once. `scores_one_row_per_user` is unique on
+        // (user_id, board, coalesce(day, …)), so the moment a player already has
+        // a row for that board the insert returns 23505, and `submitQuietly`
+        // catches and drops it. The visible result: YOUR FIRST SCORE IS YOUR
+        // PERMANENT SCORE. It was found by a player asking why a 2,000-point run
+        // left the board reading 1,211 — while their DAILY row updated fine,
+        // because they had no daily row yet and so nothing to collide with.
+        //
+        // There is no upsert to write instead: that index is on an EXPRESSION,
+        // and PostgREST can only aim `on_conflict` at a column list, so naming
+        // `user_id,board,day` answers 42P10 "no unique or exclusion constraint
+        // matching". Hence read, then write.
+        if (!row.user_id) {
+          // Signed out there is no row to own; RLS refuses this anyway, and
+          // submitQuietly does not call us. Kept for the direct callers.
+          return this._sbFetch('/scores', {
+            method: 'POST',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify(row),
+          }).then((r) => { done(); return r; });
+        }
+        const mine = '/scores?user_id=eq.' + encodeURIComponent(row.user_id)
+          + '&board=eq.' + b
+          + (b === 'daily' ? '&day=eq.' + encodeURIComponent(row.day || '') : '&day=is.null');
+        return this._sbFetch(mine + '&select=id,score')
+          .then((rows) => {
+            const have = Array.isArray(rows) && rows[0] ? rows[0] : null;
+            if (!have) {
+              return this._sbFetch('/scores', {
+                method: 'POST',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify(row),
+              });
+            }
+            // Never move a row DOWN. The caller only sends personal bests, but
+            // a stale device coming back online could send an older one, and the
+            // board is the one place that must not go backwards.
+            if (!(row.score > (+have.score || 0))) return null;
+            return this._sbFetch('/scores?id=eq.' + encodeURIComponent(have.id), {
+              method: 'PATCH',
+              headers: { Prefer: 'return=minimal' },
+              body: JSON.stringify({ score: row.score, combo: row.combo, name: row.name }),
+            });
+          })
+          .then((r) => { done(); return r; });
       }
       return this._fetch('/submit', { method: 'POST', body: JSON.stringify(row) })
         .then((r) => { done(); return r; });
