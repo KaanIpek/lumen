@@ -1070,3 +1070,31 @@ kbd {
   font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: .06em;
 }
 .name-panel input:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+/* The code field sits in the same row as the transfer buttons and has to hold
+   its own beside them rather than collapse to nothing on a narrow phone. */
+.code-input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(77, 243, 255, 0.28);
+  background: rgba(8, 12, 24, 0.72);
+  color: var(--ink, #eaf6ff);
+  font: 700 14px/1.2 "Rajdhani", ui-monospace, monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.code-input::placeholder { color: rgba(234, 246, 255, .38); letter-spacing: .08em; }
+.code-input:focus { outline: none; border-color: var(--cyan, #4df3ff); }
+
+/* The streak line above the collect button. Quiet — the number that matters is
+   on the button itself. */
+.daily-streak {
+  text-align: center;
+  color: rgba(234, 246, 255, .62);
+  font-size: 13px;
+  letter-spacing: .14em;
+  margin-bottom: 14px;
+  min-height: 18px;
+}

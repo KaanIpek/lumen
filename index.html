@@ -73,6 +73,12 @@
         <button id="btn-modes" class="btn btn-ghost ui-interactive">◇ <span data-i18n="moreModes">GAME MODES</span></button>
         <button id="btn-progress" class="btn btn-ghost ui-interactive">★ <span data-i18n="achievements">ACHIEVEMENTS</span></button>
       </div>
+      <!-- Hidden until a project is configured: with no server there is no day
+           to ask about, and a button that can only ever say "no connection" is
+           worse than no button. js/ui.js refreshMenu() decides. -->
+      <div class="btn-row hidden" id="reward-row">
+        <button id="btn-reward" class="btn btn-ghost ui-interactive">◷ <span data-i18n="btnDaily">DAILY</span></button>
+      </div>
       <div class="btn-row hidden" id="poll-row">
         <button id="btn-poll" class="btn btn-ghost ui-interactive wide">🗳 <span data-i18n="nextUpdate">NEXT UPDATE</span></button>
       </div>
@@ -276,6 +282,22 @@
     </div>
   </section>
 
+  <!-- ============ DAILY REWARD ============ -->
+  <!-- The streak belongs to the ACCOUNT, not to this phone: it survives a
+       reinstall and follows the player to a second device, and the day it counts
+       comes from the database rather than from a clock its owner can set. -->
+  <section id="screen-daily" class="overlay hidden">
+    <div class="panel name-panel">
+      <div class="shop-head">
+        <h2 class="shop-title" data-i18n="dailyTitle">DAILY REWARD</h2>
+        <button id="btn-daily-close" class="icon-x ui-interactive" aria-label="Close" data-i18n-aria="ariaClose">✕</button>
+      </div>
+      <div id="daily-streak" class="daily-streak"></div>
+      <button id="btn-daily-claim" class="btn btn-primary ui-interactive" disabled>—</button>
+      <p id="daily-line" class="name-why"></p>
+    </div>
+  </section>
+
   <!-- ============ SETTINGS ============ -->
   <section id="screen-settings" class="overlay hidden">
     <div class="panel settings-panel">
@@ -348,6 +370,15 @@
         <div class="setting"><span data-i18n="shareStats">Share anonymous stats</span><button class="toggle ui-interactive" data-set="consent"></button></div>
         <div class="setting-hint"><span data-i18n="privacyHint">No personal data, ever. Off by default.</span> <a href="privacy.html" target="_blank" rel="noopener" class="privacy-link" data-i18n="privacyPolicy">Privacy policy</a></div>
       </div>
+      <div class="set-sec" data-i18n="secCode">REDEEM A CODE</div>
+      <div class="setting-hint" data-i18n="codeHint"></div>
+      <div class="transfer-row">
+        <input id="code-input" class="code-input" type="text" maxlength="32" autocomplete="off"
+               spellcheck="false" autocapitalize="characters" inputmode="text"
+               data-i18n-ph="codePlaceholder" />
+        <button id="btn-code-redeem" class="btn btn-ghost ui-interactive"><span data-i18n="codeRedeem">REDEEM</span></button>
+      </div>
+
       <div class="set-sec" data-i18n="secTransfer">PROGRESS</div>
       <div class="setting-hint" data-i18n="transferHint"></div>
       <div class="transfer-row">
@@ -404,6 +435,7 @@
   <script src="js/analytics.js?v=260815225823"></script>
   <script src="js/auth.js?v=260815225823"></script>
   <script src="js/leaderboard.js?v=260815225823"></script>
+  <script src="js/perks.js?v=260815225823"></script>
   <script src="js/ads.js?v=260815225823"></script>
   <script src="js/iap.js?v=260815225823"></script>
   <script src="js/voice.js?v=260815225823"></script>

@@ -79,6 +79,7 @@
         modes: $('screen-modes'),
         name: $('screen-name'),
         poll: $('screen-poll'),
+        daily: $('screen-daily'),
       };
 
       this.installBackButtons();
@@ -95,6 +96,11 @@
         onTap(b, () => { Store.difficulty = b.getAttribute('data-diff'); Audio && Audio.sfx('ui'); this.refreshMenu(); });
       });
       onTap($('btn-daily'), () => { this.click(); game.startDaily(); });
+      // A different thing from the button above it, which starts the daily RUN.
+      // This one collects the reward for turning up. See js/perks.js.
+      onTap($('btn-reward'), () => { this.click(); this.openDaily(); });
+      onTap($('btn-daily-close'), () => { this.click(); this.showScreen('menu'); });
+      onTap($('btn-daily-claim'), () => { this.click(); this.claimDaily(); });
       onTap($('btn-shop'), () => { this.click(); this.openShop('customize'); });
       onTap($('btn-tutorial'), () => { this.click(); game.startTutorial(); });
       onTap($('btn-tut-play'), () => { this.click(); game.start(); });
@@ -167,6 +173,16 @@
       onTap($('btn-apple'), () => { this.click(); this.signInApple(); });
       onTap($('btn-acct-delete'), () => { this.click(); this.deleteAccount(); });
       onTap($('btn-reset'), () => this.resetProgress());
+      onTap($('btn-code-redeem'), () => this.redeemCode());
+      // Enter is what a person types after a code, and a field that ignores it
+      // reads as a field that did not take the code.
+      const codeBox = $('code-input');
+      if (codeBox) {
+        codeBox.addEventListener('keydown', (e) => {
+          e.stopPropagation();                       // never flip the orb
+          if (e.key === 'Enter') { e.preventDefault(); this.redeemCode(); }
+        });
+      }
       onTap($('btn-save-export'), () => this.exportSave());
       onTap($('btn-save-import'), () => this.importSave());
       document.querySelectorAll('#screen-settings .toggle').forEach((t) => {
@@ -337,6 +353,7 @@
       // a first-time player nothing. It appears with their first run — which is
       // also the moment it starts being true.
       this.refreshPoll();
+      this.refreshReward();
       const stats = $('menu-stats');
       if (stats) stats.classList.toggle('hidden', Store.runs === 0);
       $('menu-shards').textContent = Store.shards;
@@ -825,6 +842,16 @@
       this.showScreen('poll');
       this.renderPoll();                        // paint immediately from cache
       P.results().then(() => this.renderPoll()); // then again with live tallies
+    },
+
+    // The menu only advertises a daily reward there is a server to ask about.
+    // With no project configured there is no day to ask for, and a button whose
+    // only possible answer is "no connection" is worse than no button.
+    refreshReward() {
+      const row = $('reward-row');
+      if (!row) return;
+      const R = LUMEN.Perks;
+      row.classList.toggle('hidden', !(R && R.enabled));
     },
 
     // The menu only advertises a vote that exists.
@@ -1933,6 +1960,92 @@
       Audio && Audio.sfx('ui');
       this.renderSettings();
     },
+    // ---- redeem a code -----------------------------------------------------
+    // The code list is on the server and this client never receives it, so every
+    // answer below — including "that code does not exist" — comes from there.
+    // See js/perks.js and supabase/codes-and-daily.sql.
+    redeemCode() {
+      const R = LUMEN.Perks;
+      const box = $('code-input');
+      const btn = $('btn-code-redeem');
+      if (!R || !box) return;
+      const typed = box.value.trim();
+      if (!typed) return;
+      if (btn) btn.disabled = true;
+      R.redeem(typed).then((res) => {
+        if (btn) btn.disabled = false;
+        if (!res.ok) {
+          // Every reason is a sentence the player can act on, in their own
+          // language, rather than a code they would have to look up.
+          const key = 'code' + res.reason.charAt(0).toUpperCase() + res.reason.slice(1);
+          this.toast(T(key));
+          return;
+        }
+        box.value = '';
+        const bits = [];
+        if (res.got.shards) bits.push(T('codeGotShards', { n: res.got.shards }));
+        if (res.got.unlocked) bits.push(T('codeGotUnlocks', { n: res.got.unlocked }));
+        this.toast(T('codeOk', { what: bits.join(' · ') }));
+        this.renderSettings();
+        this.refreshMenu();
+        this.renderShop && this.renderShop();
+      });
+    },
+
+    // ---- the daily reward --------------------------------------------------
+    // The DAY comes from the database, not from this device — see
+    // supabase/codes-and-daily.sql for why that is the whole point.
+    openDaily() {
+      const R = LUMEN.Perks;
+      if (!R) return;
+      this.showScreen('daily');
+      this._paintDaily({ loading: true });
+      R.status().then((st) => this._paintDaily(st));
+    },
+
+    _paintDaily(st) {
+      const line = $('daily-line');
+      const btn = $('btn-daily-claim');
+      const strk = $('daily-streak');
+      if (!line || !btn) return;
+      if (st && st.loading) { line.textContent = ''; btn.disabled = true; return; }
+      if (!st || !st.ok) {
+        const reason = (st && st.reason) || 'offline';
+        line.textContent = T(reason === 'signin' ? 'dailySignin' : 'dailyOffline');
+        btn.disabled = true;
+        if (strk) strk.textContent = '';
+        return;
+      }
+      if (strk) strk.textContent = T('dailyStreak', { n: st.streak });
+      if (st.claimed) {
+        line.textContent = T('dailyDone', { n: st.next });
+        btn.disabled = true;
+        btn.textContent = T('dailyClaim', { n: st.next });
+        return;
+      }
+      line.textContent = '';
+      btn.disabled = false;
+      btn.textContent = T('dailyClaim', { n: st.shards });
+    },
+
+    claimDaily() {
+      const R = LUMEN.Perks;
+      const btn = $('btn-daily-claim');
+      if (!R) return;
+      if (btn) btn.disabled = true;
+      R.claim().then((res) => {
+        if (!res.ok) {
+          this._paintDaily(res.reason === 'today' ? null : res);
+          this.toast(T(res.reason === 'signin' ? 'dailySignin' : 'dailyOffline'));
+          return R.status().then((st) => this._paintDaily(st));
+        }
+        this.toast(T('dailyGot', { n: res.shards, d: res.streak }));
+        this._paintDaily({ ok: true, claimed: true, streak: res.streak, next: res.next });
+        this.refreshMenu();
+        this.renderShop && this.renderShop();
+      });
+    },
+
     // ---- save transfer -----------------------------------------------------
     // There is no account here, so moving between the web build, Steam and a
     // phone means moving the save yourself. The code is shown on screen as well

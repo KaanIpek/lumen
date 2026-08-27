@@ -103,6 +103,12 @@
       if (c.poll && c.poll.id && (c.poll.options || []).length) LUMEN.Poll.current = c.poll;
       LUMEN.UI.refreshPoll && LUMEN.UI.refreshPoll();
     }
+    // The daily-reward button appears for the same reason and at the same
+    // moment: js/perks.js reads the board's project, so it only knows there is
+    // a server to ask AFTER this function has set one. refreshMenu() also does
+    // this, but it can run before the config is applied — which is a button
+    // that stays hidden until something else happens to redraw the menu.
+    LUMEN.UI.refreshReward && LUMEN.UI.refreshReward();
     // Fetch both boards once, now, while the player is still reading the menu.
     // By the time they open the screen it is already there, and it costs them
     // nothing if they never do. Deliberately after the first frame so it cannot

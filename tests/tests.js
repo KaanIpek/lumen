@@ -4732,6 +4732,146 @@
     }
   });
 
+  // ---- redeem codes and the daily reward ------------------------------------
+  // Both exist because neither a code list nor a date can be trusted to the
+  // device: this repository is public, and a phone's clock belongs to its owner.
+  // What the tests below guard is that the CLIENT never decides either one.
+
+  test('Perks: a code is never answered locally', async () => {
+    freshStorage();
+    const R = L.Perks;
+    if (!R) return;
+    const realFetch = window.fetch;
+    const realSession = L.Auth.session;
+    const calls = [];
+    window.fetch = (url, opts) => {
+      calls.push({ url: String(url), body: opts && opts.body ? JSON.parse(opts.body) : null });
+      return Promise.resolve({
+        ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve({ ok: true, code: 'LUMENALL', grant: { shards: 250 } }),
+      });
+    };
+    const realSb = L.Leaderboard._sb;
+    try {
+      L.Leaderboard._sb = { url: 'https://test.invalid', key: 'k' };
+
+      // Signed out it does not even ask — and says why, rather than failing.
+      L.Auth.session = null;
+      let res = await R.redeem('LUMENALL');
+      eq(res.ok, false, 'signed out, nothing is redeemed');
+      eq(res.reason, 'signin', 'and the reason is one the player can act on');
+      eq(calls.length, 0, 'no request was made at all');
+
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-me' } };
+      const before = L.Store.shards;
+      res = await R.redeem('  lumenall  ');
+      eq(res.ok, true, 'a real code is accepted');
+      eq(L.Store.shards, before + 250, 'and the grant is applied');
+
+      eq(calls.length, 1, 'one call');
+      assert(/\/rest\/v1\/rpc\/redeem_promo$/.test(calls[0].url),
+        'to the FUNCTION, never to a table (' + calls[0].url + ')');
+      // The typed string goes up untouched. Trimming and case-folding belong to
+      // the server, because the server is the only thing that holds the list.
+      eq(calls[0].body.p_code, 'lumenall', 'the code travels as typed, minus the spaces');
+    } finally {
+      window.fetch = realFetch;
+      L.Auth.session = realSession;
+      L.Leaderboard._sb = realSb;
+    }
+  });
+
+  // A code list in this file would be readable by anyone: the repository is
+  // public and the script ships inside every build. This is the assertion that
+  // fails if somebody ever "simplifies" the server call away.
+  test('Perks: no code is written into the client', async () => {
+    const R = L.Perks;
+    if (!R) return;
+    const src = await fetch('../js/perks.js?t=' + Date.now()).then((r) => r.text());
+    // The example codes from the SQL must not appear anywhere in the shipped JS.
+    for (const code of ['LUMENALL', 'SHARDS5K', 'FIRSTFLIP']) {
+      assert(src.indexOf(code) < 0, code + ' must not be in the client');
+    }
+    assert(!/redeem\s*\(\s*[^)]*\)\s*{[^}]*(===|==)\s*['"][A-Z0-9]{4,}['"]/.test(src),
+      'and no code is compared against a literal either');
+    // The reward ladder IS in the client, for drawing only — so it must match
+    // the server's, or the screen promises a number the database will not pay.
+    eq(R.LADDER.length, 7, 'seven rungs');
+    eq(R.rewardFor(1), 60, 'day one');
+    eq(R.rewardFor(7), 500, 'day seven');
+    eq(R.rewardFor(99), 500, 'and it holds after that rather than growing');
+    assert(R.rewardFor(2) > R.rewardFor(1) && R.rewardFor(6) > R.rewardFor(5),
+      'the ladder only goes up');
+  });
+
+  test('Perks: the daily reward asks the server for the day', async () => {
+    freshStorage();
+    const R = L.Perks;
+    if (!R) return;
+    const realFetch = window.fetch;
+    const realSession = L.Auth.session;
+    const realSb = L.Leaderboard._sb;
+    const calls = [];
+    let reply = { ok: true, claimed: false, streak: 3, shards: 120, day: '2026-08-27' };
+    window.fetch = (url) => {
+      calls.push(String(url));
+      return Promise.resolve({
+        ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve(reply),
+      });
+    };
+    try {
+      L.Leaderboard._sb = { url: 'https://test.invalid', key: 'k' };
+      L.Auth.session = { access_token: 't', refresh_token: 'r', user: { id: 'u-me' } };
+
+      const st = await R.status();
+      eq(st.streak, 3, 'the streak comes from the server');
+      assert(/rpc\/daily_status$/.test(calls[0]), 'through the status function');
+
+      const before = L.Store.shards;
+      reply = { ok: true, streak: 4, shards: 170, next: 240, day: '2026-08-27' };
+      const got = await R.claim();
+      eq(got.ok, true, 'the claim lands');
+      eq(L.Store.shards, before + 170, 'and pays what the SERVER said, not what the ladder guessed');
+      assert(/rpc\/claim_daily$/.test(calls[1]), 'through the claim function');
+
+      // Collecting twice on one day is the server's call, and a refusal must not
+      // pay anything locally.
+      const held = L.Store.shards;
+      reply = { ok: false, reason: 'today', streak: 4 };
+      const again = await R.claim();
+      eq(again.ok, false, 'the second collection is refused');
+      eq(L.Store.shards, held, 'and nothing is paid');
+    } finally {
+      window.fetch = realFetch;
+      L.Auth.session = realSession;
+      L.Leaderboard._sb = realSb;
+    }
+  });
+
+  // `unlockAll` has to mean ALL. An earlier hand-built version of this counted
+  // three catalogues and silently missed the signatures — a shorter list still
+  // looks like a full one, which is exactly why this counts against the source.
+  test('Perks: unlockAll covers every catalogue, signatures included', () => {
+    freshStorage();
+    const R = L.Perks, C = L.Cosmetics;
+    if (!R || !C) return;
+    const all = [].concat(C.SKINS || [], C.TRAILS || [], C.MAPS || [], C.SIGNATURES || []);
+    assert((C.SIGNATURES || []).length > 0, 'there ARE signatures to miss');
+    R.apply({ unlockAll: true, shards: 10 });
+    const missing = all.filter((i) => !C.owned(i.id)).map((i) => i.id);
+    eq(missing.length, 0, 'nothing is left locked (' + missing.join(', ') + ')');
+    let iap = [];
+    try { iap = JSON.parse(localStorage.getItem('lumen_iap') || '[]'); } catch (e) {}
+    eq(iap.length, (C.SETS || []).length, 'and the sets read as owned, so the shop stops offering them');
+    // A grant never takes anything away.
+    const shards = L.Store.shards;
+    R.apply({ shards: 0 });
+    assert(L.Store.shards >= shards, 'a later, smaller grant cannot undo an earlier one');
+  });
+
   // js/scores.js stores two different numbers on purpose: the last FIFTY runs,
   // and the all-time record pinned separately so a good week months ago cannot
   // freeze MY RUNS. The seed read the first one. For a player whose record is
