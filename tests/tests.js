@@ -6061,6 +6061,31 @@
     assert(j.build > 0 && j.build < 10000, 'feed build is a plausible build number: ' + j.build);
   });
 
+  test('Update: each platform is judged against its own live build', () => {
+    const U = L.Update;
+    // The real situation this exists for: App Store 1.0.1 was live as build 86
+    // while Play was still serving 85. One number would have sent every Play
+    // player to a listing that says they are already current.
+    const feed = { build: 85, iosBuild: 86, androidBuild: 85, minBuild: 0 };
+    assert(U._compare(85, feed, 'android').action === 'none', 'a Play player on 85 is current');
+    assert(U._compare(85, feed, 'ios').action === 'prompt', 'an iOS player on 85 is one behind');
+    assert(U._compare(86, feed, 'ios').action === 'none', 'an iOS player on 86 is current');
+    // Anything that is neither falls back to `build`.
+    assert(U._compare(85, feed, 'web').action === 'none', 'an unknown platform uses the fallback');
+    assert(U._compare(84, feed, 'web').action === 'prompt', 'and is still told when it is behind');
+    // A feed with no per-platform numbers keeps working exactly as before.
+    const flat = { build: 90, minBuild: 0 };
+    for (const p of ['ios', 'android', 'web']) {
+      assert(U._compare(85, flat, p).action === 'prompt', p + ' falls back to build when there is no override');
+    }
+    // A junk override must not silently become "0 and therefore current".
+    for (const bad of [null, 'x', 0, -2, undefined]) {
+      const f = { build: 90, iosBuild: bad, minBuild: 0 };
+      assert(U._compare(85, f, 'ios').action === 'prompt',
+        'iosBuild=' + bad + ' falls back to build rather than disabling the check');
+    }
+  });
+
   test('Update: the web is exempt', async () => {
     // LUMEN.Native.isApp is false in a browser, and check() must stop there
     // rather than send a browser player to a store page they cannot install.

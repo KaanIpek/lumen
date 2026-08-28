@@ -46,10 +46,23 @@
   const Update = {
     // Exposed for the tests, which drive this with fabricated versions rather
     // than by shipping a build and waiting a month.
-    _compare(localBuild, feed) {
+    // Which number in the feed this platform should be compared against. iOS and
+    // Android do not go live together and their build numbers differ, so a
+    // single value would send whichever store is behind to a listing that says
+    // the player is already up to date -- and then ask again tomorrow. `build`
+    // stays as the fallback for anything that is neither (desktop, unknown).
+    _feedBuild(feed, platform) {
+      const p = platform != null ? platform
+        : ((window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform()) || '');
+      const per = p === 'ios' ? feed.iosBuild : p === 'android' ? feed.androidBuild : undefined;
+      const n = parseInt(per, 10);
+      return isFinite(n) && n > 0 ? n : parseInt(feed.build, 10);
+    },
+
+    _compare(localBuild, feed, platform) {
       // Anything we cannot read is not a reason to nag.
       if (!feed || typeof feed !== 'object') return { action: 'none', why: 'no feed' };
-      const latest = parseInt(feed.build, 10);
+      const latest = this._feedBuild(feed, platform);
       const min = parseInt(feed.minBuild, 10) || 0;
       const local = parseInt(localBuild, 10);
       if (!isFinite(latest) || latest <= 0) return { action: 'none', why: 'feed has no build' };
@@ -122,7 +135,7 @@
       const local = await this.localBuild();
       if (local == null) return { action: 'none', why: 'no build number' };
       const feed = await this.fetchFeed();
-      const verdict = this._compare(local, feed);
+      const verdict = this._compare(local, feed);   // platform read from Capacitor
       if (verdict.action === 'none') return verdict;
       if (verdict.action === 'prompt' && !this._dueForPrompt(Date.now())) {
         return { action: 'none', why: 'asked today already' };
