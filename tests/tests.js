@@ -4743,6 +4743,35 @@
   // Six four-piece sets landed at once. Everything below is the arithmetic the
   // design review did by hand, made permanent.
 
+  // The cat MEWS. A skin may own the flip's sound; the wiring is one lookup in
+  // flip(), and this is the test that keeps the lookup honest.
+  test('Themes: the cat skin mews on every flip, other skins do not', () => {
+    freshStorage();
+    const C = L.Cosmetics;
+    L.Store.shards = 100000;
+    C.buy('whisker');
+    const g = newGame();
+    const heard = [];
+    const realSfx = g._sfx;
+    g._sfx = function (name, opts) { heard.push(name); };
+    try {
+      C.equip('whisker');
+      g.start(); g.tutorial = null;
+      heard.length = 0;
+      g.flip();
+      assert(heard.indexOf('meow') >= 0, 'the cat flip mews (' + heard.join(',') + ')');
+      assert(heard.indexOf('flip') < 0, 'and does not ALSO play the ordinary flip over it');
+      C.equip('ion');
+      heard.length = 0;
+      g.flip();
+      assert(heard.indexOf('flip') >= 0, 'every other skin still plays the ordinary flip');
+      assert(heard.indexOf('meow') < 0, 'and never the meow');
+    } finally {
+      g._sfx = realSfx;
+      g.toMenu();
+    }
+  });
+
   test('Themes: every deco names a draw function, every set piece exists', () => {
     const C = L.Cosmetics;
     for (const sk of C.SKINS) {

@@ -576,6 +576,132 @@
   // that is tens of millions of blended pixels per frame and it destroys the
   // frame rate. They're now baked into a half-resolution offscreen layer and
   // blitted, which is a single cheap texture copy.
+  // ---- baked scenery -------------------------------------------------------
+  // A map may name a `scene`: a picture painted ONCE into the background bake,
+  // behind everything, at the bake's half resolution. It costs nothing per
+  // frame, which is the whole trick — the rooftop cat and the blossom trees are
+  // as cheap as the gradient they sit on.
+  const SCENES = {
+    // Moonlit rooftops: a full moon, a skyline of roofs with lit windows, and
+    // one more cat sitting on a chimney, tail curled, watching you play.
+    rooftops(x, w, h) {
+      // the moon, high right, with two soft craters
+      const mx = w * 0.78, my = h * 0.16, mr = h * 0.085;
+      const glow = x.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 3);
+      glow.addColorStop(0, 'hsla(48 80% 88% / 0.30)');
+      glow.addColorStop(1, 'hsla(48 80% 88% / 0)');
+      x.fillStyle = glow;
+      x.beginPath(); x.arc(mx, my, mr * 3, 0, TAU); x.fill();
+      x.fillStyle = 'hsl(48 65% 88%)';
+      x.beginPath(); x.arc(mx, my, mr, 0, TAU); x.fill();
+      x.fillStyle = 'hsla(45 40% 70% / 0.5)';
+      x.beginPath(); x.arc(mx - mr * 0.3, my - mr * 0.2, mr * 0.22, 0, TAU); x.fill();
+      x.beginPath(); x.arc(mx + mr * 0.25, my + mr * 0.3, mr * 0.14, 0, TAU); x.fill();
+
+      // the skyline: a strip of roof silhouettes along the bottom
+      const base = h * 0.93;
+      x.fillStyle = 'hsla(240 45% 6% / 0.92)';
+      x.beginPath();
+      x.moveTo(0, h);
+      x.lineTo(0, base);
+      // gabled roofs of varying widths, deterministic so the bake is stable
+      let rx = 0;
+      const peaks = [0.16, 0.11, 0.2, 0.14, 0.18, 0.13, 0.2];
+      for (let i = 0; rx < w; i++) {
+        const rw = w * peaks[i % peaks.length];
+        const peak = base - h * (0.045 + 0.03 * ((i * 7) % 3));
+        x.lineTo(rx + rw * 0.5, peak);
+        x.lineTo(rx + rw, base);
+        rx += rw;
+      }
+      x.lineTo(w, h);
+      x.closePath(); x.fill();
+
+      // warm windows tucked under the eaves
+      x.fillStyle = 'hsla(38 95% 62% / 0.85)';
+      const wins = [0.07, 0.19, 0.33, 0.46, 0.61, 0.74, 0.9];
+      for (let i = 0; i < wins.length; i++) {
+        const wx = w * wins[i], wy = base - h * (0.012 + 0.01 * (i % 3));
+        x.fillRect(wx, wy, Math.max(2, w * 0.008), Math.max(2, w * 0.011));
+      }
+
+      // a chimney, and the OTHER cat sitting on it — ears, body, curled tail
+      const cx = w * 0.30, cy = base - h * 0.055, cs = h * 0.035;
+      x.fillStyle = 'hsla(240 45% 6% / 0.95)';
+      x.fillRect(cx - cs * 0.6, cy, cs * 1.2, h * 0.06);
+      x.beginPath();                                    // body
+      x.ellipse(cx, cy - cs * 0.45, cs * 0.55, cs * 0.62, 0, 0, TAU); x.fill();
+      x.beginPath();                                    // head
+      x.arc(cx, cy - cs * 1.15, cs * 0.38, 0, TAU); x.fill();
+      x.beginPath();                                    // ears
+      x.moveTo(cx - cs * 0.34, cy - cs * 1.3); x.lineTo(cx - cs * 0.3, cy - cs * 1.72); x.lineTo(cx - cs * 0.06, cy - cs * 1.44);
+      x.moveTo(cx + cs * 0.34, cy - cs * 1.3); x.lineTo(cx + cs * 0.3, cy - cs * 1.72); x.lineTo(cx + cs * 0.06, cy - cs * 1.44);
+      x.fill();
+      x.strokeStyle = 'hsla(240 45% 6% / 0.95)';        // curled tail
+      x.lineWidth = cs * 0.16; x.lineCap = 'round';
+      x.beginPath();
+      x.moveTo(cx + cs * 0.5, cy - cs * 0.1);
+      x.quadraticCurveTo(cx + cs * 1.25, cy - cs * 0.3, cx + cs * 1.1, cy - cs * 1.0);
+      x.stroke();
+    },
+
+    // Sakura: dark branches reaching in from the top corners, heavy with
+    // blossom clusters, and a soft petal drift on the ground line.
+    sakura(x, w, h) {
+      const branch = (sx, sy, ex, ey, c1x, c1y, width) => {
+        // Two strokes: the dark wood, then a thin moonlit edge along the same
+        // curve. Against a night sky a purely dark branch vanishes and the
+        // blossom clusters float — which is what the first bake shipped.
+        x.lineCap = 'round';
+        x.strokeStyle = 'hsla(335 20% 15% / 0.95)';
+        x.lineWidth = width;
+        x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(c1x, c1y, ex, ey); x.stroke();
+        x.strokeStyle = 'hsla(340 45% 42% / 0.5)';
+        x.lineWidth = Math.max(1, width * 0.3);
+        x.beginPath(); x.moveTo(sx, sy - width * 0.28); x.quadraticCurveTo(c1x, c1y - width * 0.28, ex, ey - width * 0.28); x.stroke();
+      };
+      const bloom = (bx, by, br) => {
+        // A cluster reads as blossom when it is MANY SMALL discs, not few big
+        // ones — the first bake's six fat circles read as bubbles. Dark rose
+        // shadow first, then a dozen small petals over it, then a few bright
+        // highlights on top: cheap depth in three layers.
+        x.fillStyle = 'hsla(324 55% 46% / 0.35)';
+        x.beginPath(); x.arc(bx + br * 0.12, by + br * 0.18, br * 1.02, 0, TAU); x.fill();
+        const petals = [[0, -0.55, 0.45], [-0.6, -0.2, 0.42], [0.62, -0.28, 0.4], [-0.3, 0.42, 0.4],
+                        [0.4, 0.4, 0.44], [0, 0, 0.48], [-0.85, 0.15, 0.32], [0.85, 0.1, 0.34],
+                        [-0.15, -0.9, 0.3], [0.35, -0.75, 0.32], [-0.55, -0.65, 0.3], [0.15, 0.8, 0.3]];
+        for (let i = 0; i < petals.length; i++) {
+          x.fillStyle = i % 2 ? 'hsla(334 85% 78% / 0.5)' : 'hsla(342 90% 84% / 0.44)';
+          x.beginPath(); x.arc(bx + petals[i][0] * br, by + petals[i][1] * br, br * petals[i][2], 0, TAU); x.fill();
+        }
+        x.fillStyle = 'hsla(348 95% 91% / 0.5)';
+        for (const [hx, hy] of [[-0.3, -0.45], [0.4, -0.15], [0.05, 0.3]]) {
+          x.beginPath(); x.arc(bx + hx * br, by + hy * br, br * 0.2, 0, TAU); x.fill();
+        }
+      };
+      // left tree: trunk up the edge, two arms reaching in
+      branch(-w * 0.02, h * 0.62, w * 0.16, h * 0.16, w * 0.02, h * 0.3, w * 0.022);
+      branch(w * 0.05, h * 0.34, w * 0.30, h * 0.10, w * 0.16, h * 0.16, w * 0.012);
+      branch(w * 0.04, h * 0.40, w * 0.24, h * 0.30, w * 0.13, h * 0.33, w * 0.009);
+      bloom(w * 0.16, h * 0.13, h * 0.052);
+      bloom(w * 0.29, h * 0.09, h * 0.062);
+      bloom(w * 0.24, h * 0.27, h * 0.048);
+      bloom(w * 0.07, h * 0.22, h * 0.042);
+      // right tree, higher and lighter
+      branch(w * 1.02, h * 0.30, w * 0.80, h * 0.08, w * 0.94, h * 0.12, w * 0.016);
+      branch(w * 0.92, h * 0.14, w * 0.72, h * 0.20, w * 0.82, h * 0.14, w * 0.009);
+      bloom(w * 0.82, h * 0.07, h * 0.056);
+      bloom(w * 0.72, h * 0.18, h * 0.046);
+      bloom(w * 0.92, h * 0.16, h * 0.04);
+      // fallen petals: a faint pink dusting along the bottom
+      const g = x.createLinearGradient(0, h * 0.9, 0, h);
+      g.addColorStop(0, 'hsla(334 70% 70% / 0)');
+      g.addColorStop(1, 'hsla(334 70% 70% / 0.14)');
+      x.fillStyle = g;
+      x.fillRect(0, h * 0.9, w, h * 0.1);
+    },
+  };
+
   class Background {
     constructor() { this.dots = []; this.blobs = []; this.t = 0; this.layer = null; this._layerKey = ''; }
 
@@ -596,6 +722,19 @@
 
     update(dt, scroll) {
       this.t += dt;
+      const M = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
+      if (M && M.dustMode === 'petal') {
+        // Petals FALL. They still ride the scroll a little so the world keeps
+        // moving past, but the read is downward drift with a sideways sway —
+        // sakura, not starfield.
+        for (const d of this.dots) {
+          d.x -= scroll * d.depth * dt * 0.45;
+          d.y += (14 + 26 * d.depth) * dt;
+          d.tw += dt * (1 + d.depth);
+          if (d.y > this.H + 6 || d.x < -6) { d.y = -6; d.x = rand(0, this.W + 40); }
+        }
+        return;
+      }
       for (const d of this.dots) {
         d.x -= scroll * d.depth * dt;
         if (d.x < -4) { d.x = this.W + 4; d.y = rand(0, this.H); }
@@ -643,6 +782,9 @@
         }
         x.globalCompositeOperation = 'source-over';
       }
+
+      // the map's scenery, painted over gradient and nebula, still behind play
+      if (M && M.scene && SCENES[M.scene]) SCENES[M.scene](x, w, h);
     }
 
     draw(ctx, hue, flow) {
@@ -656,13 +798,33 @@
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const MD = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
-      ctx.fillStyle = `hsl(${lerp(MD ? MD.dust : 190, 300, flow)} 70% ${80 + flow * 15}%)`;
-      for (const d of this.dots) {
-        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(d.tw));
-        ctx.globalAlpha = d.depth * tw * 0.85;
-        ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, TAU); ctx.fill();
+      if (MD && MD.dustMode === 'petal') {
+        // each mote of dust is a petal: a pointed oval, tumbling as it sways
+        for (const d of this.dots) {
+          const sway = Math.sin(d.tw * 1.3) * 6 * d.depth;
+          const sz = d.r * 2.1;
+          ctx.globalAlpha = d.depth * 0.75;
+          ctx.fillStyle = `hsl(${(MD.dust + (d.depth > 0.6 ? 10 : -6))} 85% ${76 + d.depth * 10}%)`;
+          ctx.save();
+          ctx.translate(d.x + sway, d.y);
+          ctx.rotate(d.tw * 0.9);
+          ctx.beginPath();
+          ctx.moveTo(0, -sz);
+          ctx.quadraticCurveTo(sz * 0.7, 0, 0, sz);
+          ctx.quadraticCurveTo(-sz * 0.7, 0, 0, -sz);
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+      } else {
+        ctx.fillStyle = `hsl(${lerp(MD ? MD.dust : 190, 300, flow)} 70% ${80 + flow * 15}%)`;
+        for (const d of this.dots) {
+          const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(d.tw));
+          ctx.globalAlpha = d.depth * tw * 0.85;
+          ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, TAU); ctx.fill();
+        }
+        ctx.restore();
       }
-      ctx.restore();
     }
   }
 
@@ -726,15 +888,71 @@
 
     // Cat ears. Outer triangles only: the review cut the inner-ear pair, which
     // at 14px read as holes punched in the silhouette rather than depth.
-    whisker(ctx, r, hue) {
+    whisker(ctx, r, hue, game) {
       const sk = LUMEN.Cosmetics ? LUMEN.Cosmetics.skinDef() : { sat: 85, light: 62 };
-      ctx.fillStyle = `hsl(${hue} ${sk.sat}% ${Math.max(20, (sk.light || 62) - 12)}%)`;
+      const dark = `hsl(${hue} ${sk.sat}% ${Math.max(20, (sk.light || 62) - 12)}%)`;
+      const t = game ? game.elapsed : 0;
+      // EARS, with pink inner ears. The first pass cut the inner pair as noise;
+      // the owner's answer was that this should be A CAT, not a hint of one —
+      // so the face earns its primitives and the inner ear is part of the read.
       for (const m of [-1, 1]) {
+        ctx.fillStyle = dark;
         ctx.beginPath();
-        ctx.moveTo(m * 0.78 * r, -0.42 * r);
-        ctx.lineTo(m * 0.16 * r, -0.80 * r);
-        ctx.lineTo(m * 0.66 * r, -1.30 * r);
+        ctx.moveTo(m * 0.80 * r, -0.38 * r);
+        ctx.lineTo(m * 0.14 * r, -0.82 * r);
+        ctx.lineTo(m * 0.68 * r, -1.34 * r);
         ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'hsl(345 75% 74% / 0.9)';
+        ctx.beginPath();
+        ctx.moveTo(m * 0.62 * r, -0.62 * r);
+        ctx.lineTo(m * 0.34 * r, -0.80 * r);
+        ctx.lineTo(m * 0.58 * r, -1.10 * r);
+        ctx.closePath(); ctx.fill();
+      }
+      // EYES that actually blink: almond shapes with tall cat pupils, closing
+      // to a happy line for a beat every few seconds. The blink phases are
+      // offset from the whisker wobble so the face never moves all at once.
+      const cycle = t % 3.4;
+      const blink = cycle > 3.22 ? Math.max(0.08, 1 - (cycle - 3.22) / 0.06) : 1;
+      for (const m of [-1, 1]) {
+        ctx.fillStyle = 'hsl(25 55% 16%)';
+        ctx.beginPath();
+        ctx.ellipse(m * 0.36 * r, -0.12 * r, 0.155 * r, 0.24 * r * blink, 0, 0, TAU);
+        ctx.fill();
+        if (blink > 0.5) {
+          // the shine that makes an eye an eye
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.beginPath();
+          ctx.arc(m * 0.31 * r, -0.20 * r, 0.05 * r, 0, TAU); ctx.fill();
+        }
+      }
+      // NOSE + MOUTH: a small pink triangle and the classic "w".
+      ctx.fillStyle = 'hsl(345 80% 66%)';
+      ctx.beginPath();
+      ctx.moveTo(-0.09 * r, 0.16 * r); ctx.lineTo(0.09 * r, 0.16 * r); ctx.lineTo(0, 0.30 * r);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'hsl(25 55% 22%)';
+      ctx.lineWidth = Math.max(1, 0.05 * r);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 0.30 * r);
+      ctx.quadraticCurveTo(-0.12 * r, 0.46 * r, -0.24 * r, 0.38 * r);
+      ctx.moveTo(0, 0.30 * r);
+      ctx.quadraticCurveTo(0.12 * r, 0.46 * r, 0.24 * r, 0.38 * r);
+      ctx.stroke();
+      // WHISKERS, three a side, with a slow wobble so the face is alive even
+      // between blinks.
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = Math.max(1, 0.045 * r);
+      const wob = Math.sin(t * 2.1) * 0.05 * r;
+      for (const m of [-1, 1]) {
+        for (let i = -1; i <= 1; i++) {
+          ctx.beginPath();
+          ctx.moveTo(m * 0.42 * r, (0.16 + i * 0.10) * r);
+          ctx.quadraticCurveTo(m * 0.95 * r, (0.10 + i * 0.16) * r,
+            m * 1.38 * r, (0.02 + i * 0.22) * r + wob * i);
+          ctx.stroke();
+        }
       }
     },
 
@@ -1600,7 +1818,9 @@
 
       // squash pop
       p.sx = 1.4; p.sy = 0.6;
-      Audio && this._sfx('flip', { dir: p.dir });
+      // A skin may own the flip's SOUND as well as its look: the cat mews.
+      // Falls back to the ordinary flip for every skin that declares nothing.
+      Audio && this._sfx((this.skin().flipSfx) || 'flip', { dir: p.dir });
       // The flip is the ONE thing a player does, several hundred times a run.
       // Whatever it looks like is what the game looks like, which is why the
       // signature owns it rather than a hardcoded spray of six dots.
@@ -4016,6 +4236,7 @@
     drawMotes(ctx) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      const moteSkin = (this.world && this.world.moteSkin) || null;
       const col = this.moteColor();
       const halo = glowSprite(col);
       // The bounty is bigger, hotter and ringed — it has to be obviously worth a
@@ -4038,14 +4259,33 @@
         }
         ctx.globalAlpha = 0.9;
         ctx.fillStyle = mc;
-        ctx.save();
-        ctx.translate(m.x, m.y); ctx.rotate(Math.PI / 4 + m.pulse * 0.3);
-        const s = m.r * 1.5 * pulse;
-        ctx.fillRect(-s / 2, -s / 2, s, s);
-        ctx.restore();
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(m.x, m.y, m.r * 0.4, 0, TAU); ctx.fill();
+        if (moteSkin === 'fish') {
+          // The cat map's pickups are little gold fish. The COLOUR is untouched
+          // — reward gold is a promise to colourblind players — and a compact
+          // fish is still nothing like a hexagon power-up or a long hazard bar,
+          // which is what the shape channel exists to keep apart.
+          ctx.save();
+          ctx.translate(m.x, m.y);
+          ctx.rotate(Math.sin(m.pulse * 0.8) * 0.25);
+          const fs = m.r * 1.35 * pulse;
+          ctx.beginPath(); ctx.ellipse(0, 0, fs, fs * 0.58, 0, 0, TAU); ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(fs * 0.85, 0); ctx.lineTo(fs * 1.55, -fs * 0.55); ctx.lineTo(fs * 1.55, fs * 0.55);
+          ctx.closePath(); ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath(); ctx.arc(-fs * 0.42, -fs * 0.1, m.r * 0.28, 0, TAU); ctx.fill();
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.translate(m.x, m.y); ctx.rotate(Math.PI / 4 + m.pulse * 0.3);
+          const s = m.r * 1.5 * pulse;
+          ctx.fillRect(-s / 2, -s / 2, s, s);
+          ctx.restore();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath(); ctx.arc(m.x, m.y, m.r * 0.4, 0, TAU); ctx.fill();
+        }
       }
       ctx.restore();
     }

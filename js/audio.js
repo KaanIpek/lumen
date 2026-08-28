@@ -548,6 +548,24 @@
           this._tone({ type: 'sine', freq: f * 2, dur: 0.2, gain: 0.06, attack: 0.003, release: 0.18, detune: 4 });
           break;
         }
+        case 'meow': {
+          // A kitten's "mew": a fast rise into a longer falling tail, quiet
+          // enough to survive being heard several hundred times a run. Every
+          // meow is pitched a few percent differently — an identical sample on
+          // every flip stops being a cat and starts being a metronome.
+          const v = 1 + (Math.random() * 0.16 - 0.08);
+          const t0 = this.ctx.currentTime;
+          // the rise ("m-")
+          this._tone({ type: 'sawtooth', freq: 460 * v, freqTo: 840 * v,
+            dur: 0.07, gain: 0.045, attack: 0.015, release: 0.03, at: t0 });
+          // the fall ("-ew"), overlapping the top of the rise
+          this._tone({ type: 'sawtooth', freq: 840 * v, freqTo: 430 * v,
+            dur: 0.16, gain: 0.05, attack: 0.008, release: 0.12, at: t0 + 0.055 });
+          // a soft second harmonic gives it the nasal kitten timbre
+          this._tone({ type: 'sine', freq: 1680 * v, freqTo: 900 * v,
+            dur: 0.14, gain: 0.018, attack: 0.01, release: 0.1, at: t0 + 0.055 });
+          break;
+        }
         case 'nearmiss': {
           this._noise({ dur: 0.14, gain: 0.05, freq: 1800, freqTo: 400, filterType: 'bandpass', q: 2 });
           break;

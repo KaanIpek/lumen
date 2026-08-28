@@ -72,7 +72,7 @@
     // ---- theme packs (2026-08-28). Each of these carries a `deco` — a themed
     // silhouette drawn over the orb (see DECOS in game.js). Sold alone here and
     // as a four-piece set below.
-    { id: 'whisker',   tier: 'mid',     hue: 32,  sat: 85,  light: 62, deco: 'whisker' },
+    { id: 'whisker',   tier: 'mid',     hue: 32,  sat: 85,  light: 62, deco: 'whisker', flipSfx: 'meow' },
     // light 68, not 74: at 74 the white headband fused with the pale orb into
     // one blob — review offered band-radius or darker skin, and it needed both.
     { id: 'sakura',    tier: 'premium', hue: 336, sat: 82,  light: 68, deco: 'sakura' },
@@ -190,13 +190,13 @@
     // Moonlit rooftops. gravityBias -0.14 lightens the FALL (soft landings,
     // the cat always on its feet) and makes rising flips bite harder.
     { id: 'rooftops',   shards: 2800, bg: 234, bg2: 252, neb: [38, 262],  dust: 210, wall: 40,
-      trait: 'updraft', gravityBias: -0.14 },
+      trait: 'updraft', gravityBias: -0.14, scene: 'rooftops', moteSkin: 'fish' },
 
     // Blossom night: anime hang-time. A milder Nullpoint — long floating arcs,
     // paid for with slightly tighter, denser gates, and the nebula at full
     // strength so the pink canopy stays lit.
     { id: 'bloomward',  shards: 3400, bg: 258, bg2: 292, neb: [326, 262], dust: 326, wall: 176,
-      trait: 'weightless', gMul: 0.80, gap: 0.96, spawn: 1.05 },
+      trait: 'weightless', gMul: 0.80, gap: 0.96, spawn: 1.05, scene: 'sakura', dustMode: 'petal' },
 
     // A spiral arm turning slowly. Wall 220, not the drafted 184 — that sat two
     // degrees off Tidal's wall on Tidal's own trait, and a flagship must not
