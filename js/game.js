@@ -714,6 +714,139 @@
   // reward/danger pair onto an axis the given deficiency can still separate, and
   // shape stays the backup channel (motes are diamonds, power-ups hexagons,
   // hazards long bars) so colour is never the only signal.
+  // ---- themed orb decorations ---------------------------------------------
+  // One small draw function per theme, keyed by the skin's `deco` field. Each
+  // gets (ctx, r, hue, game) with the origin at the orb's centre, +y toward the
+  // orb's own "down", squash already applied. Filled in per theme pack.
+  const DECOS = {
+    // Every function draws with the origin at the orb's centre, distances in
+    // units of r, squash and the gravity mirror already applied: -y is the way
+    // up FEELS. Silhouettes, not pictures — at 28px anything past a handful of
+    // primitives is noise.
+
+    // Cat ears. Outer triangles only: the review cut the inner-ear pair, which
+    // at 14px read as holes punched in the silhouette rather than depth.
+    whisker(ctx, r, hue) {
+      const sk = LUMEN.Cosmetics ? LUMEN.Cosmetics.skinDef() : { sat: 85, light: 62 };
+      ctx.fillStyle = `hsl(${hue} ${sk.sat}% ${Math.max(20, (sk.light || 62) - 12)}%)`;
+      for (const m of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(m * 0.78 * r, -0.42 * r);
+        ctx.lineTo(m * 0.16 * r, -0.80 * r);
+        ctx.lineTo(m * 0.66 * r, -1.30 * r);
+        ctx.closePath(); ctx.fill();
+      }
+    },
+
+    // A hachimaki: band, knot, two streaming tails, one dark pin on the brow.
+    sakura(ctx, r, hue, game) {
+      const t = game ? game.elapsed : 0;
+      ctx.strokeStyle = '#fff';
+      ctx.globalAlpha = 0.95;
+      ctx.lineWidth = 0.26 * r;
+      // 1.12r, not 1.0r: at game size a band hugging the rim fused with the
+      // white core into one blob. The gap is what keeps it a headband.
+      ctx.beginPath(); ctx.arc(0, 0, 1.12 * r, -2.85, -0.30); ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(-0.95 * r, -0.42 * r, 0.17 * r, 0, TAU); ctx.fill();
+      // tails flutter in antiphase; 0.18r of travel — the spec's 0.08r was one
+      // pixel and read as a still image.
+      const fl = Math.sin(t * 6) * 0.18 * r;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(-1.05 * r, -0.40 * r); ctx.lineTo(-2.0 * r, -0.28 * r + fl); ctx.lineTo(-1.15 * r, -0.62 * r);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-1.05 * r, -0.52 * r); ctx.lineTo(-1.8 * r, -0.95 * r - fl); ctx.lineTo(-1.2 * r, -0.72 * r);
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'hsl(248 45% 20%)';
+      ctx.beginPath(); ctx.arc(0, -1.12 * r, 0.22 * r, 0, TAU); ctx.fill();
+    },
+
+    // A ringed wanderer: tilted ring in two arcs so it passes behind the orb,
+    // and one small moon. Ring lightness 80 keeps contrast across the core.
+    cosmos(ctx, r, hue) {
+      ctx.strokeStyle = `hsl(${hue} 70% 80%)`;
+      ctx.lineWidth = 0.17 * r;
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath(); ctx.ellipse(0, 0, 1.50 * r, 0.48 * r, -0.32, Math.PI * 0.06, Math.PI * 0.94); ctx.stroke();
+      ctx.lineWidth = 0.12 * r;
+      ctx.globalAlpha = 0.38;
+      ctx.beginPath(); ctx.ellipse(0, 0, 1.50 * r, 0.48 * r, -0.32, Math.PI * 1.06, Math.PI * 1.94); ctx.stroke();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = `hsl(${(hue + 40) % 360} 30% 88%)`;
+      // 0.20r, sized to survive the 9px minimum orb radius
+      ctx.beginPath(); ctx.arc(1.15 * r, -0.95 * r, 0.20 * r, 0, TAU); ctx.fill();
+    },
+
+    // The banded synthwave sun. Two slits, not three: on the Low profile's 9px
+    // orb three 1px bands smeared into grey; two thick ones stay bands.
+    sundown(ctx, r) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, 1.02 * r, 0, TAU); ctx.clip();
+      ctx.fillStyle = 'rgba(8,4,20,0.9)';
+      ctx.fillRect(-1.15 * r, 0.30 * r, 2.3 * r, Math.max(0.16 * r, 1.5));
+      ctx.fillRect(-1.15 * r, 0.62 * r, 2.3 * r, Math.max(0.22 * r, 2));
+      ctx.restore();
+    },
+
+    // A sheet ghost: scalloped hem hanging into the fall, two dark eyes.
+    wraith(ctx, r, hue) {
+      ctx.fillStyle = `hsl(${hue} 45% 90% / 0.85)`;
+      ctx.beginPath();
+      ctx.moveTo(-0.95 * r, 0.35 * r);
+      ctx.lineTo(0.95 * r, 0.35 * r);
+      // tips at 1.60r — the spec's 1.30r cleared the halo by two pixels
+      ctx.quadraticCurveTo(0.78 * r, 0.85 * r, 0.55 * r, 1.60 * r);
+      ctx.quadraticCurveTo(0.28 * r, 1.35 * r, 0, 1.38 * r);
+      ctx.quadraticCurveTo(-0.28 * r, 1.35 * r, -0.55 * r, 1.60 * r);
+      ctx.quadraticCurveTo(-0.78 * r, 0.85 * r, -0.95 * r, 0.35 * r);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'hsl(250 40% 12% / 0.9)';
+      for (const m of [-1, 1]) {
+        ctx.beginPath(); ctx.ellipse(m * 0.33 * r, -0.16 * r, 0.13 * r, 0.24 * r, 0, 0, TAU); ctx.fill();
+      }
+    },
+
+    // Dragon: lacquer horns and two bright whiskers. You ARE the loong — the
+    // trail is your body, not a creature chasing you.
+    moonpearl(ctx, r, hue, game) {
+      const t = game ? game.elapsed : 0;
+      ctx.fillStyle = `hsl(${hue} 90% 30%)`;
+      ctx.globalAlpha = 0.95;
+      for (const m of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(m * 0.66 * r, -0.72 * r);
+        ctx.lineTo(m * 0.26 * r, -0.90 * r);
+        ctx.lineTo(m * 0.58 * r, -1.42 * r);
+        ctx.closePath(); ctx.fill();
+      }
+      // whiskers: 0.17r wide and light 85 — the first draft's gold hairlines
+      // vanished into the orb's own gold halo.
+      ctx.strokeStyle = `hsl(${(hue + 18) % 360} 95% 85%)`;
+      ctx.lineWidth = Math.max(1, 0.17 * r);
+      ctx.lineCap = 'round';
+      const wob = Math.sin(t * 5) * 0.1 * r;
+      for (const m of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(m * 0.7 * r, 0.25 * r);
+        ctx.quadraticCurveTo(m * 1.5 * r, 0.35 * r + wob, m * 1.9 * r, 0.05 * r + wob);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    },
+  };
+  // Exposed for one reason: the test that proves every skin declaring a `deco`
+  // has a draw function here. The guard in drawPlayer skips an unknown deco
+  // SILENTLY, which is right at runtime and exactly the failure a catalogue
+  // edit would otherwise ship unnoticed. (And it must sit AFTER the table:
+  // attached next to LUMEN.DIFFICULTY it ran before `const DECOS` existed and
+  // took the whole module down — every test failed at once, which is at least
+  // the loud version of the mistake.)
+  LUMEN.DECOS = DECOS;
+
+
   const CB_PALETTES = {
     off:    { reward: 50,  danger: 350 },   // red = stop; nudged apart from the gold reward
     deuter: { reward: 52,  danger: 288 }, // red-green: lean on the blue↔yellow axis
@@ -4182,6 +4315,132 @@
           ctx.strokeStyle = `hsl(${hue} 92% 70%)`;
           ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, TAU); ctx.stroke();
         }
+      } else if (style === 'pawprints') {
+        // Footprints, not a stream: every 3rd sample is one paw print on an
+        // alternating side of the path. Heading uses a VIRTUAL horizontal step —
+        // trail samples all share the player's fixed x, so a real atan2 between
+        // them is ±90° everywhere and undefined at a flip apex.
+        const sk = this.skin();
+        for (let i = 3; i < n; i += 3) {
+          const t = p.trail[i], prev = p.trail[i - 3];
+          const k = 1 - i / n;
+          const side = (Math.floor(i / 3) % 2 ? 1 : -1);
+          const ang = Math.atan2(t.y - prev.y, p.r * 1.6);
+          const sc = 0.6 + 0.4 * k;
+          ctx.save();
+          ctx.translate(t.x, t.y + side * 0.55 * p.r);
+          ctx.rotate(ang);
+          ctx.globalAlpha = k * 0.55;
+          ctx.fillStyle = `hsl(${hue} ${sk.sat != null ? sk.sat : 85}% ${66 + k * 14}%)`;
+          ctx.beginPath(); ctx.arc(0, 0, 0.26 * p.r * sc, 0, TAU); ctx.fill();
+          // toes at 0.14r — 0.11r did not resolve as toes at game size
+          for (const [tx, ty] of [[-0.22, -0.30], [0, -0.36], [0.22, -0.30]]) {
+            ctx.beginPath(); ctx.arc(tx * p.r * sc, ty * p.r * sc, 0.14 * p.r * sc, 0, TAU); ctx.fill();
+          }
+          ctx.restore();
+        }
+      } else if (style === 'petalfall') {
+        // Petals settle off the flight line and flutter wider as they age.
+        for (let i = 0; i < n; i += 2) {
+          const t = p.trail[i], k = 1 - i / n, age = 1 - k;
+          const px = t.x;
+          const py = t.y + p.r * 0.5 * age + Math.sin(this.elapsed * 2.8 + i * 1.3) * p.r * 0.35 * age;
+          const sz = p.r * (0.30 + 0.38 * k);
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(i * 0.9 + this.elapsed * 1.8);
+          ctx.globalAlpha = k * 0.65;
+          // palest toward the TAIL: 74 + age*10, not +k*10 — the spec's own
+          // formula contradicted its prose and was caught in review.
+          ctx.fillStyle = `hsl(${(hue + 8 + i * 2) % 360} 90% ${74 + age * 10}%)`;
+          ctx.beginPath();
+          ctx.moveTo(0, -sz);
+          ctx.quadraticCurveTo(0.65 * sz, 0, 0, sz);
+          ctx.quadraticCurveTo(-0.65 * sz, 0, 0, -sz);
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
+        }
+      } else if (style === 'stardust') {
+        // A wake of four-point stars; every third is bigger and turned 45°, so
+        // the line mixes plus-stars and x-stars the way a starfield does.
+        ctx.lineCap = 'round';
+        for (let i = 0; i < n; i++) {
+          const t = p.trail[i], k = 1 - i / n;
+          const big = i % 3 === 0;
+          const a = p.r * 0.34 * (0.5 + 0.5 * k) * (big ? 1.6 : 1);
+          ctx.save();
+          ctx.translate(t.x, t.y);
+          ctx.rotate((big ? Math.PI / 4 : 0) + i * 0.15);
+          ctx.globalAlpha = k * (big ? 0.65 : 0.4);
+          ctx.strokeStyle = `hsl(${(hue + (i % 2 ? 30 : 0)) % 360} 85% ${72 + k * 16}%)`;
+          ctx.lineWidth = Math.max(1, 0.12 * p.r * k);
+          ctx.beginPath(); ctx.moveTo(-a, 0); ctx.lineTo(a, 0);
+          ctx.moveTo(0, -a); ctx.lineTo(0, a); ctx.stroke();
+          ctx.restore();
+        }
+      } else if (style === 'afterimage') {
+        // VHS channel separation degrading down the tape: a cool and a warm
+        // ghost of the orb drifting apart, with horizontal tape wobble.
+        for (let i = 0; i < n; i += 2) {
+          const t = p.trail[i], k = 1 - i / n, age = 1 - k;
+          const wob = Math.sin(i * 2.7 + this.elapsed * 13) * p.r * 0.12 * age;
+          const split = p.r * (0.15 + 0.65 * age);
+          const sz = p.r * 0.8 * k * 1.9;
+          ctx.globalAlpha = k * 0.4;
+          const warm = glowSprite(`hsl(${hue} 100% 62%)`);
+          const cool = glowSprite(`hsl(${(hue + 195) % 360} 100% 62%)`);
+          ctx.drawImage(warm, t.x + wob - split - sz, t.y - sz, sz * 2, sz * 2);
+          ctx.drawImage(cool, t.x + wob + split - sz, t.y - sz, sz * 2, sz * 2);
+        }
+      } else if (style === 'wisp') {
+        // Smoke crescents that rise off the flight path and sway as they go.
+        ctx.lineCap = 'round';
+        for (let i = 0; i < n; i += 2) {
+          const t = p.trail[i], k = 1 - i / n, age = 1 - k;
+          const wx = t.x + Math.sin(this.elapsed * 2.4 + i * 0.9) * p.r * 0.5 * age;
+          const wy = t.y - p.r * 1.7 * age;
+          ctx.globalAlpha = k * 0.5;
+          ctx.strokeStyle = `hsl(${hue} 45% ${80 + k * 12}%)`;
+          ctx.lineWidth = Math.max(1, 0.14 * p.r);
+          const rr = p.r * (0.35 + 0.45 * age);
+          const start = i * 0.8 + this.elapsed * 1.2;
+          ctx.beginPath(); ctx.arc(wx, wy, rr, start, start + Math.PI * 1.2); ctx.stroke();
+        }
+      } else if (style === 'loong') {
+        // The dragon body. Trail samples are a vertical column (the player's x
+        // never moves), so the undulation is in X — the body swims side to side
+        // behind the pearl. A Y-sine here would be longitudinal and invisible,
+        // which review caught before it shipped.
+        ctx.lineCap = 'round';
+        let fins = 0;
+        for (let i = 0; i < n - 1; i++) {
+          const k = 1 - i / n, age = 1 - k;
+          const amp = p.r * (0.35 + 0.65 * age);
+          const ox = (j) => p.trail[j].x + amp * Math.sin(j * 0.55 - this.elapsed * 9);
+          // hue drifts down the body but never past -32: at the rainbow's low
+          // end a -40 shift landed within 4° of the danger reds.
+          const bh = (hue + 16 - Math.min(32, 40 * age) + 360) % 360;
+          ctx.globalAlpha = k * 0.55;
+          ctx.strokeStyle = `hsl(${bh} 95% ${58 + k * 12}%)`;
+          ctx.lineWidth = Math.max(1, p.r * 1.0 * (0.35 + 0.65 * k));
+          ctx.beginPath();
+          ctx.moveTo(ox(i), p.trail[i].y);
+          ctx.lineTo(ox(i + 1), p.trail[i + 1].y);
+          ctx.stroke();
+          // dorsal fins: sparse, capped, off the body in ±x
+          if (i % 7 === 2 && fins < 4) {
+            fins++;
+            const fx = ox(i), fy = p.trail[i].y;
+            const m = (fins % 2 ? 1 : -1);
+            ctx.globalAlpha = k * 0.5;
+            ctx.fillStyle = `hsl(${(bh + 14) % 360} 95% 70%)`;
+            ctx.beginPath();
+            ctx.moveTo(fx + m * 0.3 * p.r, fy - 0.25 * p.r);
+            ctx.lineTo(fx + m * 0.95 * p.r, fy);
+            ctx.lineTo(fx + m * 0.3 * p.r, fy + 0.25 * p.r);
+            ctx.closePath(); ctx.fill();
+          }
+        }
       } else if (style === 'halo') {
         // Hollow rings rather than filled dots. `halo` is the payoff for a
         // 40-chain, so it should read as something given rather than bought —
@@ -4314,6 +4573,27 @@
       ctx.fillStyle = '#ffffff';
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.5, 0, TAU); ctx.fill();
       ctx.restore();
+
+      // Themed decoration, drawn last so it sits on the lit orb rather than
+      // under the halo. A deco is a SILHOUETTE — a handful of primitives scaled
+      // by p.r — because at 28px anything more detailed is noise (the icon
+      // lesson: a decoration is not a small picture). It rides the squash
+      // transform so a flip deforms the whole character, ears included, and it
+      // never touches the hitbox: collision reads p.r and only p.r.
+      const deco = sk.deco && DECOS[sk.deco];
+      if (deco) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.scale(p.sx, p.sy);
+        // The mirror follows gravity so "up" in deco space is always the way up
+        // FEELS. dir +1 is falling DOWN (game.js:1109), and in that state deco
+        // -y must stay screen-up — identity. The first draft flipped on dir > 0,
+        // which pointed every ear into the fall; nothing caught it because this
+        // table had never held a deco. Reviewed before one did.
+        if (p.dir < 0) ctx.scale(1, -1);
+        deco(ctx, p.r, hue, this);
+        ctx.restore();
+      }
 
       this.drawCharge(ctx, hue);
     }

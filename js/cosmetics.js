@@ -69,6 +69,20 @@
     { id: 'glacier',  tier: 'elite',   hue: 190, sat: 55,  light: 88 },
     // The full wheel, fast. Spectrum drifts; this one is unmistakably alive.
     { id: 'chroma',   tier: 'elite',   hue: 0,   sat: 100, light: 64, rainbow: true, rainbowSpeed: 190 },
+    // ---- theme packs (2026-08-28). Each of these carries a `deco` — a themed
+    // silhouette drawn over the orb (see DECOS in game.js). Sold alone here and
+    // as a four-piece set below.
+    { id: 'whisker',   tier: 'mid',     hue: 32,  sat: 85,  light: 62, deco: 'whisker' },
+    // light 68, not 74: at 74 the white headband fused with the pale orb into
+    // one blob — review offered band-radius or darker skin, and it needed both.
+    { id: 'sakura',    tier: 'premium', hue: 336, sat: 82,  light: 68, deco: 'sakura' },
+    // hue 222, not the drafted 185: orbHue() sweeps ±span/2 around the CENTRE,
+    // so 185+75 spent half its cycle in green-cyan instead of the teal↔indigo
+    // the pack is named for. Centred, 222±37.5 covers exactly that band.
+    { id: 'cosmos',    tier: 'premium', hue: 222, sat: 88,  light: 64, rainbow: true, rainbowSpan: 75, deco: 'cosmos' },
+    { id: 'sundown',   tier: 'premium', hue: 350, sat: 100, light: 62, rainbow: true, rainbowSpan: 56, rainbowSpeed: 24, deco: 'sundown' },
+    { id: 'wraith',    tier: 'premium', hue: 130, sat: 42,  light: 84, deco: 'wraith' },
+    { id: 'moonpearl', tier: 'premium', hue: 34,  sat: 88,  light: 68, rainbow: true, rainbowSpan: 32, rainbowSpeed: 45, deco: 'moonpearl' },
     // ---- earned only. no price, no shortcut. ----
     { id: 'aurora',   req: 'flow2',    hue: 165, sat: 90,  light: 70 },
     { id: 'obsidian', req: 'endure2',  hue: 250, sat: 40,  light: 34 },
@@ -91,6 +105,13 @@
     { id: 'embers', tier: 'mid',     style: 'embers' },
     { id: 'pulse',  tier: 'mid',     style: 'pulse' },
     { id: 'shard',  tier: 'premium', style: 'shard' },
+    // theme-pack trails, one style each — the styles live in drawTrail
+    { id: 'pawprints',  tier: 'mid',     style: 'pawprints' },
+    { id: 'petalfall',  tier: 'mid',     style: 'petalfall' },
+    { id: 'stardust',   tier: 'mid',     style: 'stardust' },
+    { id: 'afterimage', tier: 'mid',     style: 'afterimage' },
+    { id: 'wisp',       tier: 'mid',     style: 'wisp' },
+    { id: 'loong',      tier: 'premium', style: 'loong' },
     { id: 'halo',   req: 'chain2',   style: 'halo' },
     { id: 'wake',   req: 'flow3',    style: 'wake' },
   ];
@@ -160,6 +181,42 @@
     // Deep winter, and Nullpoint's mirror: all the reading time, none of the air.
     { id: 'hoarfrost',  shards: 2900, bg: 200, bg2: 214, neb: [196, 220], dust: 204, wall: 212,
       trait: 'leaden', gMul: 1.32, speed: 0.90 },
+
+    // ---- theme-pack worlds (2026-08-28) ------------------------------------
+    // Same rules as everything above: hue-only theming, every trait a trade,
+    // wall ≥28° from every colourblind danger hue and dust ≥20° from every
+    // reward hue — now enforced by a test rather than by promises.
+
+    // Moonlit rooftops. gravityBias -0.14 lightens the FALL (soft landings,
+    // the cat always on its feet) and makes rising flips bite harder.
+    { id: 'rooftops',   shards: 2800, bg: 234, bg2: 252, neb: [38, 262],  dust: 210, wall: 40,
+      trait: 'updraft', gravityBias: -0.14 },
+
+    // Blossom night: anime hang-time. A milder Nullpoint — long floating arcs,
+    // paid for with slightly tighter, denser gates, and the nebula at full
+    // strength so the pink canopy stays lit.
+    { id: 'bloomward',  shards: 3400, bg: 258, bg2: 292, neb: [326, 262], dust: 326, wall: 176,
+      trait: 'weightless', gMul: 0.80, gap: 0.96, spawn: 1.05 },
+
+    // A spiral arm turning slowly. Wall 220, not the drafted 184 — that sat two
+    // degrees off Tidal's wall on Tidal's own trait, and a flagship must not
+    // read as a reskin of the 1,500-shard map.
+    { id: 'andromeda',  shards: 4200, bg: 258, bg2: 196, neb: [268, 182], dust: 210, wall: 220,
+      trait: 'tide', tide: { amp: 0.07, speed: 0.32 } },
+
+    // The synthwave highway throbs like a bassline.
+    { id: 'nightway',   shards: 3800, bg: 258, bg2: 312, neb: [318, 196], dust: 320, wall: 190,
+      trait: 'breathing', gapWave: { amp: 0.10, speed: 0.85 } },
+
+    // Ghost-vale: violet dark, cold green bars. spawn 0.95 (the draft said 1.05
+    // while its copy promised busier gates — review caught the sign), wall 140
+    // so it does not near-duplicate Regalia's violet-sky-green-bars.
+    { id: 'gloamvale',  shards: 3400, bg: 275, bg2: 245, neb: [288, 130], dust: 280, wall: 140,
+      trait: 'weightless', gMul: 0.78, gap: 0.90, spawn: 0.95 },
+
+    // Lantern-festival night over water: the tide is the dragon's own motion.
+    { id: 'lanternmoon', shards: 4600, bg: 250, bg2: 344, neb: [8, 44],   dust: 14,  wall: 36,
+      trait: 'tide', tide: { amp: 0.07, speed: 0.42 } },
   ];
 
   const DEFAULTS = { skin: 'ion', trail: 'dust', map: 'deepfield' };
@@ -233,6 +290,63 @@
       death: { ring: { n: 4, delay: 0.05, r0: 0.6, r1: 14, life: 0.9, width: 6, hue: 0, white: true },
                burst: { n: 60, spMax: 520, lifeMax: 1.0, sizeMax: 8, drag: 0.84 } } },
 
+    // ---- theme-pack signatures (2026-08-28) --------------------------------
+
+    // Cat: a coiled-spring kick-off, warm purr rings through flow, and a death
+    // that startles the whole flock UP off the rooftop.
+    { id: 'pounce', tier: 'premium',
+      flip:  { ring: { n: 1, r0: 0.9, r1: 2.4, life: 0.3, width: 1.8 },
+               burst: { n: 6, spMax: 140, lifeMax: 0.35, sizeMax: 3, grav: 300, drag: 0.94 } },
+      flow:  { corona: true, ring: { n: 3, delay: 0.18, r0: 0.7, r1: 5.5, life: 0.95, width: 2.5, hue: 40 } },
+      death: { ring: { n: 2, delay: 0.08, r0: 0.6, r1: 8, life: 0.9, width: 4, hue: 40 },
+               burst: { n: 48, spMax: 380, lifeMax: 1.3, sizeMax: 6, grav: -320, drag: 0.92 } } },
+
+    // Anime: the power-focus gather on every tap, and a flow that answers with
+    // TWO heavy rings — review cut the drafted three, which were a near-copy of
+    // corona's flow on a same-tier item.
+    { id: 'awaken', tier: 'premium',
+      flip:  { ring: { n: 1, r0: 2.8, r1: 0.9, life: 0.24, width: 1.8, in: true },
+               burst: { n: 8, spMax: 240, lifeMax: 0.35, sizeMax: 2.5, drag: 0.92 } },
+      flow:  { corona: true, ring: { n: 2, delay: 0.2, r0: 0.7, r1: 6.0, life: 1.1, width: 4 } },
+      death: { ring: { n: 2, delay: 0.07, r0: 0.5, r1: 10, life: 0.8, width: 5, hue: 0, white: true },
+               burst: { n: 58, spMax: 560, lifeMax: 0.85, sizeMax: 6, drag: 0.90 } } },
+
+    // Galaxy: a lighthouse star sweeping, then collapsing inward while its
+    // debris rises.
+    { id: 'pulsar', tier: 'premium',
+      flip:  { ring: { n: 2, delay: 0.05, r0: 0.8, r1: 3.2, life: 0.32, width: 1.6, hue: 197 },
+               burst: { n: 5, spMax: 140, lifeMax: 0.35, sizeMax: 2.5 } },
+      flow:  { corona: true, ring: { n: 3, delay: 0.11, r0: 1.0, r1: 7.0, life: 1.0, width: 2.5, hue: 262 } },
+      death: { ring: { n: 3, delay: 0.06, r0: 9, r1: 0.4, life: 0.5, width: 5, in: true, hue: 197 },
+               burst: { n: 58, spMax: 480, lifeMax: 1.3, sizeMax: 7, grav: -140, drag: 0.88 } } },
+
+    // Synthwave: cyan scan-rings per tap, magenta pulses through flow, and a
+    // CRT power-off for a death.
+    { id: 'scanline', tier: 'premium',
+      flip:  { ring: { n: 2, delay: 0.05, r0: 0.8, r1: 3.0, life: 0.32, width: 1.4, hue: 190 },
+               burst: { n: 5, spMax: 140, lifeMax: 0.35, sizeMax: 2.5, drag: 0.9 } },
+      flow:  { corona: true, ring: { n: 3, delay: 0.12, r0: 0.9, r1: 6.5, life: 0.9, width: 2.2, hue: 318 } },
+      death: { ring: { n: 3, delay: 0.06, r0: 9, r1: 0.4, life: 0.5, width: 5, in: true, hue: 0, white: true },
+               burst: { n: 54, spMax: 460, lifeMax: 1.1, sizeMax: 7, drag: 0.84 } } },
+
+    // Ghost: cold ecto rings, and the one death where nothing shatters — every
+    // particle simply rises out of the corridor.
+    { id: 'seance', tier: 'premium',
+      flip:  { ring: { n: 1, r0: 0.7, r1: 2.9, life: 0.38, width: 2, hue: 130 },
+               burst: { n: 6, spMax: 90, lifeMax: 0.65, sizeMax: 3, grav: -140, drag: 0.93 } },
+      flow:  { corona: true, ring: { n: 2, delay: 0.2, r0: 0.8, r1: 6.5, life: 1.2, width: 2.5, hue: 280 } },
+      death: { ring: { n: 3, delay: 0.1, r0: 0.5, r1: 10, life: 1.25, width: 4, hue: 280 },
+               burst: { n: 46, spMax: 280, lifeMax: 1.7, sizeMax: 6, grav: -300, drag: 0.9 } } },
+
+    // Dragon: firecrackers. Flip burst trimmed to 7 in review so the cost claim
+    // against bloom stays true; the death is a festival chrysanthemum.
+    { id: 'fireworks', tier: 'premium',
+      flip:  { ring: { n: 1, r0: 0.5, r1: 2.3, life: 0.26, width: 1.8, hue: 46 },
+               burst: { n: 7, spMax: 200, lifeMax: 0.55, sizeMax: 2.6, grav: 320, drag: 0.92 } },
+      flow:  { corona: true, ring: { n: 2, delay: 0.12, r0: 0.9, r1: 6.0, life: 0.9, width: 2.5, hue: 22 } },
+      death: { ring: { n: 4, delay: 0.06, r0: 0.5, r1: 12, life: 1.0, width: 5, hue: 46 },
+               burst: { n: 56, spMax: 500, lifeMax: 1.4, sizeMax: 7, grav: 260, drag: 0.90 } } },
+
     // Earned, never sold. A seventy-chain is the hardest ordinary thing in the
     // game, and the point of this one is that money cannot get it for you —
     // which is exactly what makes anybody else who sees it know what it means.
@@ -245,8 +359,8 @@
   ];
 
   // ---- sets ------------------------------------------------------------------
-  // A set is one aesthetic across all three slots: the orb, what it leaves
-  // behind, and what its flip does. Bought together they are cheaper than
+  // A set is one aesthetic across the slots — orb, trail and signature, and
+  // for the theme packs the world as well. Bought together they are cheaper than
   // separately, and — this is the part that matters — YOU NEVER PAY TWICE.
   //
   // The price is always `DISCOUNT` off the list price of the pieces you do NOT
@@ -269,6 +383,17 @@
     { id: 'spectra', items: ['spectrum', 'prism', 'quasar'], usd: 5.99 },
     // cold and precise, crowned through flow
     { id: 'rimefall', items: ['frost', 'shard', 'corona'], usd: 4.49 },
+
+    // ---- theme packs: FOUR slots, shard-only ------------------------------
+    // These are the first sets to include a map. setPrice() already handles it
+    // (maps price through their own `shards` field), and usd 0 keeps them off
+    // the App Store product list entirely — the whole look is earnable.
+    { id: 'alleycat',   items: ['whisker',   'pawprints',  'rooftops',    'pounce'],    usd: 0 },
+    { id: 'hanami',     items: ['sakura',    'petalfall',  'bloomward',   'awaken'],    usd: 0 },
+    { id: 'galaxy',     items: ['cosmos',    'stardust',   'andromeda',   'pulsar'],    usd: 0 },
+    { id: 'neonsunset', items: ['sundown',   'afterimage', 'nightway',    'scanline'],  usd: 0 },
+    { id: 'phantasm',   items: ['wraith',    'wisp',       'gloamvale',   'seance'],    usd: 0 },
+    { id: 'longdance',  items: ['moonpearl', 'loong',      'lanternmoon', 'fireworks'], usd: 0 },
   ];
 
   const all = () => SKINS.concat(TRAILS, MAPS, SIGNATURES);

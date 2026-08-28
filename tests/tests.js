@@ -3569,10 +3569,16 @@
     assert(C.SETS.length >= 4, 'sets exist (' + C.SETS.length + ')');
     for (const s of C.SETS) {
       freshStorage();
-      eq(s.items.length, 3, s.id + ' spans orb, trail and signature');
-      // one of each slot, so a set really is a whole look
+      // The originals are three slots; the theme packs add the world too. One
+      // of EACH slot either way, so a set really is a whole look and never two
+      // skins in a trench coat.
       const cats = s.items.map((i) => C.category(i)).sort();
-      eq(cats.join(','), 'orbs,signatures,trails', s.id + ' covers all three slots');
+      if (s.items.length === 4) {
+        eq(cats.join(','), 'maps,orbs,signatures,trails', s.id + ' covers all four slots');
+      } else {
+        eq(s.items.length, 3, s.id + ' spans orb, trail and signature');
+        eq(cats.join(','), 'orbs,signatures,trails', s.id + ' covers all three slots');
+      }
 
       const cold = C.setPrice(s.id);
       const sum = s.items.reduce((n, i) => n + (C.price(i) ? C.price(i).shards : 0), 0);
@@ -4729,6 +4735,80 @@
       window.fetch = realFetch;
       LB._sb = realSb;
       L.Auth.session = realSession;
+    }
+  });
+
+  // ---- theme packs -----------------------------------------------------------
+
+  // Six four-piece sets landed at once. Everything below is the arithmetic the
+  // design review did by hand, made permanent.
+
+  test('Themes: every deco names a draw function, every set piece exists', () => {
+    const C = L.Cosmetics;
+    for (const sk of C.SKINS) {
+      if (sk.deco) {
+        assert(typeof L.DECOS[sk.deco] === 'function',
+          sk.id + ' declares deco "' + sk.deco + '" and drawPlayer would skip it SILENTLY');
+      }
+    }
+    // and no orphaned deco functions either — a renamed skin must not strand one
+    for (const key of Object.keys(L.DECOS)) {
+      assert(C.SKINS.some((sk) => sk.deco === key), 'deco "' + key + '" belongs to no skin');
+    }
+    for (const set of C.SETS) {
+      for (const it of set.items) {
+        const def = C.def(it);
+        assert(def, set.id + ' bundles "' + it + '" which is not in any catalogue');
+        assert(!def.req, set.id + ' bundles "' + it + '" which is achievement-only and cannot be sold');
+        assert(C.price(it), set.id + ' bundles unpriced "' + it + '"');
+      }
+      const p = C.setPrice(set.id);
+      assert(p && p.shards > 0, set.id + ' has no computable price');
+    }
+    // the four-piece sets must price their map through the map's own shards
+    const four = C.SETS.filter((s2) => s2.items.length === 4);
+    eq(four.length, 6, 'six theme packs');
+    for (const s2 of four) {
+      assert(s2.usd === 0, s2.id + ' must be shard-only — a usd price needs a store product');
+    }
+  });
+
+  // The colourblind language is load-bearing: hazards must never share a hue
+  // family with anything ambient. The themed worlds promised wall >= 28 degrees
+  // from every danger hue and dust >= 20 from every reward hue; this makes the
+  // promise a test. (Scoped to the themed worlds — emberfall predates the dust
+  // rule at 16 degrees and is left as shipped.)
+  test('Themes: map hues keep their distance from the colourblind palette', () => {
+    const DANGER = [350, 288, 276, 352];
+    const REWARD = [50, 52, 56, 128];
+    const THEMED = ['hallowmere', 'regalia', 'nullpoint', 'weave', 'hoarfrost',
+                    'rooftops', 'bloomward', 'andromeda', 'nightway', 'gloamvale', 'lanternmoon'];
+    const circ = (a, b) => { const d = Math.abs(((a % 360) + 360) % 360 - ((b % 360) + 360) % 360); return Math.min(d, 360 - d); };
+    for (const id of THEMED) {
+      const m = L.Cosmetics.def(id);
+      assert(m, id + ' exists');
+      for (const d of DANGER) {
+        assert(circ(m.wall, d) >= 28, id + ' wall ' + m.wall + ' is only ' + circ(m.wall, d) + ' deg from danger ' + d);
+      }
+      for (const r of REWARD) {
+        assert(circ(m.dust, r) >= 20, id + ' dust ' + m.dust + ' is only ' + circ(m.dust, r) + ' deg from reward ' + r);
+      }
+    }
+    // wall distance holds for EVERY map, themed or not
+    for (const m of L.Cosmetics.MAPS) {
+      for (const d of DANGER) {
+        assert(circ(m.wall, d) >= 28, m.id + ' wall ' + m.wall + ' vs danger ' + d + ' = ' + circ(m.wall, d));
+      }
+    }
+  });
+
+  // Every themed map rides an EXISTING, tested trait — a new mechanic smuggled
+  // in through the catalogue would dodge every gameplay test in this file.
+  test('Themes: new worlds reuse tested traits only', () => {
+    const KNOWN = ['none', 'updraft', 'sink', 'tide', 'sparse', 'heavy', 'haunted',
+                   'stately', 'weightless', 'breathing', 'leaden'];
+    for (const m of L.Cosmetics.MAPS) {
+      assert(KNOWN.indexOf(m.trait) >= 0, m.id + ' has unknown trait "' + m.trait + '"');
     }
   });
 

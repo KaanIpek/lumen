@@ -195,6 +195,89 @@
       snare: [4, 12], open: [14],
     },
 
+
+    // Cat burglar jazz: a walking bass sneaking up chromatic steps, brushed
+    // hats, and a pentatonic lead that lands like paws — mostly rests, then
+    // three quick steps. The only walking bass in the game.
+    rooftops: {
+      bpm: 100, wave: 'triangle', sub: 'triangle',
+      kick: [0, 7, 10], hat: 2,
+      A: [[45, 48, 52], [48, 52, 55], [50, 54, 57], [52, 56, 59]],
+      B: [[45, 48, 52], [43, 47, 50], [50, 54, 57], [45, 48, 52]],
+      arp: [0, 2, 1, 2],
+      lead: [N, N, 12, 14, 15, N, N, N, N, N, 12, N, N, N, N, N, N, 15, 17, N, 15, N, 12, N, N, N, 10, N, N, N, N, N],
+      bass: [0, N, 3, N, 5, N, 7, N, 8, N, 7, N, 5, N, 3, N],
+      snare: [4, 12], open: [10],
+    },
+
+    // The last-episode chord loop — IV V iii vi, the progression half of anime
+    // itself runs on — under a lead that holds its notes like a key frame.
+    bloomward: {
+      bpm: 100, wave: 'sine', sub: 'triangle',
+      kick: [0, 4, 8, 12], hat: 4,
+      A: [[41, 45, 48], [43, 47, 50], [40, 43, 47], [45, 48, 52]],
+      B: [[41, 45, 48], [43, 47, 50], [48, 52, 55], [43, 47, 50]],
+      arp: [0, 1, 2, 1],
+      lead: [12, N, N, N, N, N, 14, N, 16, N, N, N, N, N, N, N, 14, N, N, N, 12, N, 11, N, 12, N, N, N, N, N, N, N],
+      bass: [0, N, N, N, N, N, N, N, 0, N, N, N, 7, N, N, N],
+      snare: [8], open: [14],
+    },
+
+    // A spiral arm: a FIVE-step arp against a sixteen-step bar (weave's trick
+    // at a different prime), so the pattern precesses like the stars do. Ninth
+    // chords, no third doing any work, one high lead note a bar.
+    andromeda: {
+      bpm: 76, wave: 'sine', sub: 'sine',
+      kick: [0, 8], hat: 4,
+      A: [[45, 52, 59], [43, 50, 57], [48, 55, 62], [41, 48, 55]],
+      B: [[45, 52, 59], [50, 57, 64], [43, 50, 57], [45, 52, 59]],
+      arp: [0, 1, 2, 1, 2],
+      lead: [N, N, N, N, N, N, 19, N, N, N, N, N, N, N, N, N, 24, N, N, N, N, N, N, N, N, N, 21, N, N, N, N, N],
+      bass: [0, N, N, N, N, N, N, N, 7, N, N, N, N, N, N, N],
+      snare: [8], open: [12],
+    },
+
+    // i–VI–III–VII at 118 with an off-beat octave bass: the synthwave loop
+    // itself. Where Deepfield drives, this one CRUISES — snare halved, the
+    // open hat pushing the and-of-three.
+    nightway: {
+      bpm: 118, wave: 'sawtooth', sub: 'square',
+      kick: [0, 4, 8, 12], hat: 2,
+      A: [[45, 48, 52], [41, 45, 48], [48, 52, 55], [43, 47, 50]],
+      B: [[45, 48, 52], [41, 45, 48], [50, 53, 57], [43, 47, 50]],
+      arp: [0, 2, 1, 2],
+      lead: [12, N, N, 15, N, N, 17, N, N, N, 15, N, 12, N, N, N, 10, N, N, 12, N, N, 15, N, 17, N, 19, N, N, N, N, N],
+      bass: [0, N, 12, N, 0, N, 12, N, 0, N, 12, N, 7, N, 12, N],
+      snare: [4, 12], open: [10],
+    },
+
+    // E phrygian — the flat second leaning on the tonic is the dread interval —
+    // with one kick at the bar and a lead that only ever sighs downward by a
+    // semitone. Hallowmere is a music box; this is the cold in the room.
+    gloamvale: {
+      bpm: 82, wave: 'sine', sub: 'sine',
+      kick: [0, 10], hat: 8,
+      A: [[40, 43, 47], [41, 45, 48], [38, 41, 45], [40, 43, 47]],
+      B: [[40, 43, 47], [41, 45, 48], [43, 47, 50], [40, 43, 47]],
+      arp: [0, 1, 0, 1],
+      lead: [N, N, N, N, 13, N, 12, N, N, N, N, N, N, N, N, N, N, N, N, N, 15, N, 13, N, 12, N, N, N, N, N, N, N],
+      bass: [0, N, N, N, N, N, N, N, 0, N, N, N, 1, N, 0, N],
+      snare: [], open: [8],
+    },
+
+    // Lantern festival: gong fifths under a fully pentatonic lead — not one
+    // note outside the five — and a firecracker kick pattern in pairs.
+    lanternmoon: {
+      bpm: 112, wave: 'triangle', sub: 'sine',
+      kick: [0, 3, 8, 11], hat: 2,
+      A: [[48, 55, 60], [45, 52, 57], [50, 57, 62], [48, 55, 60]],
+      B: [[48, 55, 60], [43, 50, 55], [45, 52, 57], [48, 55, 60]],
+      arp: [0, 1, 2, 1],
+      lead: [12, N, 14, N, 16, N, N, N, 19, N, 16, N, 14, N, N, N, 21, N, 19, N, 16, N, 14, N, 12, N, N, N, N, N, N, N],
+      bass: [0, N, N, 0, N, N, 7, N, 0, N, N, 0, N, N, 7, N],
+      snare: [4, 12], open: [14],
+    },
+
     // ---- a MODE's music, not a world's ---------------------------------------
     // Claimed by ABANDON HOPE through `mode.song`, so it follows you onto every
     // map. Everything here is chosen to withhold:
