@@ -6054,8 +6054,11 @@
     // dead end at the exact moment the player agreed to update.
     assert(/^https:\/\/play\.google\.com\//.test(j.android), 'android link is a Play URL: ' + j.android);
     assert(/^https:\/\/apps\.apple\.com\//.test(j.ios), 'ios link is an App Store URL: ' + j.ios);
-    // And the build the feed advertises must be one the shipped app can beat.
-    assert(j.build >= 86, 'feed build is at least the build that shipped');
+    // The rule the release order exists to protect: the feed must never name a
+    // build nobody can install yet. There is no way to assert "this exists in
+    // the store" from here, but the shape of the mistake is catchable -- a feed
+    // build far beyond anything built is the loop-with-no-exit.
+    assert(j.build > 0 && j.build < 10000, 'feed build is a plausible build number: ' + j.build);
   });
 
   test('Update: the web is exempt', async () => {
