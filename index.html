@@ -424,6 +424,19 @@
     </div>
   </section>
 
+  <!-- ============ UPDATE AVAILABLE ============
+       An installed app is a frozen copy, and the player has no way to know a
+       newer one exists. `js/update.js` decides whether this appears at all --
+       and whether the LATER button is in it. -->
+  <section id="screen-update" class="overlay hidden">
+    <div class="panel update-panel">
+      <h2 class="pause-title" data-i18n="updateTitle">UPDATE AVAILABLE</h2>
+      <p id="update-body" class="poll-intro" data-i18n="updateBody">A newer version of LUMEN is out. Update to get the latest fixes and worlds.</p>
+      <div class="btn-row"><button id="btn-update-go" class="btn btn-primary ui-interactive"><span data-i18n="updateNow">UPDATE</span></button></div>
+      <div class="btn-row"><button id="btn-update-later" class="btn btn-ghost ui-interactive"><span data-i18n="updateLater">LATER</span></button></div>
+    </div>
+  </section>
+
   <div id="toast" class="toast hidden"></div>
 
   <script src="js/audio.js?v=260815225823"></script>
@@ -446,6 +459,7 @@
   <script src="js/save.js?v=260815225823"></script>
   <script src="js/steam.js?v=260815225823"></script>
   <script src="js/native.js?v=260815225823"></script>
+  <script src="js/update.js?v=260815225823"></script>
   <script src="js/poll.js?v=260815225823"></script>
   <script src="js/rating.js?v=260815225823"></script>
   <script src="js/ui.js?v=260815225823"></script>

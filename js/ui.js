@@ -80,6 +80,7 @@
         name: $('screen-name'),
         poll: $('screen-poll'),
         daily: $('screen-daily'),
+        update: $('screen-update'),
       };
 
       this.installBackButtons();
@@ -100,6 +101,11 @@
       // This one collects the reward for turning up. See js/perks.js.
       onTap($('btn-reward'), () => { this.click(); this.openDaily(); });
       onTap($('btn-daily-close'), () => { this.click(); this.showScreen('menu'); });
+      onTap($('btn-update-go'), () => { this.click(); LUMEN.Update && LUMEN.Update.open(this._updateFeed); });
+      // Only ever reachable on the SOFT prompt: showUpdate hides this button
+      // outright when the build is blocked, and the Android back button is
+      // guarded separately in js/native.js.
+      onTap($('btn-update-later'), () => { this.click(); this.showScreen('menu'); });
       onTap($('btn-daily-claim'), () => { this.click(); this.claimDaily(); });
       onTap($('btn-shop'), () => { this.click(); this.openShop('customize'); });
       onTap($('btn-tutorial'), () => { this.click(); game.startTutorial(); });
@@ -510,7 +516,15 @@
       const neb1 = 'hsl(' + (m.neb ? m.neb[0] : 250) + ' ' + nebSat + '% 60%)';
       const neb2 = 'hsl(' + (m.neb ? m.neb[1] : 285) + ' ' + nebSat + '% 56%)';
       const dust = 'hsl(' + m.dust + ' ' + (m.mono ? 10 : 70) + '% 84%)';
-      const wall = 'hsl(' + m.wall + ' ' + wallSat + '% 68%)';
+      // The GATE colour is not the map's. Every world draws its gates in the
+      // danger hue -- that constancy is what the colour-vision presets are for,
+      // and it is the one thing a player must never have to re-learn per world.
+      // This swatch used to paint them in `m.wall` and so promised a green or
+      // blue world that the game then rendered red. `m.wall` is real, but it is
+      // the corridor's top and bottom EDGE, so that is where it goes now.
+      const dangerHue = (LUMEN.cbPalette ? LUMEN.cbPalette().danger : 350);
+      const wall = 'hsl(' + dangerHue + ' 95% 62%)';
+      const edge = 'hsl(' + m.wall + ' ' + wallSat + '% 68%)';
       const orb = LUMEN.Cosmetics ? LUMEN.Cosmetics.skinDef() : null;
       const orbC = orb && !orb.rainbow ? 'hsl(' + orb.hue + ' ' + orb.sat + '% ' + orb.light + '%)' : '#7ff';
       // Bars are drawn as two stacked rects with a gap between them, plus a wide
@@ -541,6 +555,12 @@
           "<g fill='" + dust + "' opacity='.5'>" +
             "<circle cx='22' cy='14' r='1'/><circle cx='58' cy='9' r='.8'/><circle cx='92' cy='45' r='1'/>" +
             "<circle cx='140' cy='36' r='.8'/><circle cx='12' cy='34' r='.7'/><circle cx='72' cy='54' r='.7'/>" +
+          "</g>" +
+          "<g stroke='" + edge + "' fill='none'>" +
+            "<line x1='0' y1='2.5' x2='160' y2='2.5' stroke-width='5' opacity='.20'/>" +
+            "<line x1='0' y1='57.5' x2='160' y2='57.5' stroke-width='5' opacity='.20'/>" +
+            "<line x1='0' y1='2.5' x2='160' y2='2.5' stroke-width='1.5' opacity='.75'/>" +
+            "<line x1='0' y1='57.5' x2='160' y2='57.5' stroke-width='1.5' opacity='.75'/>" +
           "</g>" +
           gate(60, 20, 22) + gate(112, 8, 24) +
           "<circle cx='30' cy='31' r='9' fill='url(#o)'/>" +
@@ -836,6 +856,20 @@
           });
         });
       }
+    },
+
+    // Called by js/update.js when the installed build is behind the published
+    // one. `mode` is 'prompt' (dismissible, offered once a day) or 'block' (a
+    // build that must not keep running -- no LATER, and back will not close it).
+    showUpdate(mode, feed) {
+      if (!this._ready) return;
+      this._updateFeed = feed;
+      this._updateBlocking = mode === 'block';
+      const body = $('update-body');
+      if (body) body.textContent = T(this._updateBlocking ? 'updateBodyForced' : 'updateBody');
+      const later = $('btn-update-later');
+      if (later) later.classList.toggle('hidden', this._updateBlocking);
+      this.showScreen('update');
     },
 
     openPoll() {

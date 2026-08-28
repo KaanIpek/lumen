@@ -70,8 +70,13 @@ concurrency:
 #
 # Bump this on every store release. The BUILD number underneath it is the run
 # number and looks after itself; this is the number a player sees.
+#
+# It must agree with `release.json` at the repo root, which is what INSTALLED
+# apps fetch to find out they are out of date. If those two drift, every player
+# on the current build is told to update to the build they already have -- so
+# the first step of the Android job fails the run rather than ship that.
 env:
-  VERSION_NAME: '1.0.1'
+  VERSION_NAME: '1.0.2'
 
 jobs:
   android:
@@ -87,6 +92,39 @@ jobs:
         with: { node-version: '20' }
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
+
+      # release.json is the file the phones read. If it says a different version
+      # than the one being built, the update prompt is wrong in one of two ways:
+      # it nags players who are current, or it stays silent for players who are
+      # not. Both are worse than a failed build.
+      - name: release.json agrees with what is being built
+        run: |
+          RJ=$(node -p "require('./release.json').version")
+          RB=$(node -p "require('./release.json').build")
+          RM=$(node -p "require('./release.json').minBuild")
+          echo "release.json=$RJ($RB) min=$RM   building=$VERSION_NAME($GITHUB_RUN_NUMBER)"
+          if [ "$RJ" != "$VERSION_NAME" ]; then
+            echo "::error::release.json says $RJ but this build is $VERSION_NAME. Update release.json before releasing."
+            exit 1
+          fi
+          # The dangerous direction. If the feed advertises a build that does not
+          # exist yet, every player -- including whoever just installed the very
+          # newest one -- is told to update, sent to a store that says they are
+          # current, and told again tomorrow. There is no way out of that loop
+          # from the player's side, so it must not be possible to ship it.
+          if [ "$RB" -gt "$GITHUB_RUN_NUMBER" ]; then
+            echo "::error::release.json advertises build $RB but this run is $GITHUB_RUN_NUMBER. That would nag every player forever, including the ones who are up to date."
+            exit 1
+          fi
+          # minBuild is the hard block. It can never point past a build that
+          # exists, or the game locks out its entire install base.
+          if [ "$RM" -gt "$GITHUB_RUN_NUMBER" ]; then
+            echo "::error::minBuild $RM is beyond build $GITHUB_RUN_NUMBER -- that hard-blocks everyone, including this build."
+            exit 1
+          fi
+          if [ "$RB" -lt "$GITHUB_RUN_NUMBER" ]; then
+            echo "::warning::release.json build is $RB but this run is $GITHUB_RUN_NUMBER. Players on $RB..$((GITHUB_RUN_NUMBER-1)) will not be prompted. Fine for a re-run; bump it for a real release."
+          fi
 
       # `secrets` is NOT a context you may use in an `if:`. Writing
       # `if: ${{ secrets.FOO != '' }}` does not evaluate to false — it makes the

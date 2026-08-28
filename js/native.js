@@ -42,6 +42,11 @@
         const g = LUMEN.game, UI = LUMEN.UI;
         if (!g || !UI) return;
         const open = UI.currentScreen;
+        // A BLOCKING update screen is the one modal back does not close. It is
+        // shown for a build that must not keep running, and a dialog you can
+        // dismiss with the system button is not a block -- it is a suggestion
+        // with extra steps.
+        if (open === 'update' && UI._updateBlocking) return;
         // a modal over the menu → close it
         if (open && open !== 'menu') {
           if (open === 'checkout') { UI._checkoutResolve && UI._checkoutResolve(false); return; }

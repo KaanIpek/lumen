@@ -934,8 +934,38 @@
     // a tap answers exactly as fast as it did.
     //
     // HARD leaves it undefined, which reads as 1 and means no ceiling at all.
-    veryeasy: { gap: 1.45, react: 1.55, spawn: 1.42, scoreMul: 0.55, shardMul: 0.35, topSpeed: 0.56 },
-    easy:   { gap: 1.20, react: 1.25, spawn: 1.18, scoreMul: 0.75, topSpeed: 0.65 },
+    //
+    // SECOND PASS. The first ceiling (0.56 / 0.65) was still too fast to the
+    // people playing: "the ball goes up and down too quickly, very easy and easy
+    // need to be easier still". Cutting the ceiling alone would have made the
+    // two gentlest settings geometrically TIGHTER than NORMAL, which is the
+    // wrong shape of fix -- a slower orb has less time to cross to the next
+    // opening, so the room has to come from somewhere.
+    //
+    // So the speed cut is paid for with spacing. Measured against the real gate
+    // generator over a 300 s run (worst reach margin over every gate, where 1.0
+    // is "only just reachable" and bigger is more forgiving):
+    //
+    //             peak speed      full crossing     worst reach margin
+    //   HARD        2.56 playH/s      0.78 s              1.44
+    //   NORMAL      1.95              0.81                1.71
+    //   EASY  was   1.67              0.85                1.99
+    //         now   1.08              1.09                1.81
+    //   V.EASY was  1.44              0.91                2.29
+    //         now   0.97              1.17                1.93
+    //
+    // Both tiers get about a THIRD slower vertically, and both stay more
+    // forgiving than NORMAL, which is the ordering that has to hold. Gravity is
+    // still untouched everywhere: a tap answers on the next frame exactly as it
+    // always did, the orb just stops winding up.
+    //
+    // Left alone deliberately: scoreMul/shardMul. Easier settings do produce
+    // longer runs, and the balance note above is the reason to keep watching
+    // that -- but quietly cutting a player's payout while telling them the game
+    // got easier is its own kind of lie, so if the economy needs a brake it
+    // should be a decision, not a side effect of this change.
+    veryeasy: { gap: 1.45, react: 1.55, spawn: 1.60, scoreMul: 0.55, shardMul: 0.35, topSpeed: 0.38 },
+    easy:   { gap: 1.28, react: 1.25, spawn: 1.40, scoreMul: 0.75, topSpeed: 0.42 },
     normal: { gap: 1.00, react: 1.00, spawn: 1.00, scoreMul: 1.00, topSpeed: 0.76 },
     hard:   { gap: 0.84, react: 0.84, spawn: 0.88, scoreMul: 1.40 },
   };
@@ -1165,6 +1195,13 @@
   function cbPalette() {
     return CB_PALETTES[LUMEN.Store ? LUMEN.Store.colorblind : 'off'] || CB_PALETTES.off;
   }
+  // The shop draws its own little scene of a map, and it was drawing the gates
+  // in the map's `wall` hue -- a colour the game never puts on a gate. Gates are
+  // ALWAYS the danger hue, in every world, because that is the one promise the
+  // colour-vision presets make. So the shop was advertising a green world and
+  // handing over a red one. Exported so the swatch can ask the same question the
+  // renderer asks instead of guessing.
+  LUMEN.cbPalette = cbPalette;
 
   // The CSS honoured prefers-reduced-motion but the canvas ignored it, so shake
   // and full-screen flashes still fired for people who asked for neither.

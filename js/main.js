@@ -158,6 +158,10 @@
     retireStaleRecords();
     LUMEN.Steam && LUMEN.Steam.init();
     LUMEN.Native && LUMEN.Native.init();
+    // "Is this copy of the app out of date?" -- fire and forget. It never
+    // blocks the boot, never throws into it, and on the web it answers "not an
+    // installed app" and stops. See js/update.js.
+    if (LUMEN.Update) LUMEN.Update.check().catch(() => {});
     game.run();
     openDeepLink(game);
 

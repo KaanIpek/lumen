@@ -26,7 +26,11 @@ const OUT = path.join(ROOT, 'dist');
 // Everything else in the root is developer-facing.
 // NOTICE ships because the music licence requires the attribution to travel
 // "as a part of such copies" — a deployed site is a copy.
-const FILES = ['index.html', 'privacy.html', 'delete-account.html', 'support.html', 'manifest.json', 'sw.js', 'config.js', 'NOTICE'];
+// release.json ships too: it is what an INSTALLED app fetches to find out that
+// a newer build exists. Pages serves it from the deploy root, so the check has
+// no server behind it and no key -- the same push that publishes the web build
+// publishes the answer the phones ask for.
+const FILES = ['index.html', 'privacy.html', 'delete-account.html', 'support.html', 'manifest.json', 'sw.js', 'config.js', 'NOTICE', 'release.json'];
 const DIRS = ['js', 'css', 'assets'];
 
 // Store-submission material: in the repo, never in the build. Matched against

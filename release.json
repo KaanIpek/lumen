@@ -1,0 +1,8 @@
+{
+  "_comment": "The shipped version, and the oldest one still allowed to play. ONE source of truth: tools/build-web.js copies this into dist/ so GitHub Pages serves it at /lumen/release.json, .github/workflows/mobile.yml reads `version` from it to stamp the binaries, and js/update.js fetches it on launch to decide whether an installed app is out of date. Bump `version`+`build` when a release ships. Move `minBuild` ONLY to force an update -- everyone below it is hard-blocked with no way to dismiss, so it is for a broken or unsafe build, not for a content drop.",
+  "version": "1.0.2",
+  "build": 87,
+  "minBuild": 0,
+  "android": "https://play.google.com/store/apps/details?id=com.rldgames.lumen",
+  "ios": "https://apps.apple.com/app/id6797276640"
+}

@@ -2827,12 +2827,21 @@
     assert(Math.abs(shortVE - shortHard) < 0.02,
       'a 120px correction costs the same at both ends (' + shortVE.toFixed(3) + ' vs ' + shortHard.toFixed(3) + ')');
 
-    // 3. The distances between gates are NOT part of this. The ceiling must not
-    //    leak into spawn spacing: that would be making the game easier, which is
-    //    a different decision from making the orb slower.
+    // 3. The ceiling must not LEAK into spawn spacing. Spacing is its own dial:
+    //    a tier is spaced by exactly its own `spawn` and nothing else, so a
+    //    change to topSpeed can never quietly move the gates around.
+    //
+    //    Read from the table rather than repeating its numbers. Spacing IS
+    //    tuned -- VERY EASY and EASY were both widened when their ceilings came
+    //    down, so that a slower orb still has time to reach the next opening --
+    //    and a test that hard-codes today's constant fails on a legitimate tune
+    //    while still not noticing the leak it was written to catch.
     const ratio = (d) => drop(d, 1).spawn / drop('hard', 1).spawn;
-    assert(Math.abs(ratio('veryeasy') - (1.42 / 0.88)) < 1e-6, 'VERY EASY spacing is exactly its own `spawn`, nothing else');
-    assert(Math.abs(ratio('normal') - (1.00 / 0.88)) < 1e-6, 'NORMAL spacing is exactly its own `spawn`, nothing else');
+    for (const d of ['veryeasy', 'easy', 'normal']) {
+      const want = L.DIFFICULTY[d].spawn / L.DIFFICULTY.hard.spawn;
+      assert(Math.abs(ratio(d) - want) < 1e-6,
+        d.toUpperCase() + ' spacing is exactly its own `spawn`, nothing else');
+    }
 
     // 4. DREAD's fairness rule survives the ceiling: an unseen gate must stay
     //    visible for longer than it takes to cross to it.
@@ -5976,6 +5985,112 @@
     eq(typeof I.available, 'boolean', 'available answers without throwing');
     // And it records what happened either way, so an empty shop is never silent.
     assert(!!I.diag, 'diag is set: ' + I.diag);
+  });
+
+  // ---- the update gate ------------------------------------------------------
+  // An installed app is a frozen copy. These prove the two ways it is told so,
+  // and — much more importantly — the many ways it is NOT.
+  test('Update: a current build is told nothing', () => {
+    const U = L.Update;
+    assert(U._compare(86, { build: 86, minBuild: 0 }).action === 'none', 'same build says nothing');
+    assert(U._compare(90, { build: 86, minBuild: 0 }).action === 'none',
+      'a build AHEAD of the feed says nothing (a TestFlight tester is not out of date)');
+  });
+
+  test('Update: behind the published build offers the soft prompt', () => {
+    const v = L.Update._compare(80, { build: 86, minBuild: 0 });
+    assert(v.action === 'prompt', 'got ' + v.action + ', want prompt');
+    assert(v.latest === 86 && v.local === 80, 'carries both numbers for the copy');
+  });
+
+  test('Update: only minBuild blocks, and it is off by default', () => {
+    const U = L.Update;
+    assert(U._compare(80, { build: 86, minBuild: 85 }).action === 'block', 'below minBuild is a block');
+    assert(U._compare(85, { build: 86, minBuild: 85 }).action === 'prompt', 'AT minBuild is not blocked');
+    // The shipped file must not be able to lock anyone out by accident.
+    assert(U._compare(1, { build: 999, minBuild: 0 }).action === 'prompt',
+      'minBuild 0 can never block, however far behind the build is');
+  });
+
+  // The failure that matters most: a version check must never be the reason
+  // somebody cannot open the game. Every unreadable answer has to fail OPEN.
+  test('Update: every broken answer fails open', () => {
+    const U = L.Update;
+    const bad = [null, undefined, {}, { build: 'x' }, { build: 0 }, { build: -3 },
+      { minBuild: 99 }, 'nope', 42, [], { build: null, minBuild: 99 }];
+    for (const f of bad) {
+      const v = U._compare(80, f);
+      assert(v.action === 'none', 'feed ' + JSON.stringify(f) + ' → ' + v.action + ', want none');
+    }
+    // and an unreadable LOCAL build must not be treated as "ancient"
+    for (const lb of [null, undefined, NaN, 0, -1, 'x']) {
+      const v = U._compare(lb, { build: 99, minBuild: 98 });
+      assert(v.action === 'none', 'local ' + lb + ' → ' + v.action + ', want none (never block on a build we cannot read)');
+    }
+  });
+
+  test('Update: the soft prompt is offered once a day, and the block ignores that', () => {
+    const U = L.Update;
+    freshStorage();
+    const now = 1000 * 86400 * 400;
+    assert(U._dueForPrompt(now) === true, 'first launch is due');
+    U._markPrompted(now);
+    assert(U._dueForPrompt(now + 1000) === false, 'not again a second later');
+    assert(U._dueForPrompt(now + 3600000 * 23) === false, 'not again 23 hours later');
+    assert(U._dueForPrompt(now + 86400001) === true, 'due again the next day');
+    // _compare never consults the clock: a block is a block on every launch.
+    assert(U._compare(80, { build: 86, minBuild: 85 }).action === 'block', 'a block is not rate limited');
+  });
+
+  test('Update: release.json is shipped, well formed, and matches the store links', async () => {
+    const r = await fetch('../release.json');
+    assert(r.ok, 'release.json is served from the repo root');
+    const j = await r.json();
+    assert(typeof j.version === 'string' && /^\d+\.\d+/.test(j.version), 'version looks like a version: ' + j.version);
+    assert(Number.isInteger(j.build) && j.build > 0, 'build is a positive integer: ' + j.build);
+    assert(Number.isInteger(j.minBuild) && j.minBuild >= 0, 'minBuild is an integer: ' + j.minBuild);
+    assert(j.minBuild <= j.build, 'minBuild can never exceed the build being shipped');
+    // The two store links are what the UPDATE button opens. A typo here is a
+    // dead end at the exact moment the player agreed to update.
+    assert(/^https:\/\/play\.google\.com\//.test(j.android), 'android link is a Play URL: ' + j.android);
+    assert(/^https:\/\/apps\.apple\.com\//.test(j.ios), 'ios link is an App Store URL: ' + j.ios);
+    // And the build the feed advertises must be one the shipped app can beat.
+    assert(j.build >= 86, 'feed build is at least the build that shipped');
+  });
+
+  test('Update: the web is exempt', async () => {
+    // LUMEN.Native.isApp is false in a browser, and check() must stop there
+    // rather than send a browser player to a store page they cannot install.
+    const v = await L.Update.check();
+    assert(v.action === 'none', 'browser → ' + v.action + ', want none');
+  });
+
+  // ---- the shop tells the truth about walls ---------------------------------
+  test('Map swatch: gates are the DANGER hue, not the map hue', () => {
+    // The shop drew its gates in the map's `wall` hue, so a player buying a
+    // green world got red gates. Gates are always the danger hue; `wall` is the
+    // corridor's edge. The swatch has to show what the game will actually draw.
+    const danger = L.cbPalette().danger;
+    for (const m of L.Cosmetics.MAPS) {
+      const css = L.UI.mapSwatch(m);
+      const svg = decodeURIComponent(css.slice(css.indexOf('utf8,') + 5));
+      assert(svg.indexOf('hsl(' + danger + ' 95% 62%)') >= 0,
+        m.id + ': gates are drawn in the danger hue');
+      // and the map's own hue is still present -- on the corridor edge
+      assert(svg.indexOf('hsl(' + m.wall + ' ') >= 0,
+        m.id + ": the map's wall hue still appears, as the corridor edge");
+    }
+  });
+
+  test('Map swatch: no map paints its gates in its own wall hue', () => {
+    // The regression, stated as its own assertion: if someone re-wires the
+    // swatch back to `m.wall` for the bars, this fails for every map whose
+    // wall hue is not the danger hue -- which is all of them, by design.
+    const danger = L.cbPalette().danger;
+    for (const m of L.Cosmetics.MAPS) {
+      assert(Math.abs(((m.wall - danger + 540) % 360) - 180) >= 28,
+        m.id + ': wall hue ' + m.wall + ' stays 28 degrees clear of the danger hue');
+    }
   });
 
   // ---- report --------------------------------------------------------------
