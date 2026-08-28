@@ -4192,8 +4192,15 @@
         ctx.globalCompositeOperation = 'lighter';
         const base = richGlow ? 1 : 0.7;
         for (const s of segs) {
+          // A stub of a bar — the sliver above a gap that sits near the corridor
+          // edge — used to stretch the halo into a wide horizontal smear: the
+          // sprite is a vertical column of glow, and squashing it to a few
+          // pixels tall turns its side falloff into a red streak reaching half
+          // a screen sideways. Let the side glow never exceed the segment's own
+          // height and a stub glows like a stub instead of a laser.
+          const hp = Math.min(hpad, s.y1 - s.y0);
           ctx.globalAlpha = base * s.ob._a;
-          ctx.drawImage(halo, s.ob.x - hpad, s.y0, s.ob.w + hpad * 2, s.y1 - s.y0);
+          ctx.drawImage(halo, s.ob.x - hp, s.y0, s.ob.w + hp * 2, s.y1 - s.y0);
         }
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';

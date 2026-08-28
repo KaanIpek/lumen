@@ -6,6 +6,8 @@
  *
  *   node tools/shotsink.js [outDir] [port]
  *
+ * Accepts PNG stills and WEBM recordings (see the name check below).
+ *
  * Deliberately localhost-only and deliberately dumb: it accepts a filename and
  * a data URL, refuses anything that would escape the output directory, and does
  * nothing else. It is a development tool and never ships.
@@ -36,9 +38,12 @@ http.createServer((req, res) => {
     try { msg = JSON.parse(body); } catch (e) { res.writeHead(400); return res.end('bad json'); }
     // A filename from the page must never be able to write outside OUT.
     const name = path.basename(String(msg.name || 'shot.png'));
-    if (!/^[\w.-]+\.png$/.test(name)) { res.writeHead(400); return res.end('bad name'); }
-    const m = /^data:image\/png;base64,(.+)$/.exec(String(msg.data || ''));
-    if (!m) { res.writeHead(400); return res.end('not a png data url'); }
+    // .webm too: an App Preview is recorded in the page with MediaRecorder off
+    // canvas.captureStream and posted here as one file. Sending 600 PNG frames
+    // over 600 round trips is the alternative, and it is neither fast nor robust.
+    if (!/^[\w.-]+\.(png|webm)$/.test(name)) { res.writeHead(400); return res.end('bad name'); }
+    const m = /^data:(?:image\/png|video\/webm[^;]*);base64,(.+)$/.exec(String(msg.data || ''));
+    if (!m) { res.writeHead(400); return res.end('not a png or webm data url'); }
     const buf = Buffer.from(m[1], 'base64');
     fs.writeFileSync(path.join(OUT, name), buf);
     // eslint-disable-next-line no-console
