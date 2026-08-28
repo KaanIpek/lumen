@@ -645,60 +645,115 @@
       x.stroke();
     },
 
-    // Sakura: dark branches reaching in from the top corners, heavy with
-    // blossom clusters, and a soft petal drift on the ground line.
+    // Sakura at sunset. The sky itself comes from the map's `sky` rows; this
+    // paints what stands in front of it: the low sun, Fuji on the horizon, a
+    // torii silhouette, and a blossom tree built from a real branching pass
+    // with five-petal flowers — the first version's circle-blob clusters were
+    // judged, accurately, as bubbles.
     sakura(x, w, h) {
-      const branch = (sx, sy, ex, ey, c1x, c1y, width) => {
-        // Two strokes: the dark wood, then a thin moonlit edge along the same
-        // curve. Against a night sky a purely dark branch vanishes and the
-        // blossom clusters float — which is what the first bake shipped.
+      const horizon = h * 0.42;
+
+      // the sun, low and heavy, with a long halo
+      const sx2 = w * 0.62, sy = horizon - h * 0.045, sr = h * 0.075;
+      const halo = x.createRadialGradient(sx2, sy, sr * 0.4, sx2, sy, sr * 4.5);
+      halo.addColorStop(0, 'hsla(28 100% 72% / 0.5)');
+      halo.addColorStop(0.5, 'hsla(20 95% 60% / 0.18)');
+      halo.addColorStop(1, 'hsla(20 95% 60% / 0)');
+      x.fillStyle = halo;
+      x.fillRect(0, 0, w, h);
+      x.fillStyle = 'hsl(30 100% 78%)';
+      x.beginPath(); x.arc(sx2, sy, sr, 0, TAU); x.fill();
+
+      // far haze, then Fuji with a snow cap, then a nearer ridge
+      x.fillStyle = 'hsla(310 35% 22% / 0.55)';
+      x.beginPath();
+      x.moveTo(0, horizon);
+      x.quadraticCurveTo(w * 0.2, horizon - h * 0.02, w * 0.45, horizon);
+      x.lineTo(w, horizon); x.lineTo(w, horizon + h * 0.02); x.lineTo(0, horizon + h * 0.02);
+      x.closePath(); x.fill();
+      const fx = w * 0.24, fw = w * 0.42, ftop = horizon - h * 0.115;
+      x.fillStyle = 'hsla(285 40% 16% / 0.92)';
+      x.beginPath();
+      x.moveTo(fx - fw * 0.5, horizon);
+      x.quadraticCurveTo(fx - fw * 0.18, ftop + h * 0.02, fx - fw * 0.06, ftop);
+      x.lineTo(fx + fw * 0.06, ftop);
+      x.quadraticCurveTo(fx + fw * 0.18, ftop + h * 0.02, fx + fw * 0.5, horizon);
+      x.closePath(); x.fill();
+      x.fillStyle = 'hsla(340 30% 88% / 0.9)';                 // the snow cap
+      x.beginPath();
+      x.moveTo(fx - fw * 0.085, ftop + h * 0.012);
+      x.lineTo(fx - fw * 0.06, ftop); x.lineTo(fx + fw * 0.06, ftop);
+      x.lineTo(fx + fw * 0.085, ftop + h * 0.012);
+      x.lineTo(fx + fw * 0.045, ftop + h * 0.028);
+      x.lineTo(fx + fw * 0.01, ftop + h * 0.016);
+      x.lineTo(fx - fw * 0.03, ftop + h * 0.03);
+      x.closePath(); x.fill();
+
+      // a torii on the water line, small and dark against the sun
+      const tx = w * 0.60, tb = horizon, th = h * 0.075, tw2 = w * 0.085;
+      x.fillStyle = 'hsla(8 55% 14% / 0.95)';
+      x.fillRect(tx - tw2 * 0.42, tb - th * 0.82, tw2 * 0.09, th * 0.82);   // pillars
+      x.fillRect(tx + tw2 * 0.33, tb - th * 0.82, tw2 * 0.09, th * 0.82);
+      x.fillRect(tx - tw2 * 0.34, tb - th * 0.52, tw2 * 0.68, th * 0.09);   // nuki
+      x.beginPath();                                                         // kasagi
+      x.moveTo(tx - tw2 * 0.62, tb - th * 0.88);
+      x.quadraticCurveTo(tx, tb - th * 1.02, tx + tw2 * 0.62, tb - th * 0.88);
+      x.lineTo(tx + tw2 * 0.60, tb - th * 0.78);
+      x.quadraticCurveTo(tx, tb - th * 0.9, tx - tw2 * 0.60, tb - th * 0.78);
+      x.closePath(); x.fill();
+      // its reflection, broken
+      x.fillStyle = 'hsla(8 45% 14% / 0.30)';
+      x.fillRect(tx - tw2 * 0.42, tb + th * 0.06, tw2 * 0.09, th * 0.4);
+      x.fillRect(tx + tw2 * 0.33, tb + th * 0.06, tw2 * 0.09, th * 0.4);
+      // a sun road on the water
+      const road = x.createLinearGradient(0, tb, 0, tb + h * 0.1);
+      road.addColorStop(0, 'hsla(28 95% 68% / 0.30)');
+      road.addColorStop(1, 'hsla(28 95% 68% / 0)');
+      x.fillStyle = road;
+      x.fillRect(sx2 - sr * 1.4, tb, sr * 2.8, h * 0.1);
+
+      // the blossom tree: a real branching pass. Trunk from the lower left,
+      // splitting twice; every terminal carries a flower cluster drawn as
+      // five-petal blossoms, not circles.
+      const flower = (bx, by, fr, tone) => {
+        x.fillStyle = tone;
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * TAU - 0.6;
+          x.beginPath();
+          x.ellipse(bx + Math.cos(a) * fr * 0.55, by + Math.sin(a) * fr * 0.55,
+            fr * 0.42, fr * 0.3, a, 0, TAU);
+          x.fill();
+        }
+        x.fillStyle = 'hsla(45 90% 80% / 0.9)';
+        x.beginPath(); x.arc(bx, by, fr * 0.16, 0, TAU); x.fill();
+      };
+      const canopy = (cx, cy, cr) => {
+        // a soft rose mass first so the flowers sit IN something
+        const mass = x.createRadialGradient(cx, cy, 0, cx, cy, cr);
+        mass.addColorStop(0, 'hsla(334 70% 72% / 0.5)');
+        mass.addColorStop(1, 'hsla(334 70% 62% / 0)');
+        x.fillStyle = mass;
+        x.beginPath(); x.arc(cx, cy, cr, 0, TAU); x.fill();
+        const tones = ['hsla(342 88% 84% / 0.95)', 'hsla(332 80% 74% / 0.9)', 'hsla(350 92% 90% / 0.95)'];
+        const ring = [[0, 0], [-0.55, -0.25], [0.5, -0.35], [-0.25, 0.45], [0.45, 0.35], [-0.6, 0.28], [0.1, -0.6]];
+        for (let i = 0; i < ring.length; i++) {
+          flower(cx + ring[i][0] * cr, cy + ring[i][1] * cr, cr * 0.26, tones[i % 3]);
+        }
+      };
+      const branch = (bx, by, ang, len, depth) => {
+        const ex = bx + Math.cos(ang) * len, ey = by + Math.sin(ang) * len;
+        x.strokeStyle = 'hsla(350 25% 12% / 0.95)';
+        x.lineWidth = Math.max(1, (depth + 1) * h * 0.004);
         x.lineCap = 'round';
-        x.strokeStyle = 'hsla(335 20% 15% / 0.95)';
-        x.lineWidth = width;
-        x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(c1x, c1y, ex, ey); x.stroke();
-        x.strokeStyle = 'hsla(340 45% 42% / 0.5)';
-        x.lineWidth = Math.max(1, width * 0.3);
-        x.beginPath(); x.moveTo(sx, sy - width * 0.28); x.quadraticCurveTo(c1x, c1y - width * 0.28, ex, ey - width * 0.28); x.stroke();
+        x.beginPath(); x.moveTo(bx, by);
+        x.quadraticCurveTo(bx + Math.cos(ang - 0.25) * len * 0.5, by + Math.sin(ang - 0.25) * len * 0.5, ex, ey);
+        x.stroke();
+        if (depth === 0) { canopy(ex, ey, h * 0.045); return; }
+        branch(ex, ey, ang - 0.5, len * 0.72, depth - 1);
+        branch(ex, ey, ang + 0.28, len * 0.66, depth - 1);
       };
-      const bloom = (bx, by, br) => {
-        // A cluster reads as blossom when it is MANY SMALL discs, not few big
-        // ones — the first bake's six fat circles read as bubbles. Dark rose
-        // shadow first, then a dozen small petals over it, then a few bright
-        // highlights on top: cheap depth in three layers.
-        x.fillStyle = 'hsla(324 55% 46% / 0.35)';
-        x.beginPath(); x.arc(bx + br * 0.12, by + br * 0.18, br * 1.02, 0, TAU); x.fill();
-        const petals = [[0, -0.55, 0.45], [-0.6, -0.2, 0.42], [0.62, -0.28, 0.4], [-0.3, 0.42, 0.4],
-                        [0.4, 0.4, 0.44], [0, 0, 0.48], [-0.85, 0.15, 0.32], [0.85, 0.1, 0.34],
-                        [-0.15, -0.9, 0.3], [0.35, -0.75, 0.32], [-0.55, -0.65, 0.3], [0.15, 0.8, 0.3]];
-        for (let i = 0; i < petals.length; i++) {
-          x.fillStyle = i % 2 ? 'hsla(334 85% 78% / 0.5)' : 'hsla(342 90% 84% / 0.44)';
-          x.beginPath(); x.arc(bx + petals[i][0] * br, by + petals[i][1] * br, br * petals[i][2], 0, TAU); x.fill();
-        }
-        x.fillStyle = 'hsla(348 95% 91% / 0.5)';
-        for (const [hx, hy] of [[-0.3, -0.45], [0.4, -0.15], [0.05, 0.3]]) {
-          x.beginPath(); x.arc(bx + hx * br, by + hy * br, br * 0.2, 0, TAU); x.fill();
-        }
-      };
-      // left tree: trunk up the edge, two arms reaching in
-      branch(-w * 0.02, h * 0.62, w * 0.16, h * 0.16, w * 0.02, h * 0.3, w * 0.022);
-      branch(w * 0.05, h * 0.34, w * 0.30, h * 0.10, w * 0.16, h * 0.16, w * 0.012);
-      branch(w * 0.04, h * 0.40, w * 0.24, h * 0.30, w * 0.13, h * 0.33, w * 0.009);
-      bloom(w * 0.16, h * 0.13, h * 0.052);
-      bloom(w * 0.29, h * 0.09, h * 0.062);
-      bloom(w * 0.24, h * 0.27, h * 0.048);
-      bloom(w * 0.07, h * 0.22, h * 0.042);
-      // right tree, higher and lighter
-      branch(w * 1.02, h * 0.30, w * 0.80, h * 0.08, w * 0.94, h * 0.12, w * 0.016);
-      branch(w * 0.92, h * 0.14, w * 0.72, h * 0.20, w * 0.82, h * 0.14, w * 0.009);
-      bloom(w * 0.82, h * 0.07, h * 0.056);
-      bloom(w * 0.72, h * 0.18, h * 0.046);
-      bloom(w * 0.92, h * 0.16, h * 0.04);
-      // fallen petals: a faint pink dusting along the bottom
-      const g = x.createLinearGradient(0, h * 0.9, 0, h);
-      g.addColorStop(0, 'hsla(334 70% 70% / 0)');
-      g.addColorStop(1, 'hsla(334 70% 70% / 0.14)');
-      x.fillStyle = g;
-      x.fillRect(0, h * 0.9, w, h * 0.1);
+      branch(-w * 0.02, h * 0.66, -0.9, h * 0.20, 2);   // main tree, lower left
+      branch(w * 1.02, h * 0.24, Math.PI + 0.55, h * 0.14, 1);  // a reaching arm, upper right
     },
   };
 
@@ -756,15 +811,30 @@
 
       // the equipped map decides the environment; flow still shifts it toward violet
       const M = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
-      const baseA = M ? M.bg : 248, baseB = M ? M.bg2 : 254;
-      const sat = M && M.mono ? 22 : 62;
-      const bgHue = lerp(baseA, 292, flow), bgHue2 = lerp(baseB, 292, flow);
-      const g = x.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, `hsl(${bgHue} ${sat}% ${8 + flow * 5}%)`);
-      g.addColorStop(0.45, `hsl(${bgHue2 + 6} ${sat + 6}% ${4 + flow * 2}%)`);
-      g.addColorStop(1, `hsl(${bgHue - 10} ${sat - 2}% ${9 + flow * 5}%)`);
-      x.fillStyle = g;
-      x.fillRect(0, 0, w, h);
+      if (M && M.sky) {
+        // A map may paint its own sky: [stop, hue, sat, light] rows. This is
+        // the one door out of the engine's near-black gradient — a sunset needs
+        // real colour. The rows are authored against the SAME readability rule
+        // as everything else: the lower half, where the game is actually
+        // played, must stay dark enough that gates, motes and the orb keep
+        // their contrast; the drama lives in the upper third.
+        const g = x.createLinearGradient(0, 0, 0, h);
+        for (const [stop, hh, ss, ll] of M.sky) {
+          g.addColorStop(stop, `hsl(${lerp(hh, 292, flow * 0.5)} ${ss}% ${Math.max(3, ll - flow * 6)}%)`);
+        }
+        x.fillStyle = g;
+        x.fillRect(0, 0, w, h);
+      } else {
+        const baseA = M ? M.bg : 248, baseB = M ? M.bg2 : 254;
+        const sat = M && M.mono ? 22 : 62;
+        const bgHue = lerp(baseA, 292, flow), bgHue2 = lerp(baseB, 292, flow);
+        const g = x.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, `hsl(${bgHue} ${sat}% ${8 + flow * 5}%)`);
+        g.addColorStop(0.45, `hsl(${bgHue2 + 6} ${sat + 6}% ${4 + flow * 2}%)`);
+        g.addColorStop(1, `hsl(${bgHue - 10} ${sat - 2}% ${9 + flow * 5}%)`);
+        x.fillStyle = g;
+        x.fillRect(0, 0, w, h);
+      }
 
       if (!LUMEN.Q || LUMEN.Q.nebula) {
         x.globalCompositeOperation = 'lighter';
@@ -940,6 +1010,27 @@
       ctx.moveTo(0, 0.30 * r);
       ctx.quadraticCurveTo(0.12 * r, 0.46 * r, 0.24 * r, 0.38 * r);
       ctx.stroke();
+      // TAIL: swishing behind the orb, the one part of a cat that never sits
+      // still. Drawn first of the face parts it is under everything else.
+      // CHEEK BLUSH: two soft pink ovals — the single cheapest unit of cute
+      // this face has.
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = Math.max(1.5, 0.22 * r);
+      ctx.lineCap = 'round';
+      const swish = Math.sin(t * 1.7) * 0.35;
+      ctx.beginPath();
+      ctx.moveTo(-0.7 * r, 0.6 * r);
+      ctx.quadraticCurveTo(-1.5 * r, 0.9 * r + swish * r, -1.7 * r, 0.1 * r + swish * 1.6 * r);
+      ctx.stroke();
+      ctx.fillStyle = dark;
+      ctx.beginPath();
+      ctx.arc(-1.7 * r, 0.1 * r + swish * 1.6 * r, 0.13 * r, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'hsla(348 85% 72% / 0.55)';
+      for (const m of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(m * 0.52 * r, 0.14 * r, 0.14 * r, 0.09 * r, 0, 0, TAU);
+        ctx.fill();
+      }
       // WHISKERS, three a side, with a slow wobble so the face is alive even
       // between blinks.
       ctx.strokeStyle = 'rgba(255,255,255,0.75)';
@@ -4116,12 +4207,34 @@
 
       // bright inner lips framing every opening
       ctx.fillStyle = crispLips ? '#ffffff' : colLip;
+      const torii = !crispLips && this.world && this.world.gateCap === 'torii';
       for (const ob of this.obstacles) {
         ctx.globalAlpha = ob._a;
         for (const g of ob.gaps) {
           const top = g.y - g.h * 0.5, bot = g.y + g.h * 0.5;
-          if (top > this.playTop + 2) { this.roundRect(ctx, ob.x, top - 5, ob.w, 5, 2); ctx.fill(); }
-          if (bot < this.playBottom - 2) { this.roundRect(ctx, ob.x, bot, ob.w, 5, 2); ctx.fill(); }
+          if (torii) {
+            // The bars keep their danger colour — that is a promise — but their
+            // ENDS become torii lintels: a kasagi that overhangs the pillar
+            // with upswept tips, and a slimmer nuki beam beneath it. Shape is
+            // free where hue is not. Skipped in colourblind/high-contrast
+            // modes, whose white lips are doing accessibility work.
+            const ov = Math.max(4, ob.w * 0.22);
+            if (top > this.playTop + 2) {
+              this.roundRect(ctx, ob.x - ov, top - 7, ob.w + ov * 2, 6, 3); ctx.fill();
+              ctx.fillRect(ob.x - ov, top - 10, 3, 6);
+              ctx.fillRect(ob.x + ob.w + ov - 3, top - 10, 3, 6);
+              this.roundRect(ctx, ob.x - ov * 0.4, top + 2, ob.w + ov * 0.8, 3, 1.5); ctx.fill();
+            }
+            if (bot < this.playBottom - 2) {
+              this.roundRect(ctx, ob.x - ov, bot + 1, ob.w + ov * 2, 6, 3); ctx.fill();
+              ctx.fillRect(ob.x - ov, bot + 4, 3, 6);
+              ctx.fillRect(ob.x + ob.w + ov - 3, bot + 4, 3, 6);
+              this.roundRect(ctx, ob.x - ov * 0.4, bot - 5, ob.w + ov * 0.8, 3, 1.5); ctx.fill();
+            }
+          } else {
+            if (top > this.playTop + 2) { this.roundRect(ctx, ob.x, top - 5, ob.w, 5, 2); ctx.fill(); }
+            if (bot < this.playBottom - 2) { this.roundRect(ctx, ob.x, bot, ob.w, 5, 2); ctx.fill(); }
+          }
         }
       }
       ctx.globalAlpha = 1;

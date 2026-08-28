@@ -195,8 +195,12 @@
     // Blossom night: anime hang-time. A milder Nullpoint — long floating arcs,
     // paid for with slightly tighter, denser gates, and the nebula at full
     // strength so the pink canopy stays lit.
+    // The sunset rows: warm and saturated in the upper third, falling to a
+    // playable dusk below the horizon. The drama is where the game is not.
     { id: 'bloomward',  shards: 3400, bg: 258, bg2: 292, neb: [326, 262], dust: 326, wall: 176,
-      trait: 'weightless', gMul: 0.80, gap: 0.96, spawn: 1.05, scene: 'sakura', dustMode: 'petal' },
+      trait: 'weightless', gMul: 0.80, gap: 0.96, spawn: 1.05,
+      scene: 'sakura', dustMode: 'petal', gateCap: 'torii',
+      sky: [[0, 262, 55, 16], [0.22, 320, 62, 26], [0.36, 18, 85, 34], [0.44, 28, 90, 30], [0.58, 305, 45, 12], [1, 258, 50, 7]] },
 
     // A spiral arm turning slowly. Wall 220, not the drafted 184 — that sat two
     // degrees off Tidal's wall on Tidal's own trait, and a flagship must not

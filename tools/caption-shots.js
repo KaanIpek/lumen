@@ -48,6 +48,14 @@ const CAPTIONS = [
 const SETS = [
   { prefix: 's', out: 'apple-67', srcs: ['s1-flow', 's5-vortex', 's2-sprint', 's3-blackout', 's4-mirror', 's6-precision', 's7-dread', 's8-zen'] },
   { prefix: 'p', out: 'apple-ipad13', srcs: ['p1-flow', 'p2-vortex', 'p3-sprint', 'p4-blackout', 'p5-mirror', 'p6-precision', 'p7-dread', 'p8-zen'] },
+  // Google Play. Same eight scenes, Play's sizes. Capture them into work/play
+  // with the harness (resize widths below x dpr 1.25 give these exactly):
+  //   phone 1080x1920 -> resize(864, 1536)
+  //   tab7  1200x1920 -> resize(960, 1536)
+  //   tab10 1600x2560 -> resize(1280, 2048)
+  { prefix: 'g', out: 'play-phone', srcs: ['g1-flow', 'g2-vortex', 'g3-sprint', 'g4-blackout', 'g5-mirror', 'g6-precision', 'g7-dread', 'g8-zen'] },
+  { prefix: 't7', out: 'play-tab7', srcs: ['t71-flow', 't72-vortex', 't73-sprint', 't74-blackout', 't75-mirror', 't76-precision', 't77-dread', 't78-zen'] },
+  { prefix: 't10', out: 'play-tab10', srcs: ['t101-flow', 't102-vortex', 't103-sprint', 't104-blackout', 't105-mirror', 't106-precision', 't107-dread', 't108-zen'] },
 ];
 
 fs.mkdirSync(OUT, { recursive: true });
@@ -74,13 +82,17 @@ def scrim(img, W, H, top, bottom, blur):
 
 report = []
 for src, dst, kicker, head in jobs:
-    im = Image.open(os.path.join(IN, src)).convert('RGB')
+    im = Image.open(src if os.path.isabs(src) else os.path.join(IN, src)).convert('RGB')
     W, H = im.size
-    k = H / 2796.0                      # geometry scales off the iPhone reference
-    kick_y   = int(300 * k)             # below the score HUD, above the first gate
-    head_max = int(92 * k)
-    kick_px  = int(46 * k)
-    margin   = int(90 * k)
+    # Type scales off WIDTH, placement off HEIGHT. Scaling everything by height
+    # is what made the iPad set look under-set: that canvas is 59% wider than the
+    # phone but barely taller, so height-scaled type shrank against it.
+    kw = W / 1290.0
+    kh = H / 2796.0
+    kick_y   = int(300 * kh)            # below the score HUD, above the first gate
+    head_max = int(92 * kw)
+    kick_px  = int(46 * kw)
+    margin   = int(90 * kw)
 
     lines = head.split('\\n')
     probe = ImageDraw.Draw(im)
@@ -90,7 +102,7 @@ for src, dst, kicker, head in jobs:
     # fly on memory." came out with both ends sliced off — it looked fine in a
     # contact sheet and was 60px over at full size.
     size = head_max
-    while size > int(40 * k):
+    while size > int(40 * kw):
         f = ImageFont.truetype(FONT, size)
         widest = max(probe.textlength(l, font=f) for l in lines)
         if widest <= max_w:
@@ -100,18 +112,18 @@ for src, dst, kicker, head in jobs:
     kick_font = ImageFont.truetype(FONT, kick_px)
 
     line_h = int(size * 1.24)
-    top = kick_y - int(90 * k)
-    bottom = kick_y + int(70 * k) + len(lines) * line_h + int(40 * k)
-    im = scrim(im, W, H, top, bottom, int(90 * k))
+    top = kick_y - int(90 * kh)
+    bottom = kick_y + int(70 * kh) + len(lines) * line_h + int(40 * kh)
+    im = scrim(im, W, H, top, bottom, int(90 * kw))
 
     d = ImageDraw.Draw(im)
     x = W // 2
     if kicker:
         spaced = ' '.join(kicker)      # PIL has no letter tracking
-        d.text((x - d.textlength(spaced, font=kick_font) / 2, kick_y - int(10 * k)),
+        d.text((x - d.textlength(spaced, font=kick_font) / 2, kick_y - int(10 * kh)),
                spaced, font=kick_font, fill=(120, 230, 255))
-    y = kick_y + int(66 * k)
-    off = max(2, int(3 * k))
+    y = kick_y + int(66 * kh)
+    off = max(2, int(3 * kw))
     for ln in lines:
         lw = d.textlength(ln, font=head_font)
         d.text((x - lw / 2 + off, y + off), ln, font=head_font, fill=(0, 0, 0))
@@ -125,12 +137,22 @@ print(json.dumps(report))
 `;
 
 const jobs = [];
+const skipped = [];
 for (const set of SETS) {
   set.srcs.forEach((src, i) => {
     const [kicker, head] = CAPTIONS[i];
-    jobs.push([src + '.png', `${set.out}-${i + 1}.png`, kicker, head]);
+    // Look in work/shots first, then work/play — the Play frames land there.
+    const cand = [path.join(IN, src + '.png'), path.join(ROOT, 'work', 'play', src + '.png')];
+    const found = cand.find((c) => fs.existsSync(c));
+    if (!found) { skipped.push(set.out + '-' + (i + 1)); return; }
+    jobs.push([found, `${set.out}-${i + 1}.png`, kicker, head]);
   });
 }
+if (skipped.length) {
+  console.log(`${skipped.length} not captured yet, skipping: ${skipped.slice(0, 4).join(', ')}${skipped.length > 4 ? ' …' : ''}
+`);
+}
+if (!jobs.length) { console.error('nothing to caption'); process.exit(1); }
 
 const report = JSON.parse(
   execFileSync('python', ['-c', py, IN, OUT, JSON.stringify(jobs)], { encoding: 'utf8' })
