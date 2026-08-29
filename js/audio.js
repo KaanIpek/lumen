@@ -306,6 +306,20 @@
       snare: [], open: [15],
     },
 
+    // A terrace chant, basically: four-on-the-floor you could stamp to, a
+    // handclap on the backbeat, and a brass-ish lead that only ever plays three
+    // notes because a whole stand has to be able to sing it.
+    pitch: {
+      bpm: 128, wave: 'square', sub: 'triangle',
+      kick: [0, 4, 8, 12], hat: 2,
+      A: [[45, 49, 52], [43, 47, 50], [41, 45, 48], [43, 47, 50]],
+      B: [[48, 52, 55], [47, 50, 54], [45, 49, 52], [43, 47, 50]],
+      arp: [0, 2, 1, 2],
+      lead: [12, N, N, 12, N, 15, N, N, 12, N, N, N, 10, N, N, N],
+      bass: [0, 0, 7, 0, 0, 0, 7, 5, 0, 0, 7, 0, 3, 3, 5, 7],
+      snare: [4, 12], open: [14],
+    },
+
     // ---- a MODE's music, not a world's ---------------------------------------
     // Claimed by ABANDON HOPE through `mode.song`, so it follows you onto every
     // map. Everything here is chosen to withhold:

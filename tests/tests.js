@@ -4805,7 +4805,14 @@
     }
     // the four-piece sets must price their map through the map's own shards
     const four = C.SETS.filter((s2) => s2.items.length === 4);
-    eq(four.length, 6, 'six theme packs');
+    // Was hard-coded at six; MATCHDAY made it seven. Assert the SHAPE -- every
+    // four-piece pack is one orb, one trail, one world and one signature -- so
+    // adding a pack is a legitimate edit and a malformed one still fails.
+    assert(four.length >= 6, 'the theme packs are still here (' + four.length + ')');
+    for (const st of four) {
+      const cats = st.items.map((id) => C.category(id)).sort().join(',');
+      eq(cats, 'maps,orbs,signatures,trails', st.id + ' is one of each');
+    }
     for (const s2 of four) {
       assert(s2.usd === 0, s2.id + ' must be shard-only — a usd price needs a store product');
     }

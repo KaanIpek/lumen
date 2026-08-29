@@ -889,6 +889,99 @@
       }
     },
 
+    // A floodlit night match, from somewhere behind the goal. Four pylons, a
+    // stand that is only a silhouette and a thousand tiny phone screens in it,
+    // and the pitch itself running away below -- mown in stripes, because that
+    // is the single detail that says "football" faster than any crest could.
+    // Baked once, like every other scene.
+    pitch(x, w, h) {
+      const HORIZON = h * 0.30;
+
+      // 1. FLOODLIGHTS. Four pylons behind the stand, each throwing a soft cone
+      //    down onto the grass. The cones are the reason this reads as night
+      //    football rather than a green field.
+      const PYL = [0.10, 0.35, 0.65, 0.90];
+      for (const px of PYL) {
+        const cx = w * px, top = h * 0.045;
+        const cone = x.createLinearGradient(cx, top, cx, HORIZON + h * 0.22);
+        cone.addColorStop(0, 'hsla(48 40% 88% / 0.16)');
+        cone.addColorStop(1, 'hsla(48 40% 88% / 0)');
+        x.fillStyle = cone;
+        x.beginPath();
+        x.moveTo(cx - w * 0.02, top);
+        x.lineTo(cx + w * 0.02, top);
+        x.lineTo(cx + w * 0.20, HORIZON + h * 0.22);
+        x.lineTo(cx - w * 0.20, HORIZON + h * 0.22);
+        x.closePath(); x.fill();
+        // the pylon: a mast and a lamp bank
+        x.strokeStyle = 'hsla(228 30% 16% / 0.95)';
+        x.lineWidth = Math.max(1.5, w * 0.006);
+        x.beginPath(); x.moveTo(cx, top + h * 0.02); x.lineTo(cx, HORIZON - h * 0.01); x.stroke();
+        x.fillStyle = 'hsla(228 26% 12% / 0.95)';
+        x.fillRect(cx - w * 0.035, top, w * 0.07, h * 0.022);
+        x.fillStyle = 'hsla(48 80% 86% / 0.85)';
+        for (let a = 0; a < 3; a++) {
+          x.beginPath();
+          x.arc(cx - w * 0.02 + a * w * 0.02, top + h * 0.011, Math.max(1, w * 0.005), 0, TAU);
+          x.fill();
+        }
+      }
+
+      // 2. THE STAND. One dark band, and inside it the flecks that make a crowd:
+      //    a few hundred phone screens, which is what a night crowd actually
+      //    looks like from the pitch.
+      x.fillStyle = 'hsla(230 34% 10% / 0.96)';
+      x.beginPath();
+      x.moveTo(0, HORIZON);
+      x.lineTo(w, HORIZON);
+      x.lineTo(w, h * 0.155);
+      x.lineTo(0, h * 0.175);
+      x.closePath(); x.fill();
+      for (let k = 0; k < 90; k++) {
+        const fx = ((k * 37.7) % 100) / 100 * w;
+        const fy = h * 0.175 + ((k * 13.3) % 100) / 100 * (HORIZON - h * 0.175);
+        x.fillStyle = k % 7 === 0 ? 'hsla(48 90% 82% / 0.55)' : 'hsla(210 40% 72% / 0.22)';
+        x.fillRect(fx, fy, Math.max(1, w * 0.004), Math.max(1, h * 0.003));
+      }
+
+      // 3. THE PITCH, mown in stripes. Alternating bands widening toward the
+      //    viewer, which is all the perspective this needs.
+      const gr = x.createLinearGradient(0, HORIZON, 0, h);
+      gr.addColorStop(0, 'hsl(140 30% 14%)');
+      gr.addColorStop(1, 'hsl(142 26% 7%)');
+      x.fillStyle = gr; x.fillRect(0, HORIZON, w, h - HORIZON);
+      for (let b = 0; b < 9; b++) {
+        if (b % 2) continue;
+        const y0 = HORIZON + (h - HORIZON) * Math.pow(b / 9, 1.6);
+        const y1 = HORIZON + (h - HORIZON) * Math.pow((b + 1) / 9, 1.6);
+        x.fillStyle = 'hsla(140 34% 22% / 0.16)';
+        x.fillRect(0, y0, w, y1 - y0);
+      }
+
+      // 4. THE MARKINGS. A goal frame on the horizon and the arc of the centre
+      //    circle running off the bottom -- both in flat white, both thin, and
+      //    both well clear of the corridor where the game is played.
+      x.strokeStyle = 'hsla(0 0% 100% / 0.20)';
+      x.lineWidth = Math.max(1.5, h * 0.0022);
+      const gw = w * 0.30, gh = h * 0.075, gx = (w - gw) / 2, gy = HORIZON - gh;
+      x.strokeRect(gx, gy, gw, gh);
+      x.beginPath(); x.moveTo(gx - w * 0.10, HORIZON); x.lineTo(gx + gw + w * 0.10, HORIZON); x.stroke();
+      // the net, suggested with a lattice rather than drawn
+      x.strokeStyle = 'hsla(0 0% 100% / 0.07)';
+      x.lineWidth = 1;
+      for (let n = 1; n < 8; n++) {
+        const nx = gx + (gw / 8) * n;
+        x.beginPath(); x.moveTo(nx, gy); x.lineTo(nx, HORIZON); x.stroke();
+      }
+      for (let n = 1; n < 4; n++) {
+        const ny = gy + (gh / 4) * n;
+        x.beginPath(); x.moveTo(gx, ny); x.lineTo(gx + gw, ny); x.stroke();
+      }
+      x.strokeStyle = 'hsla(0 0% 100% / 0.13)';
+      x.lineWidth = Math.max(1.5, h * 0.0022);
+      x.beginPath(); x.ellipse(w * 0.5, h * 1.02, w * 0.46, h * 0.22, 0, Math.PI, TAU); x.stroke();
+    },
+
   };
 
   class Background {
@@ -1339,6 +1432,88 @@
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+    },
+
+    // ---- the matchday cast ------------------------------------------------
+    // One loud idea each. Identification with a real person comes from STACKING
+    // signals -- hair plus headband plus a pose plus a kit -- so every one of
+    // these is deliberately a single exaggerated trait on a plain orb. They are
+    // archetypes, and archetypes belong to nobody.
+
+    // NUMBER 9: the eternally offside striker, with the linesman's flag that
+    // followed him home still stuck in his hair.
+    striker(ctx, r, hue, game) {
+      const t = game ? game.elapsed : 0;
+      // the shirt number, big and dumb
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.font = 'bold ' + (r * 1.05).toFixed(1) + 'px system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('9', 0, r * 0.06);
+      // the flag: a stick and a pennant that flutters
+      const fx = r * 0.62, fy = -r * 0.66;
+      ctx.strokeStyle = 'hsl(30 20% 88%)';
+      ctx.lineWidth = Math.max(1, r * 0.09);
+      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + r * 0.10, fy - r * 0.85); ctx.stroke();
+      const wag = Math.sin(t * 6) * 0.14;
+      ctx.fillStyle = 'hsl(52 95% 58%)';
+      ctx.beginPath();
+      ctx.moveTo(fx + r * 0.10, fy - r * 0.85);
+      ctx.lineTo(fx + r * 0.86, fy - r * 0.70 + wag * r);
+      ctx.lineTo(fx + r * 0.12, fy - r * 0.44);
+      ctx.closePath(); ctx.fill();
+    },
+
+    // KEEPER: gloves too big to hold anything.
+    keeper(ctx, r, hue) {
+      ctx.fillStyle = 'hsl(150 60% 52%)';
+      for (const m of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(m * r * 0.92, r * 0.18, r * 0.42, r * 0.54, m * 0.35, 0, TAU);
+        ctx.fill();
+        // three fat fingers
+        ctx.strokeStyle = 'hsl(150 45% 34%)';
+        ctx.lineWidth = Math.max(1, r * 0.07);
+        for (let k = -1; k <= 1; k++) {
+          ctx.beginPath();
+          ctx.moveTo(m * r * 0.92 + k * r * 0.16, r * 0.02);
+          ctx.lineTo(m * r * 1.02 + k * r * 0.18, -r * 0.28);
+          ctx.stroke();
+        }
+      }
+      // a cap, because keepers always have one
+      ctx.fillStyle = 'hsl(214 30% 30%)';
+      ctx.beginPath();
+      ctx.ellipse(0, -r * 0.72, r * 0.78, r * 0.34, 0, Math.PI, TAU);
+      ctx.fill();
+      ctx.fillRect(-r * 1.15, -r * 0.76, r * 0.55, r * 0.14);
+    },
+
+    // GAFFER: basically a moustache and a whistle.
+    gaffer(ctx, r, hue, game) {
+      const t = game ? game.elapsed : 0;
+      // the moustache, which is most of the character
+      ctx.fillStyle = 'hsl(28 24% 22%)';
+      for (const m of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(0, r * 0.18);
+        ctx.quadraticCurveTo(m * r * 0.62, r * 0.02, m * r * 0.98, r * 0.30);
+        ctx.quadraticCurveTo(m * r * 0.55, r * 0.34, 0, r * 0.40);
+        ctx.closePath(); ctx.fill();
+      }
+      // the whistle, blown on the beat
+      const blow = 0.5 + 0.5 * Math.sin(t * 3.1);
+      ctx.fillStyle = 'hsl(45 12% 78%)';
+      ctx.beginPath(); ctx.arc(r * 0.72, r * 0.62, r * 0.22, 0, TAU); ctx.fill();
+      ctx.fillRect(r * 0.62, r * 0.50, r * 0.30, r * 0.10);
+      if (blow > 0.7) {
+        ctx.strokeStyle = `hsla(0 0% 100% / ${(blow - 0.7) * 2})`;
+        ctx.lineWidth = Math.max(1, r * 0.06);
+        for (let a = 0; a < 3; a++) {
+          ctx.beginPath();
+          ctx.arc(r * 0.86, r * 0.62, r * (0.34 + a * 0.20), -0.7, 0.7);
+          ctx.stroke();
+        }
+      }
     },
   };
   // Exposed for one reason: the test that proves every skin declaring a `deco`
@@ -2920,7 +3095,11 @@
       // lose every power-up. Calm is meant to be gentle, not empty.
       const dt = o.rampT != null ? o.rampT : e;
       const gapH = clamp(clamp(0.35 - dt * 0.0022, 0.205, 0.35) * (o.gapMul || 1), floor, 0.52);
-      const maxJump = lerp(0.28, 0.62, clamp(dt / 40, 0, 1));
+      // How far the next opening may sit from the last. A mode may widen it --
+      // HOLD does, because a steered orb should be asked to cross the corridor
+      // rather than nudge along it. Clamped so it can never exceed what the
+      // playfield can hold.
+      const maxJump = Math.min(0.95, lerp(0.28, 0.62, clamp(dt / 40, 0, 1)) * (o.jump || 1));
 
       // pick the archetype first — its motion affects how much padding we need
       let kind = 'normal';
@@ -2986,7 +3165,23 @@
         spec.sep = 0.27;
         pad = spec.doubleGapH * 0.5 + 0.02 + spec.sep * 0.5;
       }
-      spec.c = clamp(lastC + rr(-maxJump, maxJump), pad, 1 - pad);
+      let _c = lastC + rr(-maxJump, maxJump);
+      // A mode may demand that consecutive openings never LINE UP. Widening
+      // maxJump alone barely moved the average (0.197 -> 0.222 playH) because
+      // `pad` clamps the result back toward the middle; what actually staggers
+      // the corridor is a floor under the distance, not a bigger ceiling over
+      // it. HOLD is the only mode that sets it. Note this raises the AVERAGE
+      // stagger and leaves the WORST case exactly where maxJump already put it,
+      // so every reach guarantee is untouched.
+      if (o.jumpMin) {
+        const need = o.jumpMin;
+        if (Math.abs(_c - lastC) < need) {
+          const up = lastC - need, down = lastC + need;
+          const upOk = up >= pad, downOk = down <= 1 - pad;
+          _c = upOk && downOk ? (rng() < 0.5 ? up : down) : upOk ? up : downOk ? down : _c;
+        }
+      }
+      spec.c = clamp(_c, pad, 1 - pad);
       spec.mote = rng() < 0.85;
       spec.moteGap = rng() < 0.5 ? 0 : 1;
       spec.motePulse = rr(0, TAU);
@@ -3126,7 +3321,9 @@
         // there is nothing for it to protect against there anyway.
         : Game.makeSpec(this.rng, this.elapsed, this.lastC,
           { gapMul: this.gapMul, minGap: this.minGapFrac,
-            rampT: this.rampT, rise: this.world && this.world.rise });
+            rampT: this.rampT, rise: this.world && this.world.rise,
+            jump: this.mode && this.mode.jump,
+            jumpMin: this.mode && this.mode.jumpMin });
       this.lastC = spec.c;
       this._lastSpecTight = !!spec.tight;
 
@@ -5178,6 +5375,20 @@
             ctx.beginPath(); ctx.arc(tx * p.r * sc, ty * p.r * sc, 0.14 * p.r * sc, 0, TAU); ctx.fill();
           }
           ctx.restore();
+        }
+      } else if (style === 'turf') {
+        // Divots: torn clumps of grass thrown backwards and settling, not a
+        // glow. Two small rects each, no path, no rotate -- cheaper than the
+        // default dot and it reads as damage rather than light.
+        for (let i = 0; i < n; i += 2) {
+          const t = p.trail[i], k = 1 - i / n, age = 1 - k;
+          const jx = Math.sin(i * 2.3) * p.r * 0.5 * age;
+          const jy = Math.cos(i * 1.7) * p.r * 0.4 * age + age * p.r * 0.9;
+          const w = Math.max(1, p.r * 0.30 * k), h = Math.max(1, p.r * 0.16 * k);
+          ctx.fillStyle = `hsla(${118 + (i % 3) * 8} 45% ${26 + k * 16}% / ${k * 0.75})`;
+          ctx.fillRect(t.x + jx, t.y + jy, w, h);
+          ctx.fillStyle = `hsla(30 30% 18% / ${k * 0.45})`;
+          ctx.fillRect(t.x + jx + w * 0.2, t.y + jy + h, w * 0.6, h * 0.7);
         }
       } else if (style === 'petalfall') {
         // Petals settle off the flight line and flutter wider as they age.

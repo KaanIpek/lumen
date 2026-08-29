@@ -90,6 +90,14 @@
     { id: 'zenith',   req: 'scorer2',  hue: 52,  sat: 100, light: 78 },
     { id: 'eclipse',  req: 'runs3',    hue: 275, sat: 25,  light: 22 },
     { id: 'mirage',   req: 'close2',   hue: 42,  sat: 80,  light: 72 },
+
+    // The matchday cast. One loud trait each -- that is the design rule, and it
+    // is also the legal one: identification comes from STACKING signals, so a
+    // single exaggerated idea per orb keeps every one of these an archetype
+    // rather than a portrait of somebody real.
+    { id: 'striker',  tier: 'premium', hue: 8,   sat: 78, light: 58, deco: 'striker' },
+    { id: 'keeper',   tier: 'mid',     hue: 44,  sat: 88, light: 60, deco: 'keeper' },
+    { id: 'gaffer',   tier: 'mid',     hue: 214, sat: 30, light: 52, deco: 'gaffer' },
   ];
 
   // ---- trails -------------------------------------------------------------
@@ -114,6 +122,9 @@
     { id: 'loong',      tier: 'premium', style: 'loong' },
     { id: 'halo',   req: 'chain2',   style: 'halo' },
     { id: 'wake',   req: 'flow3',    style: 'wake' },
+
+    // Divots. The pitch takes a beating behind you.
+    { id: 'turf',      tier: 'mid',     style: 'turf' },
   ];
 
   // ---- maps ---------------------------------------------------------------
@@ -239,6 +250,14 @@
       scene: 'ashrise', dustMode: 'lift', gateCap: 'capstone',
       sky: [[0, 234, 62, 13], [0.16, 242, 58, 18], [0.26, 268, 48, 24],
             [0.32, 26, 82, 32], [0.38, 20, 56, 14], [0.66, 236, 46, 8], [1, 232, 50, 6]] },
+
+    // Floodlit night match. gate 171 takes the largest hole left in the
+    // catalogue (155 -> 187): 16 degrees off gloamvale, 16 off tidal, 121 off
+    // the gold reward. dust 100 is grass kicked up by the run and clears every
+    // reward hue including trit's 128 by 28.
+    { id: 'pitch',     shards: 4400, bg: 228, bg2: 244, neb: [96, 220],  dust: 100, wall: 100, gate: 171,
+      trait: 'stately', speed: 0.94, gap: 1.04,
+      scene: 'pitch', reviveStyle: 'var' },
   ];
 
   const DEFAULTS = { skin: 'ion', trail: 'dust', map: 'deepfield' };
@@ -378,6 +397,17 @@
       flow:  { corona: true, ring: { n: 3, delay: 0.09, r0: 1.2, r1: 7.5, life: 1.0, width: 3, hue: 52 } },
       death: { ring: { n: 4, delay: 0.07, r0: 0.5, r1: 12, life: 1.1, width: 5, hue: 52 },
                burst: { n: 56, spMax: 460, lifeMax: 1.2, sizeMax: 7, drag: 0.86 } } },
+
+    // The celebration. A knee slide with no knees: a wide low ring that runs
+    // away from you, and confetti on the death that keeps falling after
+    // everything else has stopped. Data, like every other signature -- this is
+    // a tuning, not a new code path.
+    { id: 'goal', tier: 'premium',
+      flip:  { burst: { n: 7, spMax: 150, lifeMax: 0.45, sizeMax: 3 } },
+      flow:  { ring: { n: 2, delay: 0.10, r0: 0.5, r1: 7.0, life: 0.9, width: 2.5 },
+               burst: { n: 10, spMax: 200, lifeMax: 0.7, sizeMax: 3 } },
+      death: { burst: { n: 60, spMax: 300, lifeMax: 2.2, sizeMax: 6, drag: 0.94 },
+               ring: { n: 3, delay: 0.12, r0: 0.6, r1: 9.0, life: 1.2, width: 3 } } },
   ];
 
   // ---- sets ------------------------------------------------------------------
@@ -416,6 +446,7 @@
     { id: 'neonsunset', items: ['sundown',   'afterimage', 'nightway',    'scanline'],  usd: 0 },
     { id: 'phantasm',   items: ['wraith',    'wisp',       'gloamvale',   'seance'],    usd: 0 },
     { id: 'longdance',  items: ['moonpearl', 'loong',      'lanternmoon', 'fireworks'], usd: 0 },
+    { id: 'matchday',   items: ['striker',   'turf',       'pitch',       'goal'],      usd: 0 },
   ];
 
   const all = () => SKINS.concat(TRAILS, MAPS, SIGNATURES);

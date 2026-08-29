@@ -166,8 +166,13 @@
       onTap($('btn-revive'), () => {
         this.click();
         if (!game.revive()) { this.toast(T('notEnough')); game.finalizeRun(); }
+        else this.varDecision();
       });
       onTap($('btn-giveup'), () => { this.click(); game.finalizeRun(); });
+
+      // Both ways back into a run go through the same decision beat, so the ad
+      // route and the shard route feel identical -- which they should, because
+      // they buy the same thing.
       onTap($('btn-revive-ad'), () => { this.click(); this.reviveWithAd(); });
       // finalizeRun FIRST: leaving is not the same as throwing the run away, and
       // a score you actually reached should be recorded whichever door you use.
@@ -1892,7 +1897,7 @@
         // them would be worse than doing nothing, because toMenu() calls reset()
         // which clears the already-recorded guard, so a finalize from the menu
         // banks the same run a second time.
-        if (g.revive(true)) return;
+        if (g.revive(true)) { this.varDecision(); return; }
         if (g.state === 'dead') g.finalizeRun();
       });
     },
@@ -1920,7 +1925,48 @@
       // actually keep, multipliers and all. Showing the raw figure here made the
       // decision on a Sprint run look like half of what was really at stake.
       $('revive-score').textContent = Math.floor(this.game.score * this.game.scoreMul);
+      this.dressRevive();
       this.showScreen('revive');
+    },
+
+    // A world may re-dress the revive panel. PITCH turns it into a VAR check:
+    // the decision is literally pending while you decide, which is the one
+    // moment in this game where waiting is the point rather than the cost.
+    //
+    // Nothing about the offer changes -- same shard price, same one-per-run
+    // rule, same ad. Only the words and the frame, and only while that world is
+    // equipped. Everything here is drawn or written by us: no broadcast
+    // graphics, no league marks, no real match audio. The joke is the format.
+    // The decision lands. On PITCH the panel flashes the verdict for a beat
+    // before the run resumes; everywhere else this does nothing at all.
+    varDecision() {
+      const style = (C.mapDef && C.mapDef() || {}).reviveStyle || null;
+      if (style !== 'var') return;
+      this.dressRevive(true);
+      const panel = document.querySelector('#screen-revive .panel');
+      if (panel) {
+        panel.classList.add('var-goal');
+        setTimeout(() => panel.classList.remove('var-goal'), 900);
+      }
+      Audio && Audio.sfx('best');
+      this.toast(T('varDecisionGoal'));
+    },
+
+    dressRevive(decided) {
+      const panel = document.querySelector('#screen-revive .panel');
+      if (!panel) return;
+      const style = (C.mapDef && C.mapDef() || {}).reviveStyle || null;
+      panel.classList.toggle('var-check', style === 'var');
+      const title = panel.querySelector('.revive-title');
+      const sub = panel.querySelector('.revive-sub');
+      if (style === 'var') {
+        if (title) title.textContent = decided ? T('varDecisionGoal') : T('varChecking');
+        if (sub && !decided) sub.innerHTML = '<span>' + esc(T('varSub')) + '</span>';
+      } else if (title) {
+        // put the ordinary copy back, or a world switch leaves VAR wording behind
+        title.textContent = T('continueQ');
+        if (sub) sub.innerHTML = '<span>' + esc(T('reviveSub')) + '</span><br><em>' + esc(T('reviveOnce')) + '</em>';
+      }
     },
 
     // ---- settings --------------------------------------------------------

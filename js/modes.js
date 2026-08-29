@@ -231,8 +231,17 @@
       // it. Tightened to 0.94 / 0.78 -- still far from sprint's margin, and the
       // sight time stays close to two seconds, but the corridor now keeps
       // arriving instead of waiting for you.
-      gap: 1.22, speed: 1.55, spawn: 0.94, ramp: 0.78,
-      scoreMul: 1.6, shardMul: 1.35, ranked: true, lethal: true,
+      // The corridor stops being a corridor. `jump` widens how far the next
+      // opening may sit from the last one, so the gaps stagger instead of
+      // queueing up in a line -- which is the whole point of steering: a mode
+      // where you can put the orb anywhere should ask you to put it everywhere.
+      // Every other mode leaves `jump` undefined and is untouched.
+      gap: 1.10, speed: 1.55, spawn: 0.94, ramp: 0.78, jump: 1.55, jumpMin: 0.40,
+      // …and it pays LESS, not more. Direct control is easier than timing a
+      // flip, and a mode that is easier must not also be the best place to earn
+      // or every price in the shop is set by it. This is the same brake VERY
+      // EASY carries, for the same reason.
+      scoreMul: 0.85, shardMul: 0.75, ranked: true, lethal: true,
       accent: 152,
       hold: true,
     },
