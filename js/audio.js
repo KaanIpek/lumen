@@ -553,6 +553,58 @@
     },
 
     // ---- Sound effects -----------------------------------------------------
+    // ---- the wind bed -------------------------------------------------------
+    // ALOFT needs to be HEARD, not just measured. One looping noise buffer with
+    // a bandpass on it: climb and the filter opens and it gets louder, descend
+    // and it closes to almost nothing. Two nodes for the whole run, created once
+    // and reused -- a per-frame _noise() would allocate a fresh buffer sixty
+    // times a second and is what this exists to avoid.
+    //
+    // It never plays in the menu, never survives a run, and starts only when a
+    // mode actually asks for it, so the other eleven are silent exactly as
+    // before.
+    windStart() {
+      const ctx = this.ctx;
+      if (!ctx || this._wind || !this.sfxOn) return;
+      const len = Math.floor(ctx.sampleRate * 2);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      // brownish noise: integrated white, which sounds like air rather than hiss
+      let last = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        last = (last + 0.02 * w) / 1.02;
+        d[i] = last * 3.2;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      const flt = ctx.createBiquadFilter();
+      flt.type = 'bandpass'; flt.frequency.value = 420; flt.Q.value = 0.6;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      src.connect(flt); flt.connect(g); g.connect(this.sfxBus || this.master || ctx.destination);
+      try { src.start(); } catch (e) { return; }
+      this._wind = { src: src, flt: flt, gain: g };
+    },
+    // `t` is 0 at the calm line, 1 at full gale, and may go negative below it.
+    windSet(t) {
+      const w = this._wind;
+      if (!w || !this.ctx) return;
+      const k = Math.max(0, Math.min(1, t));
+      const now = this.ctx.currentTime;
+      w.gain.gain.setTargetAtTime(0.015 + 0.075 * k * k, now, 0.12);
+      w.flt.frequency.setTargetAtTime(360 + 900 * k, now, 0.12);
+    },
+    windStop() {
+      const w = this._wind;
+      if (!w) return;
+      this._wind = null;
+      try {
+        w.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.08);
+        setTimeout(() => { try { w.src.stop(); } catch (e) {} }, 400);
+      } catch (e) {}
+    },
+
     sfx(name, opts) {
       if (!this.ctx || this.sfxOn === false) return;
       opts = opts || {};

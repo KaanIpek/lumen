@@ -1804,6 +1804,7 @@
       // path reaches after the mode is known. Opens at 1 -- the calm line -- and
       // eases to whatever your altitude asks for over 0.30s.
       this.wind = 1;
+      this.held = false;   // HOLD: never inherit a thumb from the last run
     }
 
     // How long a single flow can last. Long enough to feel like a reward,
@@ -2047,9 +2048,31 @@
             return;
           }
         }
+        this.held = true;
+        if (this.state === State.PLAY && !this.attract && this.mode && this.mode.hold) {
+          if (this.player.dir !== -1) this.flip();
+          return;                       // a hold-mode press is not a flip toggle
+        }
         this.action();
       };
+      // HOLD mode gives the single input a DURATION. Rather than teach flip() a
+      // second personality, both edges are routed through it: press asks for
+      // "up" and release asks for "down", and each one only flips if the orb is
+      // not already going that way. So the squash, the sound, the near-miss
+      // accounting and the tutorial all see exactly the flips they always saw.
+      const wantDir = (d) => {
+        if (this.state !== State.PLAY || this.attract) return;
+        if (!(this.mode && this.mode.hold)) return;
+        if (this.player.dir !== d) this.flip();
+      };
+      const release = () => { this.held = false; wantDir(1); };
       this.canvas.addEventListener('pointerdown', press);
+      // A pointer that leaves the canvas or is stolen by the OS must count as a
+      // release, or the orb sticks to the ceiling until the next tap.
+      for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+        this.canvas.addEventListener(ev, release);
+      }
+      window.addEventListener('blur', release);
       // Debounced: every resize event rebuilds the baked background + vignettes and
       // regenerates the dust field, so dragging a window edge would otherwise churn
       // hundreds of offscreen canvases.
@@ -2371,6 +2394,7 @@
     }
 
     pause() {
+      this.stopWind();
       // The attract demo also lives in the PLAY state, and every pause entry
       // point (Esc, the pause button, window blur, tab hide, gamepad Start) keys
       // off that. Guarding here instead of at five call sites is what stops a
@@ -2398,6 +2422,7 @@
       LUMEN.UI && LUMEN.UI.showScreen(null);
     }
     toMenu() {
+      this.stopWind();
       this.state = State.MENU;
       this.reset();
       LUMEN.UI && LUMEN.UI.showScreen('menu');
@@ -2614,6 +2639,7 @@
     }
 
     die() {
+      this.stopWind();
       const p = this.player;
       // Zen cannot kill you. You bump, the world dims for a beat, you carry on.
       // Nothing is scored or recorded there, so there is nothing to protect.
@@ -3303,6 +3329,12 @@
         const alt = clamp((this.playBottom - this.player.y) / this.playH, 0, 1);
         const want = _wd.lo + (_wd.hi - _wd.lo) * alt;
         this.wind += (want - this.wind) * Math.min(1, gdt / _wd.ease);
+        // and let it be heard. The bed is started lazily on the first frame of a
+        // wind run and torn down by stopWind() on every exit path.
+        if (Audio) {
+          if (!this._windAudio) { Audio.windStart && Audio.windStart(); this._windAudio = true; }
+          Audio.windSet && Audio.windSet((this.wind - 1) / (_wd.hi - 1));
+        }
       }
       const scroll = this.scrollSpeed;
       this.distance += scroll * gdt;
@@ -3314,7 +3346,30 @@
       // line through a run of tight gaps.
       const gMul = this.gravMul;
       // Emberfall pushes up all run: a downward flip costs more, an upward one less.
-      const bias = (this.world && this.world.gravityBias) || 0;
+      // HOLD: down is the rest state and the thumb is the only thing lifting you.
+      // Re-asserted every frame so a release that arrived while the tab was
+      // hidden, or a pointer the OS took away, cannot leave the orb stuck up.
+      if (this.mode && this.mode.hold && !this.attract) {
+        p.dir = this.held ? -1 : 1;
+      }
+      let bias = (this.world && this.world.gravityBias) || 0;
+      // ALOFT: the wind is not a number on a gauge, it is a hand under the orb.
+      // Above the calm line it pushes UP, below it lets you sink -- so climbing
+      // is self-reinforcing and dropping is a real commitment, and the player
+      // FEELS the throttle instead of reading about it. It rides the same `bias`
+      // channel Emberfall's updraft already uses, so it is bounded by the same
+      // maths and cannot fight a flip: at full gale it is 0.22 g against the 1 g
+      // a tap commands.
+      const _wl = this.mode && this.mode.wind;
+      // 0.55/0.22 was a rounding error you could not feel: at wind 1.22 it was
+      // 0.12g against the 1g a tap commands, and the orb fell 628px in half a
+      // second regardless. It has to read as a hand under you.
+      // NEGATIVE is up: `bias` is added to `p.dir`, and dir +1 is falling. The
+      // first version added a positive bias for a rising wind, so climbing made
+      // the orb fall FASTER -- the exact opposite of the mechanic. Caught by
+      // 'The wind is felt, not just measured', which measured the fall instead
+      // of trusting the sign.
+      if (_wl && !this.attract) bias -= clamp((this.wind - 1) * 1.15, -0.30, 0.30);
       const G = (2 * this.playH) / (this.CROSS_TIME * this.CROSS_TIME) * gMul; // wall-to-wall in CROSS_TIME
       p.vy += (p.dir + bias) * G * gdt;
       // The ceiling. It goes AFTER the acceleration and BEFORE the move, so the
@@ -4269,6 +4324,7 @@
       }
 
       this.drawWalls(ctx, hue);
+      this.drawWind(ctx);
       this.drawObstacles(ctx);
       this.drawTraps(ctx);
       this.drawScout(ctx);
@@ -4438,11 +4494,67 @@
       ctx.restore();
     }
 
+    // ALOFT's wind, drawn. A number on a badge is not weather -- the player asked
+    // to SEE it, and the mode is unteachable without it: you cannot discover
+    // that height is a throttle if height looks like nothing.
+    //
+    // Streaks that lean the way the wind is pushing, denser and longer and more
+    // opaque the harder it blows, and almost invisible below the calm line. They
+    // are seeded off `distance` so they stream past with the world rather than
+    // twinkling in place, and they are plain lines under 'lighter' -- no path
+    // per particle, no allocation per frame.
+    // Every path out of a run goes through here. A wind bed that outlives its run
+    // is a hiss under the menu, which is the kind of bug nobody reports and
+    // everybody hears.
+    stopWind() {
+      if (!this._windAudio) return;
+      this._windAudio = false;
+      Audio && Audio.windStop && Audio.windStop();
+    }
+
+    drawWind(ctx) {
+      const wd = this.mode && this.mode.wind;
+      if (!wd || this.attract) return;
+      // 0 at the calm line, 1 at full gale. Below calm there is nothing to draw.
+      const t = clamp((this.wind - 1) / (wd.hi - 1), 0, 1);
+      if (t <= 0.02) return;
+      if (calmVisuals() && t < 0.5) return;      // reduce-motion: only a real gale
+      const n = Math.round(10 + 26 * t);
+      const g = this.world && this.world.gate;
+      const hue = g == null ? 196 : g;
+      const d = this.distance * 0.6;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      for (let i = 0; i < n; i++) {
+        // deterministic scatter: no rand() per frame, so the field is stable
+        const fx = ((i * 73.13) % 100) / 100;
+        const fy = ((i * 31.77) % 100) / 100;
+        const sp = 0.55 + fx * 0.9;
+        const x0 = this.W - ((d * sp + fx * this.W * 2.2) % (this.W * 1.25));
+        const y0 = this.playTop + fy * this.playH;
+        const len = (26 + 74 * t) * sp;
+        // leans UP, because that is the way the wind is carrying you
+        const rise = -len * 0.22 * t;
+        ctx.strokeStyle = `hsla(${hue} 85% 82% / ${(0.14 + 0.42 * t) * (0.5 + fx * 0.5)})`;
+        ctx.lineWidth = 1.4 + t * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0 + len, y0 + rise);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     drawObstacles(ctx) {
       ctx.save();
       const r = Math.min(8, this.obstacleW * 0.4);
       // colours are identical for every obstacle this frame — build the strings once
-      const colBody = this.gateColor(0.9), colLip = this.gateColor(1);
+      // The lip was drawn at full alpha while the bar's own body is 0.62, so the
+      // caps read as a separate brighter object stuck on the end rather than as
+      // part of the bar. Close enough now to belong to it, still bright enough
+      // to edge the opening -- which is the job the lip actually has.
+      const colBody = this.gateColor(0.9), colLip = this.gateColor(0.8);
       // white lips give the opening a luminance edge that survives any colour deficiency
       const crispLips = Store.highContrast || Store.colorblind !== 'off';
       // Gates glow on EVERY quality tier. The orb, the motes and the walls all
@@ -4506,9 +4618,9 @@
         // wash into each other and into the sky, which read as fog rather than
         // as light coming off an object -- and it buried the painted scenes the
         // worlds were given. The bar still throws light; it no longer floods.
-        const hpad = this.obstacleW * halo._pad * (richGlow ? 0.55 : 0.35);
+        const hpad = this.obstacleW * halo._pad * (richGlow ? 0.40 : 0.26);
         ctx.globalCompositeOperation = 'lighter';
-        const base = richGlow ? 0.62 : 0.45;
+        const base = richGlow ? 0.46 : 0.34;
         for (const s of segs) {
           // A stub of a bar — the sliver above a gap that sits near the corridor
           // edge — used to stretch the halo into a wide horizontal smear: the
@@ -4592,7 +4704,7 @@
         ctx.globalCompositeOperation = 'lighter';
         // 0.5 -> 0.32 for the same reason as the halo above: the opening should
         // be edged in light, not smeared with it.
-        ctx.fillStyle = withAlpha(colLip, 0.32);
+        ctx.fillStyle = withAlpha(colLip, 0.16);
         for (const ob of this.obstacles) {
           ctx.globalAlpha = ob._a;
           for (const g of ob.gaps) {

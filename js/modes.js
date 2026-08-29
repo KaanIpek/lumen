@@ -205,6 +205,38 @@
       accent: 228,                   // 32 off classic's 196, 37 off blackout's 265
       wind: { lo: 0.78, hi: 1.40, ease: 0.30 },
     },
+
+    {
+      // The thirteenth, and the only one that changes what the input MEANS.
+      //
+      // Everywhere else a tap flips gravity and you let go. Here you hold: down
+      // is the rest state and holding is the only thing keeping you up, so the
+      // orb is never coasting -- it is climbing or it is falling, and your thumb
+      // decides which, continuously. It is still one finger and still one
+      // contact; what changed is that the input has a duration.
+      //
+      // That control is easier to be PRECISE with, so the world is what makes it
+      // hard: speed 1.55 is the fastest in the game by a distance (sprint is
+      // 1.30), and the ramp is turned down to 0.60 so the pace you meet in the
+      // first ten seconds is most of the pace you ever meet. Gaps are opened
+      // 1.22 to pay for it, because at that speed a Classic opening is not a
+      // reflex test, it is a coin toss.
+      //
+      // `hold: true` is read in exactly two places -- the press/release pair in
+      // Game._wireInput and the direction line in updatePlay. Everything else,
+      // including flip() itself, is untouched, so the squash, the sound, the
+      // near-miss accounting and the tutorial all behave as they always have.
+      id: 'hold',
+      // Measured, not guessed: at spawn 1.06 / ramp 0.60 the reach margin was
+      // 3.63 against sprint's 1.23, so there was a lot of room to make it mean
+      // it. Tightened to 0.94 / 0.78 -- still far from sprint's margin, and the
+      // sight time stays close to two seconds, but the corridor now keeps
+      // arriving instead of waiting for you.
+      gap: 1.22, speed: 1.55, spawn: 0.94, ramp: 0.78,
+      scoreMul: 1.6, shardMul: 1.35, ranked: true, lethal: true,
+      accent: 152,
+      hold: true,
+    },
   ];
 
   const byId = {};

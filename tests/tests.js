@@ -6434,6 +6434,103 @@
     }
   });
 
+  // ---- HOLD -----------------------------------------------------------------
+  test('HOLD: the thumb is the only thing keeping you up', () => {
+    freshStorage();
+    L.Modes.setCurrent('hold');
+    const g = newGame(390, 844);
+    g.start();
+    const mid = () => { g.player.y = g.playTop + g.playH * 0.5; g.player.vy = 0; };
+
+    // holding climbs
+    mid(); g.held = true;
+    let y0 = g.player.y;
+    for (let i = 0; i < 45; i++) { g.obstacles.length = 0; g.traps.length = 0; g.update(1 / 60); }
+    const rose = y0 - g.player.y;
+    assert(rose > 20, 'holding lifts the orb (rose ' + rose.toFixed(0) + 'px in 0.75s)');
+    assert(g.player.dir === -1, 'and the direction is up while held');
+
+    // letting go drops
+    mid(); g.held = false;
+    y0 = g.player.y;
+    for (let i = 0; i < 45; i++) { g.obstacles.length = 0; g.traps.length = 0; g.update(1 / 60); }
+    const fell = g.player.y - y0;
+    assert(fell > 20, 'releasing drops it (fell ' + fell.toFixed(0) + 'px)');
+    assert(g.player.dir === 1, 'and the direction is down when not held');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
+  test('HOLD: a run never inherits a thumb, and a lost pointer never sticks', () => {
+    freshStorage();
+    L.Modes.setCurrent('hold');
+    const g = newGame(390, 844);
+    g.held = true;          // as if the last run ended mid-press
+    g.start();
+    assert(g.held === false, 'a fresh run starts with nothing held');
+    // and the direction is re-asserted every frame, so a release lost to a
+    // hidden tab or an OS gesture cannot leave the orb pinned to the ceiling
+    g.held = true;  g.update(1 / 60); assert(g.player.dir === -1, 'held -> up');
+    g.held = false; g.update(1 / 60); assert(g.player.dir === 1, 'released -> down, on the very next frame');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
+  test('HOLD is the only mode that reads a held thumb', () => {
+    freshStorage();
+    for (const m of L.Modes.MODES) {
+      if (m.id === 'hold') { assert(m.hold === true, 'HOLD declares itself'); continue; }
+      assert(!m.hold, m.id + ' does not read the hold flag');
+    }
+    // and in a normal mode a held thumb changes nothing about direction
+    L.Modes.setCurrent('classic');
+    const g = newGame(390, 844);
+    g.start();
+    const before = g.player.dir;
+    g.held = true;
+    for (let i = 0; i < 30; i++) { g.obstacles.length = 0; g.update(1 / 60); }
+    assert(g.player.dir === before, 'classic ignores held entirely');
+    g.toMenu();
+  });
+
+  test('HOLD and ALOFT are named and explained in every language', () => {
+    for (const lang of ['en', 'tr', 'es', 'zh']) {
+      L.i18n.set(lang);
+      for (const k of ['mode_hold', 'moded_hold', 'modet_hold', 'tutm_hold_t', 'tutm_hold_h',
+                       'mode_aloft', 'moded_aloft', 'modet_aloft']) {
+        assert(L.i18n.t(k) !== k, lang + ': ' + k + ' is translated');
+      }
+    }
+    L.i18n.set('en');
+  });
+
+  test('The wind is felt, not just measured', () => {
+    // The owner asked for wind that pushes. At the roof it has to be a real
+    // force against the fall, and below the calm line it must not push at all.
+    freshStorage();
+    L.Modes.setCurrent('aloft');
+    const g = newGame(390, 844);
+    g.start();
+    const drop = (wind) => {
+      g.start();
+      g.wind = wind;
+      g.player.y = g.playTop + g.playH * 0.5; g.player.vy = 0; g.player.dir = 1;
+      for (let i = 0; i < 30; i++) {
+        g.obstacles.length = 0; g.traps.length = 0;
+        g.wind = wind;                      // hold the wind steady for the measurement
+        g.update(1 / 60);
+      }
+      return g.player.y - (g.playTop + g.playH * 0.5);
+    };
+    const gale = drop(1.40), calm = drop(1.0), sink = drop(0.78);
+    assert(gale < calm, 'a gale slows the fall (' + gale.toFixed(0) + ' vs ' + calm.toFixed(0) + 'px)');
+    assert(sink > calm, 'and below the calm line you fall faster (' + sink.toFixed(0) + 'px)');
+    assert((calm - gale) / calm > 0.10, 'the difference is felt, not academic ('
+      + (100 * (calm - gale) / calm).toFixed(0) + '% less fall)');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 
