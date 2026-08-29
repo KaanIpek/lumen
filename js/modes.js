@@ -207,25 +207,24 @@
     },
 
     {
-      // The thirteenth, and the only one that changes what the input MEANS.
+      // The thirteenth, and the only one that changes what the input IS.
       //
-      // Everywhere else a tap flips gravity and you let go. Here you hold: down
-      // is the rest state and holding is the only thing keeping you up, so the
-      // orb is never coasting -- it is climbing or it is falling, and your thumb
-      // decides which, continuously. It is still one finger and still one
-      // contact; what changed is that the input has a duration.
+      // Everywhere else a tap flips gravity and the orb does the rest. Here you
+      // keep a finger down and STEER: slide up and down and the orb chases the
+      // finger, so you thread the gaps by hand instead of by timing. Let go and
+      // gravity takes it back, which is what keeps releasing a decision.
       //
-      // That control is easier to be PRECISE with, so the world is what makes it
-      // hard: speed 1.55 is the fastest in the game by a distance (sprint is
-      // 1.30), and the ramp is turned down to 0.60 so the pace you meet in the
-      // first ten seconds is most of the pace you ever meet. Gaps are opened
-      // 1.22 to pay for it, because at that speed a Classic opening is not a
-      // reflex test, it is a coin toss.
+      // The orb obeys the same speed ceiling as every other mode, so the
+      // corridor asks exactly what it always asked and a flick cannot cross the
+      // screen in a frame. Direct control is easier to be PRECISE with, so the
+      // world is what makes it hard: speed 1.55 is the fastest in the game by a
+      // distance (sprint is 1.30). Gaps are opened 1.22 to pay for it, because
+      // at that speed a Classic opening stops being a test and becomes a coin
+      // toss.
       //
-      // `hold: true` is read in exactly two places -- the press/release pair in
-      // Game._wireInput and the direction line in updatePlay. Everything else,
-      // including flip() itself, is untouched, so the squash, the sound, the
-      // near-miss accounting and the tutorial all behave as they always have.
+      // `hold: true` is read in exactly two places -- the pointer wiring in
+      // Game._wireInput and the steering block in updatePlay. flip() is never
+      // called in this mode, and no other mode reads the flag.
       id: 'hold',
       // Measured, not guessed: at spawn 1.06 / ramp 0.60 the reach margin was
       // 3.63 against sprint's 1.23, so there was a lot of room to make it mean

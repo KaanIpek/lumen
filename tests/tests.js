@@ -6435,62 +6435,109 @@
   });
 
   // ---- HOLD -----------------------------------------------------------------
-  test('HOLD: the thumb is the only thing keeping you up', () => {
+  test('HOLD: the orb follows the finger, up and down', () => {
     freshStorage();
     L.Modes.setCurrent('hold');
     const g = newGame(390, 844);
     g.start();
-    const mid = () => { g.player.y = g.playTop + g.playH * 0.5; g.player.vy = 0; };
-
-    // holding climbs
-    mid(); g.held = true;
-    let y0 = g.player.y;
-    for (let i = 0; i < 45; i++) { g.obstacles.length = 0; g.traps.length = 0; g.update(1 / 60); }
-    const rose = y0 - g.player.y;
-    assert(rose > 20, 'holding lifts the orb (rose ' + rose.toFixed(0) + 'px in 0.75s)');
-    assert(g.player.dir === -1, 'and the direction is up while held');
-
-    // letting go drops
-    mid(); g.held = false;
-    y0 = g.player.y;
-    for (let i = 0; i < 45; i++) { g.obstacles.length = 0; g.traps.length = 0; g.update(1 / 60); }
-    const fell = g.player.y - y0;
-    assert(fell > 20, 'releasing drops it (fell ' + fell.toFixed(0) + 'px)');
-    assert(g.player.dir === 1, 'and the direction is down when not held');
+    const chase = (targetFrac) => {
+      g.player.y = g.playTop + g.playH * 0.5; g.player.vy = 0;
+      g.held = true;
+      g.touchY = g.playTop + g.playH * targetFrac;
+      for (let i = 0; i < 90; i++) { g.obstacles.length = 0; g.traps.length = 0; g.update(1 / 60); }
+      return (g.player.y - g.playTop) / g.playH;
+    };
+    const up = chase(0.15), down = chase(0.85);
+    assert(Math.abs(up - 0.15) < 0.06, 'a finger near the top pulls the orb there (' + up.toFixed(2) + ')');
+    assert(Math.abs(down - 0.85) < 0.06, 'and near the bottom too (' + down.toFixed(2) + ')');
     g.toMenu();
     L.Modes.setCurrent('classic');
   });
 
-  test('HOLD: a run never inherits a thumb, and a lost pointer never sticks', () => {
+  test('HOLD: steering obeys the same speed ceiling as every other mode', () => {
+    // Direct control must not become teleportation, or the corridor stops
+    // asking anything: the reach guarantees every other mode relies on are
+    // written against vMax, and this mode has to live inside them too.
+    freshStorage();
+    L.Store.difficulty = 'normal';
+    L.Modes.setCurrent('hold');
+    const g = newGame(390, 844);
+    g.start();
+    g.player.y = g.playBottom - 4; g.player.vy = 0;
+    g.held = true; g.touchY = g.playTop;      // ask for the whole corridor at once
+    let peak = 0;
+    for (let i = 0; i < 120; i++) {
+      g.obstacles.length = 0; g.traps.length = 0;
+      g.update(1 / 60);
+      peak = Math.max(peak, Math.abs(g.player.vy));
+    }
+    assert(peak <= g.vMax + 1, 'the orb never exceeds vMax (' + peak.toFixed(0) + ' vs ' + g.vMax.toFixed(0) + ')');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
+  test('HOLD: letting go gives the orb back to gravity', () => {
     freshStorage();
     L.Modes.setCurrent('hold');
     const g = newGame(390, 844);
-    g.held = true;          // as if the last run ended mid-press
     g.start();
-    assert(g.held === false, 'a fresh run starts with nothing held');
-    // and the direction is re-asserted every frame, so a release lost to a
-    // hidden tab or an OS gesture cannot leave the orb pinned to the ceiling
-    g.held = true;  g.update(1 / 60); assert(g.player.dir === -1, 'held -> up');
-    g.held = false; g.update(1 / 60); assert(g.player.dir === 1, 'released -> down, on the very next frame');
+    g.player.y = g.playTop + g.playH * 0.5; g.player.vy = 0;
+    g.held = false; g.touchY = null;
+    const y0 = g.player.y;
+    for (let i = 0; i < 45; i++) { g.obstacles.length = 0; g.traps.length = 0; g.update(1 / 60); }
+    assert(g.player.y - y0 > 20, 'with no finger down the orb falls (' + (g.player.y - y0).toFixed(0) + 'px)');
     g.toMenu();
     L.Modes.setCurrent('classic');
   });
 
-  test('HOLD is the only mode that reads a held thumb', () => {
+  test('HOLD: a lost pointer never leaves the orb chasing a ghost', () => {
+    freshStorage();
+    L.Modes.setCurrent('hold');
+    const g = newGame(390, 844);
+    g.held = true; g.touchY = 10;      // as if the last run ended mid-drag
+    g.start();
+    assert(g.held === false && g.touchY == null, 'a fresh run starts with no finger down');
+    g.held = true; g.touchY = g.playTop + 20;
+    g.update(1 / 60);
+    g.held = false; g.touchY = null;   // the OS takes the pointer away
+    const v0 = g.player.vy;
+    for (let i = 0; i < 30; i++) { g.obstacles.length = 0; g.update(1 / 60); }
+    assert(g.player.vy > v0, 'gravity resumes on the very next frame');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
+  test('HOLD is the only mode that steers, and it never flips', () => {
     freshStorage();
     for (const m of L.Modes.MODES) {
       if (m.id === 'hold') { assert(m.hold === true, 'HOLD declares itself'); continue; }
       assert(!m.hold, m.id + ' does not read the hold flag');
     }
-    // and in a normal mode a held thumb changes nothing about direction
+    // a held finger changes nothing in a normal mode
     L.Modes.setCurrent('classic');
-    const g = newGame(390, 844);
+    let g = newGame(390, 844);
     g.start();
     const before = g.player.dir;
-    g.held = true;
+    g.held = true; g.touchY = g.playTop + 10;
     for (let i = 0; i < 30; i++) { g.obstacles.length = 0; g.update(1 / 60); }
-    assert(g.player.dir === before, 'classic ignores held entirely');
+    assert(g.player.dir === before, 'classic ignores held and touchY entirely');
     g.toMenu();
+    // and HOLD never calls flip(), so nothing downstream of a flip fires
+    L.Modes.setCurrent('hold');
+    g = newGame(390, 844);
+    g.start();
+    let flips = 0;
+    const realFlip = g.flip.bind(g);
+    g.flip = () => { flips++; realFlip(); };
+    g.held = true;
+    for (let i = 0; i < 60; i++) {
+      g.obstacles.length = 0;
+      g.touchY = g.playTop + g.playH * (i % 2 ? 0.2 : 0.8);   // yank it about
+      g.update(1 / 60);
+    }
+    assert(flips === 0, 'steering never routes through flip() (' + flips + ' flips)');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
   });
 
   test('HOLD and ALOFT are named and explained in every language', () => {

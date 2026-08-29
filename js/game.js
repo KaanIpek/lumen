@@ -1804,7 +1804,11 @@
       // path reaches after the mode is known. Opens at 1 -- the calm line -- and
       // eases to whatever your altitude asks for over 0.30s.
       this.wind = 1;
-      this.held = false;   // HOLD: never inherit a thumb from the last run
+      // HOLD: never inherit a finger from the last run. `touchY` matters as much
+      // as `held` -- a stale one would have the orb lunge at wherever the last
+      // run ended the moment the new one is grabbed.
+      this.held = false;
+      this.touchY = null;
     }
 
     // How long a single flow can last. Long enough to feel like a reward,
@@ -2048,27 +2052,28 @@
             return;
           }
         }
-        this.held = true;
-        if (this.state === State.PLAY && !this.attract && this.mode && this.mode.hold) {
-          if (this.player.dir !== -1) this.flip();
-          return;                       // a hold-mode press is not a flip toggle
-        }
+        // In HOLD a press on a live run is a GRAB -- the steering is done by the
+        // move handler above. It must still fall through to action() from the
+        // menu, or the mode could never be started by tapping.
+        if (this.state === State.PLAY && !this.attract && this.mode && this.mode.hold) return;
         this.action();
       };
-      // HOLD mode gives the single input a DURATION. Rather than teach flip() a
-      // second personality, both edges are routed through it: press asks for
-      // "up" and release asks for "down", and each one only flips if the orb is
-      // not already going that way. So the squash, the sound, the near-miss
-      // accounting and the tutorial all see exactly the flips they always saw.
-      const wantDir = (d) => {
-        if (this.state !== State.PLAY || this.attract) return;
-        if (!(this.mode && this.mode.hold)) return;
-        if (this.player.dir !== d) this.flip();
+      // HOLD mode is STEERING, not flipping: keep a finger down and slide it up
+      // and down, and the orb goes where the finger is. The other twelve modes
+      // never see any of this -- `pointermove` does nothing unless the mode asks
+      // for it, and the listener is passive so it cannot cost a scroll frame.
+      const track = (e) => {
+        if (!(this.mode && this.mode.hold) || this.state !== State.PLAY || this.attract) return;
+        const r = this.canvas.getBoundingClientRect();
+        // clamp to the corridor, not the canvas: the HUD band is not somewhere
+        // the orb can go, and a finger up there should mean "as high as I can"
+        this.touchY = clamp(e.clientY - r.top, this.playTop, this.playBottom);
       };
-      const release = () => { this.held = false; wantDir(1); };
-      this.canvas.addEventListener('pointerdown', press);
+      const release = () => { this.held = false; this.touchY = null; };
+      this.canvas.addEventListener('pointerdown', (e) => { this.held = true; track(e); });
+      this.canvas.addEventListener('pointermove', track, { passive: true });
       // A pointer that leaves the canvas or is stolen by the OS must count as a
-      // release, or the orb sticks to the ceiling until the next tap.
+      // release, or the orb keeps chasing a finger that is not there.
       for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
         this.canvas.addEventListener(ev, release);
       }
@@ -3346,11 +3351,30 @@
       // line through a run of tight gaps.
       const gMul = this.gravMul;
       // Emberfall pushes up all run: a downward flip costs more, an upward one less.
-      // HOLD: down is the rest state and the thumb is the only thing lifting you.
-      // Re-asserted every frame so a release that arrived while the tab was
-      // hidden, or a pointer the OS took away, cannot leave the orb stuck up.
-      if (this.mode && this.mode.hold && !this.attract) {
-        p.dir = this.held ? -1 : 1;
+      // HOLD: the orb chases the finger. Not a teleport -- it accelerates toward
+      // it and is held to the SAME speed ceiling every other mode obeys, so the
+      // corridor asks exactly as much of you as it always did and a flick of the
+      // thumb cannot cross the screen in a frame. Let go and gravity takes over
+      // again, which is what makes releasing a decision rather than a pause.
+      //
+      // Re-read every frame so a release lost to a hidden tab or an OS gesture
+      // cannot leave the orb chasing a finger that is not there.
+      const _hm = this.mode && this.mode.hold && !this.attract;
+      if (_hm && this.held && this.touchY != null) {
+        const want = this.touchY - p.y;
+        const vc = this.vMax;
+        // a stiff spring, then clamped: snappy near the finger, never faster
+        // than the ceiling far from it
+        let v = want * 9;
+        if (isFinite(vc)) v = clamp(v, -vc, vc);
+        p.vy = v;
+        p.dir = want < 0 ? -1 : 1;      // so the trail, squash and deco face the way it moves
+        p.y += p.vy * gdt;
+        // gravity is the finger's job in this mode; skip the rest of the fall
+        // maths and go straight to the wall handling below
+        this._holdSteered = true;
+      } else {
+        this._holdSteered = false;
       }
       let bias = (this.world && this.world.gravityBias) || 0;
       // ALOFT: the wind is not a number on a gauge, it is a hand under the orb.
@@ -3371,13 +3395,13 @@
       // of trusting the sign.
       if (_wl && !this.attract) bias -= clamp((this.wind - 1) * 1.15, -0.30, 0.30);
       const G = (2 * this.playH) / (this.CROSS_TIME * this.CROSS_TIME) * gMul; // wall-to-wall in CROSS_TIME
-      p.vy += (p.dir + bias) * G * gdt;
+      if (!this._holdSteered) p.vy += (p.dir + bias) * G * gdt;
       // The ceiling. It goes AFTER the acceleration and BEFORE the move, so the
       // orb still answers a tap on the next frame and simply stops winding up
       // past the limit. `vMax` is Infinity on HARD, where this is a no-op.
       const vc = this.vMax;
       if (p.vy > vc) p.vy = vc; else if (p.vy < -vc) p.vy = -vc;
-      p.y += p.vy * gdt;
+      if (!this._holdSteered) p.y += p.vy * gdt;
       // RUBBER: the walls throw you back instead of catching you. `p.dir` is
       // deliberately untouched — flipping direction on a bounce would change the
       // control contract, not the physics. The settle threshold stops the orb
