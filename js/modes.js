@@ -159,15 +159,27 @@
       // corridor: gapFrac, scrollSpeed and spawnInterval all clamp, and every
       // one of those floors is already reached by t = 900s, which the
       // threadability test already covers.
+      // PAYOUT, SECOND PASS. Brittle earns twice: the multipliers below AND
+      // `fault.pay` on every shatter, and the second one is the part that runs
+      // away. A shatter was worth 18 x comboMult x 1.9 = 34 before the chain
+      // even opens up, which is several motes for one bar, and a good player
+      // shatters constantly. It is now 10 x 1.55 = 15.5 -- a 55% cut to what a
+      // shatter is actually worth -- and the flat multipliers come down with it,
+      // out of blackout's band (2.94 -> 2.02 combined) and into glutton's.
+      //
+      // Measuring this with the autopilot is worthless, incidentally: it aims at
+      // gaps and never targets a fault, so it scores HALF of Classic here. The
+      // number that matters is what a player who plays the mode as designed
+      // earns, and that is the one being cut.
       id: 'brittle',
       gap: 1.18, speed: 0.88, spawn: 1.12, ramp: 0.55,
-      scoreMul: 1.9, shardMul: 1.55, ranked: true, lethal: true,
+      scoreMul: 1.55, shardMul: 1.3, ranked: true, lethal: true,
       accent: 318,
       fault: {
         band: 0.05,     // band height as a fraction of playH…
         minR: 2.6,      // …but never shorter than baseR * this
         wide: 1.45,     // widened on any gate that is not a plain one
-        pay: 18,        // raw score per shatter, before comboMult()
+        pay: 10,        // raw score per shatter, before comboMult()
         nerve: 3,       // meter cap
         start: 2,       // …and what a run opens with
         gain: 1 / 3,    // nerve per shatter: three hits buy one brake

@@ -98,6 +98,9 @@
     { id: 'striker',  tier: 'premium', hue: 262, sat: 62, light: 46, deco: 'striker' },
     { id: 'keeper',   tier: 'mid',     hue: 44,  sat: 88, light: 60, deco: 'keeper' },
     { id: 'gaffer',   tier: 'mid',     hue: 214, sat: 30, light: 52, deco: 'gaffer' },
+
+    // A hole with a rim, and the current arcing across it.
+    { id: 'singularity', tier: 'premium', hue: 286, sat: 74, light: 40, deco: 'singularity' },
   ];
 
   // ---- trails -------------------------------------------------------------
@@ -125,6 +128,8 @@
 
     // Divots. The pitch takes a beating behind you.
     { id: 'turf',      tier: 'mid',     style: 'turf' },
+
+    { id: 'arcflash',  tier: 'premium', style: 'arcflash' },
   ];
 
   // ---- maps ---------------------------------------------------------------
@@ -258,6 +263,16 @@
     { id: 'pitch',     shards: 4400, bg: 228, bg2: 244, neb: [96, 220],  dust: 100, wall: 100, gate: 171,
       trait: 'stately', speed: 0.94, gap: 1.04,
       scene: 'pitch', reviveStyle: 'var' },
+
+    // The accretion disc of something that has already eaten the rest of the
+    // sky. gate 127 is the last real hole in the wheel (9 degrees off moss, 10
+    // off ashrise) so it takes the OTHER axis too: gateLight 80 puts its bars a
+    // full stop brighter than either neighbour, which separates them at a glance
+    // where hue alone no longer can.
+    { id: 'eventhorizon', shards: 5200, bg: 272, bg2: 288, neb: [286, 196], dust: 292, wall: 244,
+      gate: 127, gateSat: 88, gateLight: 80,
+      trait: 'heavy', gMul: 1.14, gap: 1.10, spawn: 1.04,
+      scene: 'eventhorizon', dustMode: 'spiral' },
   ];
 
   const DEFAULTS = { skin: 'ion', trail: 'dust', map: 'deepfield' };
@@ -408,6 +423,13 @@
                burst: { n: 10, spMax: 200, lifeMax: 0.7, sizeMax: 3 } },
       death: { burst: { n: 60, spMax: 300, lifeMax: 2.2, sizeMax: 6, drag: 0.94 },
                ring: { n: 3, delay: 0.12, r0: 0.6, r1: 9.0, life: 1.2, width: 3 } } },
+
+    // Collapse: everything rushes IN, then one ring escapes.
+    { id: 'collapse', tier: 'premium',
+      flip:  { burst: { n: 8, spMax: 130, lifeMax: 0.35, sizeMax: 3 } },
+      flow:  { ring: { n: 2, delay: 0.08, r0: 5.5, r1: 0.6, life: 0.55, width: 3 } },
+      death: { ring: { n: 4, delay: 0.07, r0: 8.0, r1: 0.4, life: 0.7, width: 4 },
+               burst: { n: 54, spMax: 380, lifeMax: 1.3, sizeMax: 6, drag: 0.88 } } },
   ];
 
   // ---- sets ------------------------------------------------------------------
@@ -447,6 +469,7 @@
     { id: 'phantasm',   items: ['wraith',    'wisp',       'gloamvale',   'seance'],    usd: 0 },
     { id: 'longdance',  items: ['moonpearl', 'loong',      'lanternmoon', 'fireworks'], usd: 0 },
     { id: 'matchday',   items: ['striker',   'turf',       'pitch',       'goal'],      usd: 0 },
+    { id: 'cosmic',     items: ['singularity', 'arcflash', 'eventhorizon', 'collapse'], usd: 0 },
   ];
 
   const all = () => SKINS.concat(TRAILS, MAPS, SIGNATURES);

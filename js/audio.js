@@ -320,6 +320,21 @@
       snare: [4, 12], open: [14],
     },
 
+    // Something enormous and slow, with the current running over it. A drone
+    // under everything, a lead that only moves by a tritone and a minor sixth --
+    // the two intervals that refuse to settle -- and a hat on 3 so the pulse
+    // never quite lands where you expect.
+    eventhorizon: {
+      bpm: 72, wave: 'sawtooth', sub: 'sine',
+      kick: [0, 11], hat: 3,
+      A: [[33, 39, 44], [33, 40, 45], [31, 37, 42], [33, 39, 44]],
+      B: [[36, 42, 47], [35, 41, 46], [33, 39, 44], [31, 38, 43]],
+      arp: [0, 2, 1, 2, 0, 1],
+      lead: [N, N, 18, N, N, N, N, N, 24, N, N, N, N, 21, N, N, N, N],
+      bass: [0, N, N, 0, N, N, 7, N],
+      snare: [], open: [7, 15],
+    },
+
     // ---- a MODE's music, not a world's ---------------------------------------
     // Claimed by ABANDON HOPE through `mode.song`, so it follows you onto every
     // map. Everything here is chosen to withhold:

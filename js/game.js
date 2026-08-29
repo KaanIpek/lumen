@@ -982,6 +982,79 @@
       x.beginPath(); x.ellipse(w * 0.5, h * 1.02, w * 0.46, h * 0.22, 0, Math.PI, TAU); x.stroke();
     },
 
+    // Something has already eaten the rest of the sky. A disc seen almost
+    // edge-on, the dark of the hole inside it, and the light of everything
+    // behind bent into a ring above and below -- which is the one detail that
+    // makes a black hole read as a black hole and not a planet.
+    //
+    // All of it sits ABOVE the corridor's upper third; the lower two thirds are
+    // bare, which is the same readability deal every other scene here takes.
+    eventhorizon(x, w, h) {
+      // Drafted at 0.13 of the short side and it filled a quarter of the screen,
+      // disc and all, sitting in the corridor rather than behind it. The scene
+      // is a backdrop; the corridor is the game.
+      const cx = w * 0.54, cy = h * 0.145, R = Math.min(w, h) * 0.085;
+
+      // the glow the disc throws over everything near it
+      const halo = x.createRadialGradient(cx, cy, R * 0.4, cx, cy, R * 4.6);
+      halo.addColorStop(0, 'hsla(296 80% 46% / 0.30)');
+      halo.addColorStop(0.45, 'hsla(276 70% 34% / 0.13)');
+      halo.addColorStop(1, 'hsla(272 70% 20% / 0)');
+      x.fillStyle = halo;
+      x.fillRect(0, 0, w, h * 0.62);
+
+      // the lensed ring: light from BEHIND, bent over the top and under the
+      // bottom. Two flattened arcs, brightest where they meet the disc.
+      for (const s2 of [-1, 1]) {
+        const g2 = x.createLinearGradient(cx - R * 1.6, cy, cx + R * 1.6, cy);
+        g2.addColorStop(0, 'hsla(36 100% 72% / 0)');
+        g2.addColorStop(0.5, 'hsla(40 100% 82% / 0.85)');
+        g2.addColorStop(1, 'hsla(36 100% 72% / 0)');
+        x.strokeStyle = g2;
+        x.lineWidth = Math.max(1.5, R * 0.13);
+        x.beginPath();
+        x.ellipse(cx, cy, R * 1.42, R * 1.05, 0, s2 < 0 ? Math.PI : 0, s2 < 0 ? TAU : Math.PI);
+        x.stroke();
+      }
+
+      // the disc itself, nearly edge-on
+      x.save();
+      x.translate(cx, cy);
+      x.rotate(-0.16);
+      x.scale(1, 0.26);
+      for (const [rad, wid, col] of [
+        [R * 2.30, R * 0.30, 'hsla(24 96% 58% / 0.42)'],
+        [R * 1.80, R * 0.34, 'hsla(32 100% 66% / 0.72)'],
+        [R * 1.36, R * 0.26, 'hsla(46 100% 80% / 0.92)'],
+      ]) {
+        x.strokeStyle = col;
+        x.lineWidth = wid;
+        x.beginPath(); x.arc(0, 0, rad, 0, TAU); x.stroke();
+      }
+      x.restore();
+
+      // and the hole, which is simply an absence with a hot edge
+      x.fillStyle = 'hsl(274 80% 3%)';
+      x.beginPath(); x.arc(cx, cy, R, 0, TAU); x.fill();
+      x.strokeStyle = 'hsla(300 100% 82% / 0.55)';
+      x.lineWidth = Math.max(1, R * 0.05);
+      x.beginPath(); x.arc(cx, cy, R * 1.02, 0, TAU); x.stroke();
+
+      // a handful of stars, stretched as they fall in
+      for (let k = 0; k < 40; k++) {
+        const a = k * 2.399, d = R * (2.6 + ((k * 29) % 100) / 100 * 5.2);
+        const sx = cx + Math.cos(a) * d, sy = cy + Math.sin(a) * d * 0.55;
+        if (sy < 0 || sy > h * 0.60) continue;
+        const pull = Math.max(0.2, 1 - d / (R * 7));
+        x.strokeStyle = `hsla(210 60% 88% / ${0.15 + pull * 0.45})`;
+        x.lineWidth = 1;
+        x.beginPath();
+        x.moveTo(sx, sy);
+        x.lineTo(sx + Math.cos(a + 1.57) * pull * R * 0.5, sy + Math.sin(a + 1.57) * pull * R * 0.28);
+        x.stroke();
+      }
+    },
+
   };
 
   class Background {
@@ -1005,6 +1078,23 @@
     update(dt, scroll) {
       this.t += dt;
       const M = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
+      if (M && M.dustMode === 'spiral') {
+        // Everything is falling in. Dust drifts toward one point and speeds up
+        // as it gets there, then respawns at the edge -- the world's own motion,
+        // and the reason it feels alive rather than painted.
+        const calm = calmVisuals() ? 0.45 : 1;
+        const cx = this.W * 0.52, cy = this.H * 0.20;
+        for (const d of this.dots) {
+          const dx = cx - d.x, dy = cy - d.y;
+          const dist = Math.max(24, Math.hypot(dx, dy));
+          const pull = (26 + 120 / (dist / this.H + 0.25)) * dt * d.depth * calm;
+          d.x += (dx / dist) * pull - scroll * d.depth * dt * 0.20;
+          d.y += (dy / dist) * pull;
+          d.tw += dt * (1.4 + d.depth) * calm;
+          if (dist < 30) { d.x = rand(0, this.W + 40); d.y = rand(0, this.H); }
+        }
+        return;
+      }
       if (M && M.dustMode === 'lift') {
         // Sparks RISE. The only dust in the game that goes against the fall, and
         // it is the world's second motion: the balloons behind it are baked and
@@ -1565,6 +1655,74 @@
           ctx.stroke();
         }
       }
+    },
+
+    // A black hole: a hole with a rim, and current arcing across the mouth of
+    // it. The one deco that removes light instead of adding it -- the orb's own
+    // bright core is punched out and replaced by dark, which is what makes it
+    // read as a HOLE rather than a dark ball.
+    //
+    // Alive, deliberately: the arcs re-strike on their own clock, the disc leans
+    // as it spins, and the rim breathes. At 19px the motion IS the character,
+    // because the shape at that size is just a ring.
+    singularity(ctx, r, hue, game) {
+      const t = game ? game.elapsed : 0;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.99, 0, TAU); ctx.clip();
+
+      // THE HOLE. Punched out over the orb's white core, so what is left is an
+      // absence with a lit edge.
+      ctx.fillStyle = 'hsl(272 70% 4%)';
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.60, 0, TAU); ctx.fill();
+
+      // THE DISC, leaning. Two arcs at an angle read as a ring seen edge-on far
+      // more cheaply than an ellipse with a gradient does.
+      const lean = 0.42 + 0.10 * Math.sin(t * 0.6);
+      for (const [rad, wid, al] of [[0.80, 0.16, 0.95], [0.94, 0.09, 0.55]]) {
+        ctx.save();
+        ctx.rotate(-0.5);
+        ctx.scale(1, lean);
+        ctx.strokeStyle = `hsla(${28 + 18 * Math.sin(t * 0.9)} 95% 66% / ${al})`;
+        ctx.lineWidth = Math.max(1.2, r * wid);
+        ctx.beginPath(); ctx.arc(0, 0, r * rad, 0, TAU); ctx.stroke();
+        ctx.restore();
+      }
+
+      // THE RIM. A hot ring right on the horizon, breathing.
+      ctx.strokeStyle = `hsla(300 100% 78% / ${0.55 + 0.35 * Math.sin(t * 2.4)})`;
+      ctx.lineWidth = Math.max(1, r * 0.075);
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, TAU); ctx.stroke();
+
+      // THE ARCS. Three, each on its own strike clock, each a jagged chord
+      // across the mouth. Deterministic per strike, so it flickers rather than
+      // fizzes -- and it is the thing that makes it feel electric and alive.
+      ctx.lineCap = 'round';
+      for (let k = 0; k < 3; k++) {
+        const phase = t * (1.7 + k * 0.6) + k * 2.1;
+        const strike = Math.sin(phase);
+        if (strike < 0.55) continue;                 // most of the time: nothing
+        const life = (strike - 0.55) / 0.45;
+        const seed = Math.floor(phase / Math.PI);    // constant for one strike
+        const a0 = (seed * 2.399 + k) % TAU;
+        const a1 = a0 + Math.PI * (0.55 + ((seed * 7) % 10) / 22);
+        const R0 = r * 0.60;
+        ctx.strokeStyle = `hsla(190 100% 88% / ${life * 0.95})`;
+        ctx.lineWidth = Math.max(1, r * 0.055);
+        ctx.beginPath();
+        const steps = 5;
+        for (let n = 0; n <= steps; n++) {
+          const f = n / steps;
+          const a = a0 + (a1 - a0) * f;
+          // pull the middle of the chord toward the centre, and jag it
+          const bend = 1 - 0.55 * Math.sin(f * Math.PI);
+          const jag = ((seed * (n + 3) * 13) % 100) / 100 - 0.5;
+          const rr2 = R0 * bend * (1 + jag * 0.18);
+          const x = Math.cos(a) * rr2, y = Math.sin(a) * rr2;
+          if (n) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
     },
   };
   // Exposed for one reason: the test that proves every skin declaring a `deco`
@@ -4550,9 +4708,16 @@
     //     gate hue at arm's length from the reward.
     gateColor(a) {
       if (Store.highContrast || Store.colorblind !== 'off') return this.dangerColor(a);
-      const g = this.world && this.world.gate;
+      const w = this.world;
+      const g = w && w.gate;
       if (g == null) return this.dangerColor(a);
-      return `hsla(${g} 92% 62% / ${a == null ? 1 : a})`;
+      // Nineteen worlds have filled the usable hue wheel to about 16 degrees a
+      // world, so lightness is the axis left: a world may lift its bars off the
+      // hues either side of it without moving them. Defaults are the old values,
+      // so every world that says nothing looks exactly as it did.
+      const sat = w.gateSat == null ? 92 : w.gateSat;
+      const li = w.gateLight == null ? 62 : w.gateLight;
+      return `hsla(${g} ${sat}% ${li}% / ${a == null ? 1 : a})`;
     }
 
     // ---- render ----------------------------------------------------------
@@ -5426,6 +5591,24 @@
             ctx.beginPath(); ctx.arc(tx * p.r * sc, ty * p.r * sc, 0.14 * p.r * sc, 0, TAU); ctx.fill();
           }
           ctx.restore();
+        }
+      } else if (style === 'arcflash') {
+        // Current, not dust: short jagged segments that snap between successive
+        // points of the trail and fade fast, so the wake crackles.
+        ctx.lineCap = 'round';
+        for (let i = 2; i < n; i += 2) {
+          const a = p.trail[i - 2], b = p.trail[i];
+          if (!a || !b) continue;
+          const k = 1 - i / n;
+          ctx.strokeStyle = `hsla(${i % 6 < 3 ? 190 : 296} 100% ${72 + k * 16}% / ${k * 0.85})`;
+          ctx.lineWidth = Math.max(1, p.r * 0.18 * k);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          const off = p.r * 0.55 * (1 - k) * (i % 4 < 2 ? 1 : -1);
+          ctx.lineTo(mx + off * 0.3, my + off);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
         }
       } else if (style === 'turf') {
         // Divots: torn clumps of grass thrown backwards and settling, not a
