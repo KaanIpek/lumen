@@ -29,6 +29,22 @@
   <div class="sub">Runs the real game modules: economy, missions, daily, leaderboard, collision, physics, rendering, resize and audio.</div>
   <div id="out"></div>
 
+  <!-- The shop's DOM, so the shop tests can drive the REAL renderShop() instead
+       of a hand-rolled imitation of it. Two shipped bugs lived in that function
+       (buy buttons with no listener under the SETS filter, and three listeners
+       on the same button under ALL), and a test that skips it would have missed
+       both. Kept out of sight; the suite never shows it. -->
+  <div id="lumen-shop-dom" style="position:absolute;left:-99999px;top:0;width:400px">
+    <div class="panel">
+      <span id="shop-shards"></span>
+      <div id="shop-coach"></div>
+      <div id="shop-filters"></div>
+      <div id="shop-grid"></div>
+      <div id="shop-note"></div>
+      <button id="btn-restore"></button>
+    </div>
+  </div>
+
   <!-- The game under test (UI/bootstrap are exercised separately, in the app).
        Loaded with a cache-busting stamp so a test run always measures the code
        on disk right now, never a stale copy the browser is holding. -->

@@ -505,6 +505,16 @@
     // (The previous version pasted a hex alpha onto an hsl() string, which is not
     // valid CSS. One bad layer invalidates the whole `background` shorthand, so
     // every map card rendered as an empty box.)
+    // A REAL frame of the world, captured from the running game at 2x and
+    // installed under assets/maps/. The hand-drawn SVG below is still here as
+    // the fallback, but it was a 160x60 cartoon squashed into a 62px strip --
+    // it could not show a sunset, a mountain, a torii or a moon, which is most
+    // of what distinguishes one world from another now.
+    mapArt(m) {
+      return "background:#0a0a12 url('assets/maps/" + m.id + ".jpg') center/cover no-repeat;"
+        + 'box-shadow: inset 0 0 0 1px rgba(255,255,255,.10)';
+    },
+
     mapSwatch(m) {
       // `mono` maps are meant to read as colourless — grey, silent, immense — so
       // the desaturation has to reach the nebulae and gates too, not just the sky.
@@ -516,14 +526,16 @@
       const neb1 = 'hsl(' + (m.neb ? m.neb[0] : 250) + ' ' + nebSat + '% 60%)';
       const neb2 = 'hsl(' + (m.neb ? m.neb[1] : 285) + ' ' + nebSat + '% 56%)';
       const dust = 'hsl(' + m.dust + ' ' + (m.mono ? 10 : 70) + '% 84%)';
-      // The GATE colour is not the map's. Every world draws its gates in the
-      // danger hue -- that constancy is what the colour-vision presets are for,
-      // and it is the one thing a player must never have to re-learn per world.
-      // This swatch used to paint them in `m.wall` and so promised a green or
-      // blue world that the game then rendered red. `m.wall` is real, but it is
-      // the corridor's top and bottom EDGE, so that is where it goes now.
-      const dangerHue = (LUMEN.cbPalette ? LUMEN.cbPalette().danger : 350);
-      const wall = 'hsl(' + dangerHue + ' 95% 62%)';
+      // The gates are the WORLD's colour, because that is now what the game
+      // draws -- see gateColor() in js/game.js. Under a colour-vision preset or
+      // HIGH CONTRAST the game falls back to the fixed danger hue, and so does
+      // this card: what you are shown has to be what you will get.
+      // `m.wall` is the corridor's top and bottom edge, drawn below.
+      const cb = LUMEN.cbPalette ? LUMEN.cbPalette() : { danger: 350 };
+      const St = LUMEN.Store;
+      const fixed = St && (St.highContrast || St.colorblind !== 'off');
+      const gateHue = fixed || m.gate == null ? cb.danger : m.gate;
+      const wall = 'hsl(' + gateHue + ' ' + (m.mono ? wallSat : 92) + '% 62%)';
       const edge = 'hsl(' + m.wall + ' ' + wallSat + '% 68%)';
       const orb = LUMEN.Cosmetics ? LUMEN.Cosmetics.skinDef() : null;
       const orbC = orb && !orb.rainbow ? 'hsl(' + orb.hue + ' ' + orb.sat + '% ' + orb.light + '%)' : '#7ff';
@@ -724,11 +736,13 @@
           sec('signatures');
           this.renderCatalog(grid, C.SIGNATURES, Store.signature, 'signatures', iapOn);
         }
+        this.wireShopActions(grid);
         this.startSigPreviews();
         return;
       }
       $('shop-filters').classList.add('hidden');
       this.renderCatalog(grid, C.MAPS, Store.map, 'maps', iapOn);
+      this.wireShopActions(grid);
     },
 
     // The category filter for CUSTOMIZE. Sticky, so it is reachable from
@@ -931,7 +945,7 @@
       for (const s of C.SETS) {
         const p = C.setPrice(s.id);
         const card = document.createElement('div');
-        card.className = 'shop-card set-card' + (p.complete ? ' equipped' : '');
+        card.className = 'shop-card set-card' + (p.complete ? ' owned' : '');
 
         // the three pieces, named, so nobody buys a bag they cannot see into
         const parts = s.items.map((id) => {
@@ -940,9 +954,20 @@
             + (have ? '✓ ' : '') + esc(C.name(id)) + '</span>';
         }).join('');
 
+        // Is the whole look already on? Every piece equipped in its own slot.
+        const worn = s.items.every((id) => {
+          const cat = C.category(id);
+          return (cat === 'orbs' && Store.skin === id)
+            || (cat === 'trails' && Store.trail === id)
+            || (cat === 'maps' && Store.map === id)
+            || (cat === 'signatures' && Store.signature === id);
+        });
+
         let btns;
         if (p.complete) {
-          btns = '<button class="c-btn equipped" disabled>' + T('setComplete') + '</button>';
+          btns = worn
+            ? '<button class="c-btn equipped" disabled>' + T('setWearing') + '</button>'
+            : '<button class="c-btn equip" data-act="setequip" data-id="' + s.id + '">' + T('setEquip') + '</button>';
         } else {
           const afford = Store.shards >= p.shards;
           btns = '<button class="c-btn buy' + (afford ? '' : ' locked') + '" data-act="setbuy" data-id="'
@@ -1150,7 +1175,25 @@
           : kind === 'signatures' ? ' sig' : '');
         const swatchStyle = kind === 'orbs' ? this.skinSwatch(it)
           : kind === 'trails' ? this.trailSwatch(it)
-          : kind === 'signatures' ? '' : this.mapSwatch(it);
+          : kind === 'signatures' ? '' : this.mapArt(it);
+
+        // What this world DOES to the game, said out loud. The description
+        // underneath is flavour; this is the rule. A player choosing a world was
+        // otherwise picking a colour scheme and finding out afterwards that the
+        // gravity had changed.
+        let badge = '';
+        if (kind === 'maps') {
+          const bits = [];
+          if (it.trait && it.trait !== 'none') bits.push(T('trait_' + it.trait));
+          if (it.gMul && it.gMul !== 1) bits.push(T(it.gMul < 1 ? 'traitLightG' : 'traitHeavyG'));
+          if (it.gap && it.gap !== 1) bits.push(T(it.gap < 1 ? 'traitTightGaps' : 'traitWideGaps'));
+          if (it.spawn && it.spawn !== 1) bits.push(T(it.spawn < 1 ? 'traitBusy' : 'traitSparse'));
+          if (it.speed && it.speed !== 1) bits.push(T(it.speed > 1 ? 'traitFast' : 'traitSlow'));
+          if (!bits.length) bits.push(T('trait_none'));
+          badge = '<div class="map-traits">'
+            + bits.map((b) => '<span class="map-trait">' + esc(b) + '</span>').join('')
+            + '</div>';
+        }
 
         let btns;
         if (equipped) btns = '<button class="c-btn equipped" disabled>' + T('equipped') + '</button>';
@@ -1185,6 +1228,7 @@
           featured +
           '<div class="c-name">' + C.name(it.id) + '</div>' +
           '<div class="c-desc">' + C.desc(it.id) + '</div>' +
+          badge +
           (flav && flav !== 'cosf_' + it.id ? '<div class="c-flav">' + flav + '</div>' : '') +
           '<div class="c-buys">' + btns + '</div>';
         // Set the swatch style as a property, not inside the markup: the map
@@ -1193,7 +1237,27 @@
         if (swatchStyle) card.firstChild.setAttribute('style', swatchStyle);
         grid.appendChild(card);
       }
+    },
+
+    // Every shop button gets its listener from HERE, once, after the whole grid
+    // is built. It used to live at the end of renderCatalog, which broke in two
+    // directions at once:
+    //
+    //   - Under the SETS filter renderCatalog never runs, so no set button was
+    //     ever wired. Tapping BUY on a pack did nothing at all -- no sound, no
+    //     message, no purchase -- and SETS is the obvious place to go looking
+    //     for a pack you just heard about.
+    //   - Under ALL it runs three times and each pass re-queried the WHOLE
+    //     grid, so a set button collected three listeners and one tap ran three
+    //     purchases: the first bought the set and the next two failed against
+    //     the now-complete set, ending a SUCCESSFUL purchase on the failure
+    //     sound and "not enough shards".
+    //
+    // One call site, after everything is in the DOM, and both are gone.
+    wireShopActions(grid) {
       grid.querySelectorAll('button[data-act]').forEach((b) => {
+        if (b._wired) return;              // belt and braces: never twice
+        b._wired = true;
         onTap(b, () => this.shopAction(b.getAttribute('data-act'), b.getAttribute('data-id')));
       });
     },
@@ -2182,6 +2246,15 @@
     shopAction(act, id) {
       if (act === 'equip') {
         C.equip(id); Audio && Audio.sfx('ui');
+      } else if (act === 'setequip') {
+        // Owning a set and wearing it are two different things. A completed set
+        // used to end at a disabled SET COMPLETE badge, so the only way back
+        // into a look you already owned was to find its four pieces across four
+        // different lists -- and the map is not even in this tab.
+        const st = C.setDef(id);
+        if (st) for (const it of st.items) C.equip(it);
+        Audio && Audio.sfx('best');
+        this.toast(T('setEquipped'));
       } else if (act === 'buy') {
         if (C.buy(id)) { C.equip(id); Audio && Audio.sfx('best'); this.toast(T('unlocked')); }
         else { Audio && Audio.sfx('flowEnd'); this.toast(T('notEnough')); return; }

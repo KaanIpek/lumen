@@ -128,30 +128,30 @@
   //
   // The Daily always runs on Deep Field, so the shared course stays neutral.
   const MAPS = [
-    { id: 'deepfield', shards: 0,    bg: 248, bg2: 254, neb: [250, 285], dust: 190, wall: 196,
+    { id: 'deepfield', shards: 0,    bg: 248, bg2: 254, neb: [250, 285], dust: 190, wall: 196, gate: 350,
       trait: 'none' },
 
     // Embers rise: a gentle upward pull. Flips downward bite harder, upward float.
-    { id: 'emberfall', shards: 900,  bg: 18,  bg2: 8,   neb: [20, 340],  dust: 34,  wall: 30,
+    { id: 'emberfall', shards: 900,  bg: 18,  bg2: 8,   neb: [20, 340],  dust: 34,  wall: 30, gate: 18,
       trait: 'updraft', gravityBias: -0.16 },
 
     // A tide that breathes the whole corridor in and out. Gaps drift as a set.
-    { id: 'tidal',     shards: 1500, bg: 196, bg2: 205, neb: [185, 215], dust: 175, wall: 186,
+    { id: 'tidal',     shards: 1500, bg: 196, bg2: 205, neb: [185, 215], dust: 175, wall: 186, gate: 187,
       trait: 'tide', tide: { amp: 0.055, speed: 0.55 } },
 
     // Overgrown: motes are rarer, but each one is worth more.
-    { id: 'moss',      shards: 2200, bg: 150, bg2: 168, neb: [120, 160], dust: 140, wall: 146,
+    { id: 'moss',      shards: 2200, bg: 150, bg2: 168, neb: [120, 160], dust: 140, wall: 146, gate: 118,
       trait: 'sparse', moteRate: 0.62, moteWorth: 1.6 },
 
     // Immense and slow: wider openings, but they arrive closer together.
-    { id: 'monolith',  shards: 3200, bg: 240, bg2: 240, neb: [240, 250], dust: 220, wall: 228,
+    { id: 'monolith',  shards: 3200, bg: 240, bg2: 240, neb: [240, 250], dust: 220, wall: 228, gate: 236,
       mono: true, trait: 'heavy', gap: 1.12, spawn: 0.86 },
 
     // Two suns pull hard. The mirror of Emberfall: here everything sinks, so
     // holding height costs you — and the field pays for the trouble. Nothing is
     // drawn over the screen for this; the trait is in the handling, where you
     // feel it every flip instead of watching it happen.
-    { id: 'solaris',   shards: 4800, bg: 300, bg2: 32,  neb: [310, 40],  dust: 48,  wall: 316,
+    { id: 'solaris',   shards: 4800, bg: 300, bg2: 32,  neb: [310, 40],  dust: 48,  wall: 316, gate: 88,
       trait: 'sink', gravityBias: 0.16, moteWorth: 1.3 },
 
     // ---- themed worlds -------------------------------------------------------
@@ -162,24 +162,24 @@
     // DANGER hue, and every dust hue at least 20 off every REWARD hue.
 
     // Halloween. Hunted from the whistle, and paid for the nerve.
-    { id: 'hallowmere', shards: 2600, bg: 26,  bg2: 286, neb: [292, 22],  dust: 20,  wall: 82,
+    { id: 'hallowmere', shards: 2600, bg: 26,  bg2: 286, neb: [292, 22],  dust: 20,  wall: 82, gate: 100,
       trait: 'haunted', traps: true, trapEvery: [4.5, 8], moteWorth: 1.25 },
 
     // A throne hall the size of a canyon: all the time in the world, and no room.
-    { id: 'regalia',    shards: 3600, bg: 268, bg2: 252, neb: [272, 42],  dust: 316, wall: 108,
+    { id: 'regalia',    shards: 3600, bg: 268, bg2: 252, neb: [272, 42],  dust: 316, wall: 108, gate: 270,
       trait: 'stately', gap: 0.86, speed: 0.88 },
 
     // The void. Long flat arcs — and a late flip that cannot save you.
-    { id: 'nullpoint',  shards: 4400, bg: 232, bg2: 234, neb: [230, 236], dust: 250, wall: 244,
+    { id: 'nullpoint',  shards: 4400, bg: 232, bg2: 234, neb: [230, 236], dust: 250, wall: 244, gate: 203,
       trait: 'weightless', gMul: 0.68, gap: 0.94, spawn: 1.06, nebA: 0.15 },
 
     // Magic as geometry: the corridor breathes, wider than anywhere and then
     // tighter than anywhere. The trough always comes.
-    { id: 'weave',      shards: 5200, bg: 272, bg2: 188, neb: [286, 166], dust: 300, wall: 168,
+    { id: 'weave',      shards: 5200, bg: 272, bg2: 188, neb: [286, 166], dust: 300, wall: 168, gate: 285,
       trait: 'breathing', gapWave: { amp: 0.17, speed: 0.42 } },
 
     // Deep winter, and Nullpoint's mirror: all the reading time, none of the air.
-    { id: 'hoarfrost',  shards: 2900, bg: 200, bg2: 214, neb: [196, 220], dust: 204, wall: 212,
+    { id: 'hoarfrost',  shards: 2900, bg: 200, bg2: 214, neb: [196, 220], dust: 204, wall: 212, gate: 220,
       trait: 'leaden', gMul: 1.32, speed: 0.90 },
 
     // ---- theme-pack worlds (2026-08-28) ------------------------------------
@@ -189,7 +189,7 @@
 
     // Moonlit rooftops. gravityBias -0.14 lightens the FALL (soft landings,
     // the cat always on its feet) and makes rising flips bite harder.
-    { id: 'rooftops',   shards: 2800, bg: 234, bg2: 252, neb: [38, 262],  dust: 210, wall: 40,
+    { id: 'rooftops',   shards: 2800, bg: 234, bg2: 252, neb: [38, 262],  dust: 210, wall: 40, gate: 334,
       trait: 'updraft', gravityBias: -0.14, scene: 'rooftops', moteSkin: 'fish' },
 
     // Blossom night: anime hang-time. A milder Nullpoint — long floating arcs,
@@ -197,7 +197,7 @@
     // strength so the pink canopy stays lit.
     // The sunset rows: warm and saturated in the upper third, falling to a
     // playable dusk below the horizon. The drama is where the game is not.
-    { id: 'bloomward',  shards: 3400, bg: 258, bg2: 292, neb: [326, 262], dust: 326, wall: 176,
+    { id: 'bloomward',  shards: 3400, bg: 258, bg2: 292, neb: [326, 262], dust: 326, wall: 176, gate: 318,
       trait: 'weightless', gMul: 0.80, gap: 0.96, spawn: 1.05,
       scene: 'sakura', dustMode: 'petal', gateCap: 'torii',
       sky: [[0, 262, 55, 16], [0.22, 320, 62, 26], [0.36, 18, 85, 34], [0.44, 28, 90, 30], [0.58, 305, 45, 12], [1, 258, 50, 7]] },
@@ -205,21 +205,21 @@
     // A spiral arm turning slowly. Wall 220, not the drafted 184 — that sat two
     // degrees off Tidal's wall on Tidal's own trait, and a flagship must not
     // read as a reskin of the 1,500-shard map.
-    { id: 'andromeda',  shards: 4200, bg: 258, bg2: 196, neb: [268, 182], dust: 210, wall: 220,
+    { id: 'andromeda',  shards: 4200, bg: 258, bg2: 196, neb: [268, 182], dust: 210, wall: 220, gate: 252,
       trait: 'tide', tide: { amp: 0.07, speed: 0.32 } },
 
     // The synthwave highway throbs like a bassline.
-    { id: 'nightway',   shards: 3800, bg: 258, bg2: 312, neb: [318, 196], dust: 320, wall: 190,
+    { id: 'nightway',   shards: 3800, bg: 258, bg2: 312, neb: [318, 196], dust: 320, wall: 190, gate: 300,
       trait: 'breathing', gapWave: { amp: 0.10, speed: 0.85 } },
 
     // Ghost-vale: violet dark, cold green bars. spawn 0.95 (the draft said 1.05
     // while its copy promised busier gates — review caught the sign), wall 140
     // so it does not near-duplicate Regalia's violet-sky-green-bars.
-    { id: 'gloamvale',  shards: 3400, bg: 275, bg2: 245, neb: [288, 130], dust: 280, wall: 140,
+    { id: 'gloamvale',  shards: 3400, bg: 275, bg2: 245, neb: [288, 130], dust: 280, wall: 140, gate: 155,
       trait: 'weightless', gMul: 0.78, gap: 0.90, spawn: 0.95 },
 
     // Lantern-festival night over water: the tide is the dragon's own motion.
-    { id: 'lanternmoon', shards: 4600, bg: 250, bg2: 344, neb: [8, 44],   dust: 14,  wall: 36,
+    { id: 'lanternmoon', shards: 4600, bg: 250, bg2: 344, neb: [8, 44],   dust: 14,  wall: 36, gate: 6,
       trait: 'tide', tide: { amp: 0.07, speed: 0.42 } },
   ];
 

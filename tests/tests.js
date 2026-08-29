@@ -6094,30 +6094,189 @@
   });
 
   // ---- the shop tells the truth about walls ---------------------------------
-  test('Map swatch: gates are the DANGER hue, not the map hue', () => {
-    // The shop drew its gates in the map's `wall` hue, so a player buying a
-    // green world got red gates. Gates are always the danger hue; `wall` is the
-    // corridor's edge. The swatch has to show what the game will actually draw.
-    const danger = L.cbPalette().danger;
+  // ---- the world colours its own gates ---------------------------------------
+  test('Gates take the WORLD colour, and every world declares one', () => {
+    // Choosing a world used to change the sky and nothing else. Every map now
+    // carries a `gate` hue, and the bars are drawn in it.
+    for (const m of L.Cosmetics.MAPS) {
+      assert(typeof m.gate === 'number' && m.gate >= 0 && m.gate < 360,
+        m.id + ' declares a gate hue (got ' + m.gate + ')');
+    }
+    // and they are not all the same colour, which was the complaint
+    const hues = new Set(L.Cosmetics.MAPS.map((m) => m.gate));
+    assert(hues.size >= 10, 'the seventeen worlds use ' + hues.size + ' distinct gate hues, not one');
+  });
+
+  test('A gate hue never collides with the gold mote', () => {
+    // This is why `gate` is authored rather than reused from `wall`: three of
+    // the wall hues sit within 30 degrees of the reward, and rooftops is 10
+    // degrees away. A bar the same colour as a pickup is the one confusion the
+    // shape channel cannot fully undo at speed.
+    const sep = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+    for (const p of ['off', 'deuter', 'prot', 'trit']) {
+      L.Store.colorblind = p;
+      const reward = L.cbPalette().reward;
+      for (const m of L.Cosmetics.MAPS) {
+        // under a preset the bars are the fixed danger hue, so only 'off' can collide
+        if (p !== 'off') continue;
+        assert(sep(m.gate, reward) >= 30,
+          m.id + ' gate ' + m.gate + ' stays 30 degrees clear of the reward ' + reward
+          + ' (got ' + sep(m.gate, reward) + ')');
+      }
+    }
+    L.Store.colorblind = 'off';
+  });
+
+  test('Colour-vision presets and high contrast take the world colour back', () => {
+    // The accessibility promise outranks the decoration: with a preset on, or
+    // HIGH CONTRAST on, "this will kill you" is one colour in every world.
+    freshStorage();
+    const g = newGame(390, 844);
+    g.world = { gate: 158 };            // gloamvale's cold green
+    L.Store.colorblind = 'off'; L.Store.highContrast = false;
+    const themed = g.gateColor(1);
+    assert(themed.indexOf('158') >= 0, 'off: the bar is the world colour (' + themed + ')');
+
+    L.Store.highContrast = true;
+    assert(g.gateColor(1) === g.dangerColor(1), 'high contrast: back to the fixed danger hue');
+    L.Store.highContrast = false;
+
+    for (const p of ['deuter', 'prot', 'trit']) {
+      L.Store.colorblind = p;
+      assert(g.gateColor(1) === g.dangerColor(1), p + ': back to the fixed danger hue');
+    }
+    L.Store.colorblind = 'off';
+
+    // a world that declares nothing is still red, not undefined
+    g.world = {};
+    assert(g.gateColor(1) === g.dangerColor(1), 'a world with no gate hue falls back');
+    g.world = null;
+    assert(g.gateColor(1) === g.dangerColor(1), 'no world at all falls back');
+    g.toMenu();
+  });
+
+  test('Map swatch shows the gate colour the game will actually draw', () => {
+    // The card and the renderer must not disagree -- that disagreement was the
+    // bug: cards showed a green world and the game handed over a red one.
+    freshStorage();
+    L.Store.colorblind = 'off'; L.Store.highContrast = false;
     for (const m of L.Cosmetics.MAPS) {
       const css = L.UI.mapSwatch(m);
       const svg = decodeURIComponent(css.slice(css.indexOf('utf8,') + 5));
-      assert(svg.indexOf('hsl(' + danger + ' 95% 62%)') >= 0,
-        m.id + ': gates are drawn in the danger hue');
-      // and the map's own hue is still present -- on the corridor edge
-      assert(svg.indexOf('hsl(' + m.wall + ' ') >= 0,
-        m.id + ": the map's wall hue still appears, as the corridor edge");
+      assert(svg.indexOf('hsl(' + m.gate + ' ') >= 0, m.id + ": the card paints the world's gate hue");
+      assert(svg.indexOf('hsl(' + m.wall + ' ') >= 0, m.id + ': and the corridor edge is still the wall hue');
+    }
+    // and under a preset the card goes red along with the game
+    L.Store.colorblind = 'deuter';
+    const danger = L.cbPalette().danger;
+    const css = L.UI.mapSwatch(L.Cosmetics.MAPS[0]);
+    const svg = decodeURIComponent(css.slice(css.indexOf('utf8,') + 5));
+    assert(svg.indexOf('hsl(' + danger + ' ') >= 0, 'under deuter the card uses the fixed danger hue');
+    L.Store.colorblind = 'off';
+  });
+
+  // ---- the shop's buttons actually do something -----------------------------
+  // Two bugs lived here at once and between them they made a shipped theme pack
+  // look like it had never been released.
+  test('Shop: every buy button is wired under EVERY filter', () => {
+    freshStorage();
+    L.Store.shards = 99999;
+    L.UI.showScreen('menu');
+    L.UI.openShop('customize');
+    for (const f of ['all', 'sets', 'orbs', 'trails', 'signatures']) {
+      L.UI.shopFilter = f;
+      L.UI.renderShop();
+      const btns = [...document.querySelectorAll('#shop-grid button[data-act]')];
+      assert(btns.length > 0, f + ': the filter renders at least one action button');
+      const dead = btns.filter((b) => !b._wired);
+      assert(dead.length === 0,
+        f + ': ' + dead.length + ' of ' + btns.length + ' buttons had no listener'
+        + (dead[0] ? ' (first: ' + dead[0].getAttribute('data-act') + ' ' + dead[0].getAttribute('data-id') + ')' : ''));
+    }
+    // and the MAPS tab, which renders through a different branch
+    L.UI.openShop('maps');
+    const mapBtns = [...document.querySelectorAll('#shop-grid button[data-act]')];
+    assert(mapBtns.length > 0 && mapBtns.every((b) => b._wired), 'maps tab buttons are wired too');
+    L.UI.shopFilter = 'all';
+  });
+
+  test('Shop: one tap is one purchase', () => {
+    // Under ALL, renderCatalog used to run three times and each pass re-wired
+    // the WHOLE grid, so a set button collected three listeners. One tap ran
+    // three purchases and a SUCCESSFUL buy ended on "not enough shards".
+    freshStorage();
+    L.Store.shards = 99999;
+    L.UI.showScreen('menu');
+    L.UI.openShop('customize');
+    L.UI.shopFilter = 'all';
+    L.UI.renderShop();
+    const toasts = [];
+    const real = L.UI.toast;
+    L.UI.toast = (m) => { toasts.push(m); };
+    const before = L.Store.shards;
+    const price = L.Cosmetics.setPrice('hanami').shards;
+    const btn = document.querySelector('#shop-grid button[data-act="setbuy"][data-id="hanami"]');
+    assert(!!btn, 'the sakura set has a buy button');
+    btn.click();
+    L.UI.toast = real;
+    assert(before - L.Store.shards === price,
+      'exactly one purchase was charged (spent ' + (before - L.Store.shards) + ', price ' + price + ')');
+    assert(toasts.length === 1, 'exactly one message, got ' + JSON.stringify(toasts));
+    assert(L.Cosmetics.setPrice('hanami').complete, 'and the set is complete');
+  });
+
+  test('Shop: a completed set can be put back on in one tap', () => {
+    freshStorage();
+    L.Store.shards = 99999;
+    L.UI.showScreen('menu'); L.UI.openShop('customize');
+    L.UI.shopFilter = 'sets'; L.UI.renderShop();
+    document.querySelector('#shop-grid button[data-act="setbuy"][data-id="hanami"]').click();
+
+    // wearing it -> no equip button, a WEARING badge instead
+    L.UI.renderShop();
+    assert(!document.querySelector('button[data-act="setequip"][data-id="hanami"]'),
+      'while the set is worn there is nothing to equip');
+
+    // wear something else -> the set offers EQUIP
+    L.Cosmetics.equip('ion'); L.Cosmetics.equip('deepfield');
+    L.UI.renderShop();
+    const eq = document.querySelector('#shop-grid button[data-act="setequip"][data-id="hanami"]');
+    assert(!!eq && eq._wired, 'an owned-but-not-worn set offers a wired EQUIP button');
+    eq.click();
+    const s = L.Cosmetics.setDef('hanami');
+    for (const id of s.items) {
+      const cat = L.Cosmetics.category(id);
+      const on = (cat === 'orbs' && L.Store.skin === id) || (cat === 'trails' && L.Store.trail === id)
+        || (cat === 'maps' && L.Store.map === id) || (cat === 'signatures' && L.Store.signature === id);
+      assert(on, id + ' was equipped by the one tap');
     }
   });
 
-  test('Map swatch: no map paints its gates in its own wall hue', () => {
-    // The regression, stated as its own assertion: if someone re-wires the
-    // swatch back to `m.wall` for the bars, this fails for every map whose
-    // wall hue is not the danger hue -- which is all of them, by design.
-    const danger = L.cbPalette().danger;
+  test('Every world has a card image, and the card is a real frame', async () => {
+    // The cards were a 160x60 SVG squashed into a 62px strip -- it could not
+    // show a sunset, a mountain or a moon, which is most of what tells two
+    // worlds apart now.
     for (const m of L.Cosmetics.MAPS) {
-      assert(Math.abs(((m.wall - danger + 540) % 360) - 180) >= 28,
-        m.id + ': wall hue ' + m.wall + ' stays 28 degrees clear of the danger hue');
+      const style = L.UI.mapArt(m);
+      assert(style.indexOf("assets/maps/" + m.id + ".jpg") >= 0, m.id + ' points at its own art');
+      const r = await fetch('../assets/maps/' + m.id + '.jpg', { method: 'GET' });
+      assert(r.ok, m.id + '.jpg is actually shipped (got ' + r.status + ')');
+      const b = await r.blob();
+      assert(b.size > 4000, m.id + '.jpg is a real image, not a stub (' + b.size + ' bytes)');
+    }
+  });
+
+  test('Every world says what it does to the game', () => {
+    // Picking a world used to be picking a colour scheme and finding out about
+    // the gravity afterwards.
+    freshStorage();
+    L.UI.showScreen('menu'); L.UI.openShop('maps');
+    const cards = [...document.querySelectorAll('#shop-grid .shop-card')];
+    assert(cards.length === L.Cosmetics.MAPS.length, 'every world has a card');
+    for (const c of cards) {
+      const chips = [...c.querySelectorAll('.map-trait')].map((x) => x.textContent.trim());
+      assert(chips.length > 0, 'a world card names at least one rule');
+      for (const t of chips) assert(t && t.indexOf('trait') !== 0, 'the chip is translated, not a raw key: ' + t);
     }
   });
 

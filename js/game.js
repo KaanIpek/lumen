@@ -2059,7 +2059,7 @@
       this.damageFlash = 0.8;
       Audio && this._sfx('crash');
       haptic(30);
-      this.particles.burst(p.x, p.y, 18, { color: this.dangerColor(1), spMax: 240, lifeMax: 0.6, sizeMax: 5, glow: true });
+      this.particles.burst(p.x, p.y, 18, { color: this.gateColor(1), spMax: 240, lifeMax: 0.6, sizeMax: 5, glow: true });
       // nudge the player back to the nearest opening and clear what's on top
       let target = this.playTop + this.playH * 0.5;
       let best = 1e9;
@@ -3639,7 +3639,10 @@
 
     drawTraps(ctx) {
       if (!this.traps.length) return;
-      const hot = this.dangerColor(1);
+      // Same family as the bars: a world with rose gates and red spikes reads as
+      // two games. Falls back to the fixed danger hue under the colour-vision
+      // presets exactly as the bars do.
+      const hot = this.gateColor(1);
       ctx.save();
       for (const t of this.traps) {
         // While arming, a trap is drawn hollow and pulsing: you always see it
@@ -3950,6 +3953,26 @@
       const l = 60 + (Store.highContrast ? 10 : 0);
       return `hsla(${h} 95% ${l}% / ${a == null ? 1 : a})`;
     }
+    // The colour of the BARS, which is the world's, not a constant.
+    //
+    // Choosing a world used to change the sky and nothing else -- the thing you
+    // spend the whole run looking at was the same red in all seventeen. It is
+    // the map's `gate` hue now, so a world you bought actually looks like one.
+    //
+    // Two rules keep that from costing anything:
+    //   - Colour-vision presets and HIGH CONTRAST fall straight back to the
+    //     fixed danger hue. Those settings exist so "this will kill you" is one
+    //     colour everywhere, and a decoration must never outrank that.
+    //   - `gate` is authored per map rather than reused from `wall` (the
+    //     corridor edge), because three of the wall hues sit within 30 degrees
+    //     of the gold mote -- rooftops is 10 degrees away. A test holds every
+    //     gate hue at arm's length from the reward.
+    gateColor(a) {
+      if (Store.highContrast || Store.colorblind !== 'off') return this.dangerColor(a);
+      const g = this.world && this.world.gate;
+      if (g == null) return this.dangerColor(a);
+      return `hsla(${g} 92% 62% / ${a == null ? 1 : a})`;
+    }
 
     // ---- render ----------------------------------------------------------
     render() {
@@ -4165,7 +4188,7 @@
       ctx.save();
       const r = Math.min(8, this.obstacleW * 0.4);
       // colours are identical for every obstacle this frame — build the strings once
-      const colBody = this.dangerColor(0.9), colLip = this.dangerColor(1);
+      const colBody = this.gateColor(0.9), colLip = this.gateColor(1);
       // white lips give the opening a luminance edge that survives any colour deficiency
       const crispLips = Store.highContrast || Store.colorblind !== 'off';
       // Gates glow on EVERY quality tier. The orb, the motes and the walls all
@@ -4225,9 +4248,13 @@
 
       {
         const halo = barGlowSprite(colBody);
-        const hpad = this.obstacleW * halo._pad * (richGlow ? 1 : 0.6);
+        // Toned down from 1.0/0.6. The bars were wearing a halo wide enough to
+        // wash into each other and into the sky, which read as fog rather than
+        // as light coming off an object -- and it buried the painted scenes the
+        // worlds were given. The bar still throws light; it no longer floods.
+        const hpad = this.obstacleW * halo._pad * (richGlow ? 0.55 : 0.35);
         ctx.globalCompositeOperation = 'lighter';
-        const base = richGlow ? 1 : 0.7;
+        const base = richGlow ? 0.62 : 0.45;
         for (const s of segs) {
           // A stub of a bar — the sliver above a gap that sits near the corridor
           // edge — used to stretch the halo into a wide horizontal smear: the
@@ -4285,7 +4312,9 @@
       // and a hot additive kiss along those lips so the opening glows too
       if (richGlow) {
         ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = withAlpha(colLip, 0.5);
+        // 0.5 -> 0.32 for the same reason as the halo above: the opening should
+        // be edged in light, not smeared with it.
+        ctx.fillStyle = withAlpha(colLip, 0.32);
         for (const ob of this.obstacles) {
           ctx.globalAlpha = ob._a;
           for (const g of ob.gaps) {
