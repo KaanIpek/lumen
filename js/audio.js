@@ -278,6 +278,34 @@
       snare: [4, 12], open: [14],
     },
 
+    // The hour before sunrise, written the way that hour sounds: nothing agrees
+    // with anything else about where the bar is.
+    //
+    //   QUARTAL harmony -- [root, +5, +10], two stacked fourths, no third
+    //   anywhere. Every other song here is triadic, or bare fifths, or
+    //   sus4-with-a-fifth; nothing stacks two fourths, and a fourth stack cannot
+    //   cadence. The roots move by whole tone and by fourth and NEVER by
+    //   semitone, so there is no leading note and nothing to resolve to. It
+    //   cycles, the way a dawn does.
+    //
+    //   Every pattern is a different length against the 64-step loop:
+    //     hat 6   -> a 6-6-4 limp; no other song uses divisor 6
+    //     bass 5  -> five bars to come back round; every other bass is sixteen
+    //     arp 7   -> steps one 16th every four bars, realigns after seven passes
+    //     lead 20 -> lands four steps later each section, home after twenty bars
+    //   No snare: a backbeat promises somebody is keeping time with you, and
+    //   this is an hour with nobody in it.
+    ashrise: {
+      bpm: 86, wave: 'triangle', sub: 'sine',
+      kick: [0, 10], hat: 6,
+      A: [[45, 50, 55], [47, 52, 57], [50, 55, 60], [52, 57, 62]],
+      B: [[52, 57, 62], [50, 55, 60], [45, 50, 55], [43, 48, 53]],
+      arp: [0, 1, 2, 1, 2, 0, 1],
+      lead: [N, N, N, N, 12, N, N, N, N, N, N, N, 17, N, 14, N, N, N, N, N],
+      bass: [0, N, 7, N, N],
+      snare: [], open: [15],
+    },
+
     // ---- a MODE's music, not a world's ---------------------------------------
     // Claimed by ABANDON HOPE through `mode.song`, so it follows you onto every
     // map. Everything here is chosen to withhold:

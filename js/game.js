@@ -755,6 +755,140 @@
       branch(-w * 0.02, h * 0.66, -0.9, h * 0.20, 2);   // main tree, lower left
       branch(w * 1.02, h * 0.24, Math.PI + 0.55, h * 0.14, 1);  // a reaching arm, upper right
     },
+    // The hour before sunrise over a valley of tuff. Six layers, baked once, so
+    // it costs nothing per frame -- the same deal rooftops and sakura get.
+    //
+    // The lint this obeys (a test enforces it): no fill here is within 20 degrees
+    // of a REWARD hue or 28 of a DANGER hue unless it is dark (L <= 40) or
+    // near-neutral (S <= 25), and nothing is drawn with 'lighter'. Every object
+    // that can kill or reward you ADDS light; a backdrop never does. This world
+    // has small bright WARM points in it -- the burners -- which is the exact
+    // shape of a gold mote, so it is held to the rule: hue 26 is 24 degrees off
+    // gold, at a third of a mote's alpha, four times its width, and coreless.
+    ashrise(x, w, h) {
+      // 1. VALLEY MIST — one band, and it is what turns a row of silhouettes
+      //    into a valley.
+      const mist = x.createLinearGradient(0, h * 0.30, 0, h * 0.50);
+      mist.addColorStop(0, 'hsla(228 40% 62% / 0.14)');
+      mist.addColorStop(1, 'hsla(228 40% 62% / 0)');
+      x.fillStyle = mist; x.fillRect(0, h * 0.30, w, h * 0.20);
+
+      // 2. MORNING STAR — a dot and a four-point flare. Neutral, so it carries
+      //    no colour signal at all.
+      const sx2 = w * 0.16, sy2 = h * 0.08, sf = h * 0.018;
+      x.fillStyle = 'hsl(0 0% 96%)';
+      x.beginPath(); x.arc(sx2, sy2, Math.max(1, h * 0.004), 0, TAU); x.fill();
+      x.strokeStyle = 'hsla(0 0% 96% / 0.5)'; x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(sx2 - sf, sy2); x.lineTo(sx2 + sf, sy2);
+      x.moveTo(sx2, sy2 - sf); x.lineTo(sx2, sy2 + sf);
+      x.stroke();
+
+      // 3. BALLOONS — fourteen, three depths, all above the ridge line. Far ones
+      //    are flat and cold so depth reads; the five nearest get a gradient,
+      //    two gores and a lit burner.
+      // Radii are ~60% of the drafted ones. At a phone's height the near
+      // balloons were 175px across and stopped reading as distance -- they were
+      // in the corridor rather than behind it.
+      const B = [
+        [0.07, 0.06, 0.009, 0], [0.19, 0.04, 0.008, 0], [0.32, 0.08, 0.010, 0],
+        [0.46, 0.04, 0.008, 0], [0.60, 0.08, 0.009, 0], [0.75, 0.05, 0.008, 0],
+        [0.90, 0.07, 0.010, 0],
+        [0.13, 0.13, 0.014, 1], [0.53, 0.12, 0.015, 1],
+        [0.16, 0.19, 0.020, 2], [0.34, 0.17, 0.021, 2], [0.50, 0.20, 0.019, 2],
+        [0.70, 0.16, 0.022, 2], [0.87, 0.19, 0.020, 2],
+      ];
+      for (let i = 0; i < B.length; i++) {
+        const bx = w * B[i][0], by = h * B[i][1], r = h * B[i][2], dep = B[i][3];
+        if (dep === 2) {
+          const g2 = x.createLinearGradient(bx, by - r * 1.1, bx, by + r * 1.2);
+          g2.addColorStop(0, 'hsla(24 72% 52% / 0.92)');
+          g2.addColorStop(1, 'hsla(342 50% 34% / 0.92)');
+          x.fillStyle = g2;
+        } else {
+          x.fillStyle = dep === 1 ? 'hsla(250 26% 30% / 0.62)' : 'hsla(250 22% 26% / 0.45)';
+        }
+        x.beginPath();                                        // dome + taper to the mouth
+        x.ellipse(bx, by, r, r * 1.12, 0, Math.PI, TAU);
+        x.moveTo(bx - r, by);
+        x.quadraticCurveTo(bx - r * 0.55, by + r * 0.9, bx - r * 0.22, by + r * 1.24);
+        x.lineTo(bx + r * 0.22, by + r * 1.24);
+        x.quadraticCurveTo(bx + r * 0.55, by + r * 0.9, bx + r, by);
+        x.closePath(); x.fill();
+        if (dep === 2) {
+          x.strokeStyle = 'hsla(34 60% 70% / 0.35)';          // two gores
+          x.lineWidth = Math.max(1, r * 0.09);
+          for (const m of [-0.45, 0.45]) {
+            x.beginPath();
+            x.moveTo(bx + r * m, by - r * 0.95);
+            x.quadraticCurveTo(bx + r * m * 1.6, by, bx + r * m * 0.5, by + r * 1.2);
+            x.stroke();
+          }
+          // THE BURNER. The one warm light up here, and what makes these read as
+          // balloons rather than as circles. Deliberately wide, soft and
+          // CORELESS: a gold mote is a small bright point inside a tight halo,
+          // so this is built to be its opposite at every scale. Hue 26 is 24
+          // degrees off gold and 34 off danger — it clears the same rule the
+          // dust hue does, at half a mote's peak alpha and four times its width.
+          const bgr = x.createRadialGradient(bx, by + r * 0.55, 0, bx, by + r * 0.55, r * 0.95);
+          bgr.addColorStop(0, 'hsla(26 90% 60% / 0.30)');
+          bgr.addColorStop(1, 'hsla(26 90% 60% / 0)');
+          x.fillStyle = bgr;
+          x.beginPath(); x.arc(bx, by + r * 0.55, r * 0.95, 0, TAU); x.fill();
+        }
+        x.fillStyle = 'hsla(250 30% 12% / 0.9)';              // basket on two lines
+        x.fillRect(bx - r * 0.16, by + r * 1.5, r * 0.32, r * 0.24);
+        x.strokeStyle = 'hsla(250 30% 12% / 0.8)'; x.lineWidth = 1;
+        x.beginPath();
+        x.moveTo(bx - r * 0.16, by + r * 1.24); x.lineTo(bx - r * 0.12, by + r * 1.5);
+        x.moveTo(bx + r * 0.16, by + r * 1.24); x.lineTo(bx + r * 0.12, by + r * 1.5);
+        x.stroke();
+      }
+
+      // 4. THE RIDGE — one filled path, three humps, and everything below it is
+      //    flat and dark. That flatness is the readability argument: the whole
+      //    lower two thirds of the frame, which is most of the corridor, has
+      //    nothing in it.
+      x.fillStyle = 'hsla(248 38% 9% / 0.95)';
+      x.beginPath();
+      x.moveTo(0, h * 0.36);
+      x.quadraticCurveTo(w * 0.18, h * 0.30, w * 0.36, h * 0.35);
+      x.quadraticCurveTo(w * 0.55, h * 0.40, w * 0.74, h * 0.33);
+      x.quadraticCurveTo(w * 0.88, h * 0.29, w, h * 0.34);
+      x.lineTo(w, h); x.lineTo(0, h); x.closePath(); x.fill();
+
+      // 5. FAIRY CHIMNEYS — the silhouette that exists in no other world and in
+      //    very few other games: a WAISTED cone (not a triangle) wearing a
+      //    basalt cap WIDER than the neck it sits on. Nine, three depth tiers.
+      //    Their caps break the ridge line into the amber band; their bodies go
+      //    down into the dark.
+      const CX = [0.05, 0.13, 0.22, 0.36, 0.44, 0.58, 0.71, 0.84, 0.94];
+      const TIER = [2, 1, 2, 0, 1, 0, 2, 1, 0];       // 0 = nearest
+      for (let i = 0; i < CX.length; i++) {
+        const t = TIER[i];
+        // Drafted at base 0.44-0.64h and ch up to 0.30h, which hung them halfway
+        // down the screen in a lighter colour than the ridge -- pale wedges
+        // standing in the corridor rather than a skyline behind it. Their feet
+        // now sit just under the ridge line and only the caps rise into the
+        // amber band; everything below 0.42h is flat dark.
+        const base = h * (0.36 + 0.025 * (2 - t));
+        const ch = h * (0.13 - 0.028 * t);
+        const bw = h * (0.020 - 0.005 * t);
+        const bx = w * CX[i];
+        x.fillStyle = t === 0 ? 'hsla(248 35% 8% / 0.96)'
+          : t === 1 ? 'hsla(249 32% 12% / 0.85)' : 'hsla(250 30% 15% / 0.70)';
+        x.beginPath();
+        x.moveTo(bx - bw, base);
+        x.quadraticCurveTo(bx - bw * 0.35, base - ch * 0.55, bx - bw * 0.16, base - ch);
+        x.lineTo(bx + bw * 0.16, base - ch);
+        x.quadraticCurveTo(bx + bw * 0.35, base - ch * 0.55, bx + bw, base);
+        x.closePath(); x.fill();
+        x.beginPath();                                        // the hat
+        x.ellipse(bx, base - ch * 1.02, bw * 0.52, bw * 0.20, 0.12, 0, TAU);
+        x.fill();
+      }
+    },
+
   };
 
   class Background {
@@ -778,6 +912,20 @@
     update(dt, scroll) {
       this.t += dt;
       const M = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
+      if (M && M.dustMode === 'lift') {
+        // Sparks RISE. The only dust in the game that goes against the fall, and
+        // it is the world's second motion: the balloons behind it are baked and
+        // still, so this is what makes the air move -- and it teaches ALOFT for
+        // free, because up is where the air is going.
+        const calm = calmVisuals() ? 0.5 : 1;
+        for (const d of this.dots) {
+          d.x -= scroll * d.depth * dt * 0.35;
+          d.y -= (10 + 22 * d.depth) * dt * calm;
+          d.tw += dt * (1.1 + d.depth) * calm;
+          if (d.y < -6 || d.x < -6) { d.y = this.H + 6; d.x = rand(0, this.W + 40); }
+        }
+        return;
+      }
       if (M && M.dustMode === 'petal') {
         // Petals FALL. They still ride the scroll a little so the world keeps
         // moving past, but the read is downward drift with a sideways sway —
@@ -868,6 +1016,23 @@
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const MD = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
+      if (MD && MD.dustMode === 'lift') {
+        // A short warm lozenge and the tail it left, not a dot: two fillRects,
+        // no path and no save/restore, which is CHEAPER than the arc+fill the
+        // default does. One fillStyle for the whole field; depth rides alpha.
+        ctx.fillStyle = `hsl(${lerp(MD.dust, 300, flow)} 90% ${72 + flow * 12}%)`;
+        const sway = calmVisuals() ? 0 : 1;
+        for (const d of this.dots) {
+          const lx = d.x + Math.sin(d.tw * 1.1) * 5 * d.depth * sway;
+          const bw = Math.max(1, d.r * 0.7), bh = d.r * 2.2;
+          ctx.globalAlpha = d.depth * 0.8;
+          ctx.fillRect(lx, d.y, bw, bh);
+          ctx.globalAlpha = d.depth * 0.28;
+          ctx.fillRect(lx, d.y + bh, bw, bh * 1.6);
+        }
+        ctx.restore();
+        return;
+      }
       if (MD && MD.dustMode === 'petal') {
         // each mote of dust is a petal: a pointed oval, tumbling as it sways
         for (const d of this.dots) {
@@ -1635,6 +1800,10 @@
       const flt = this.mode && this.mode.fault;
       this.nerve = flt ? flt.start : 0;
       this.heat = 0;
+      // ALOFT's wind is per-RUN state, and this is the one function every entry
+      // path reaches after the mode is known. Opens at 1 -- the calm line -- and
+      // eases to whatever your altitude asks for over 0.30s.
+      this.wind = 1;
     }
 
     // How long a single flow can last. Long enough to feel like a reward,
@@ -1688,11 +1857,39 @@
       return this.CROSS_TIME * (1 + k * k) / (2 * k);
     }
 
+    // ALOFT: how hard the world is being pushed past you right now. 1 in every
+    // other mode, so this is byte-identical for the other eleven.
+    //
+    // ##########################################################
+    // # THIS IS THE ONLY THING WIND MULTIPLIES, BESIDES PAYOUT. #
+    // #                                                        #
+    // # Wind must NEVER reach spawnInterval. It is the obvious #
+    // # next "improvement" -- faster should mean more gates --  #
+    // # and it is exactly where this mode becomes an            #
+    // # unavoidable death: spawnInterval floors at 0.80s, and   #
+    // # 0.80 / 1.40 = 0.57s between two gates whose centres can #
+    // # be maxJump (0.62 playH) apart, which takes 0.61s to     #
+    // # cross at NORMAL. No input avoids that.                  #
+    // #                                                        #
+    // # Wind must also never reach gapFrac, gapMul, makeSpec,   #
+    // # maxJump or moveAmp. The corridor's SPATIAL geometry     #
+    // # never reads it, which is why every threadability test   #
+    // # still constrains this mode exactly as it constrains     #
+    // # Classic.                                                #
+    // ##########################################################
+    get windMul() {
+      const wd = this.mode && this.mode.wind;
+      if (!wd || this.attract) return 1;   // the menu demo is a background, not a run
+      return this.wind || 1;
+    }
+
     get scrollSpeed() {
       // dev freeze: hold the world still so a gate can be inspected
       if (LUMEN.Cheats && LUMEN.Cheats.freeze && LUMEN.Cheats.available) return 0;
-      // the tutorial runs gently and never ramps — it's for learning, not pressure
-      if (this.tutorial) return (this.W * 0.62) / 3.2;
+      const wnd = this.windMul;
+      // the tutorial runs gently and never ramps — it's for learning, not pressure.
+      // ALOFT's last lesson has to BE the mode, so the wind reaches it too.
+      if (this.tutorial) return (this.W * 0.62) / 3.2 * wnd;
       // reaction time from ~2.7s down to ~1.5s -> constant across widths
       const d = this.diff || DIFFICULTY.normal;
       const m = this.mode;
@@ -1703,7 +1900,7 @@
       // footing: >1 is faster, <1 is more reading time.
       const reaction = clamp(2.7 - t * 0.0075, 1.25, 2.7) * d.react
         / ((m ? m.speed : 1) * ((this.world && this.world.speed) || 1));
-      return (this.W * 0.62) / reaction;
+      return (this.W * 0.62) / reaction * wnd;
     }
     get spawnInterval() {
       if (this.tutorial) return 2.0;
@@ -2706,6 +2903,16 @@
         else if (r < pDouble + pMove + pPulse) kind = 'pulsing';
       }
 
+      // ASHRISE / `buoyant`: nothing in this corridor sits still. A plain gate
+      // here is not still -- it floats. The archetype MIX is untouched: double
+      // and pulsing keep Classic's schedule and Classic's exact share, so every
+      // threadability and difficulty guarantee in this file still holds. What
+      // changes is that the STILL gate stops being still, which is a texture and
+      // not a difficulty. Before `from` seconds the world is Classic, so the
+      // player is given a still reference first.
+      const ri = (o.rise && e >= o.rise.from) ? o.rise : null;
+      if (ri && kind === 'normal') kind = 'moving';
+
       const spec = {
         kind, gapH, moveAmp: 0, pulseAmp: 0,
         movePhase: rr(0, TAU), moveSpeed: rr(1.1, 1.9),
@@ -2715,7 +2922,33 @@
       // motion — otherwise a moving gap slides off the playfield and the only way
       // through is a sliver against the wall (an unavoidable-looking death).
       let pad = gapH * 0.5 + 0.02;
-      if (kind === 'moving') { spec.moveAmp = rr(0.06, 0.13); pad += spec.moveAmp; }
+      if (kind === 'moving') {
+        if (ri) {
+          // A wider, far slower swing than a Classic moving gate: period
+          // 8.4-15.7s against Classic's 3.3-5.7s. Every opening enters the frame
+          // at its RESTING height and then rises, monotonically, for the whole
+          // ~1.1s it is on screen -- it never reverses while you are looking at
+          // it, because the first reversal is a quarter period (2.1-3.9s) after
+          // it appeared.
+          //
+          // `e` is this.elapsed at the moment of the spawn, and folding it into
+          // the phase is the whole trick: the gate is animated against ABSOLUTE
+          // elapsed, so a constant phase would land the sine somewhere arbitrary
+          // by the time the gate actually appeared. This way sin lands on 0 at
+          // first sight and goes negative, and -y is up, so the opening rises --
+          // like the balloons behind it. The reward rides along for free: a mote
+          // attached to a gap follows gap.y.
+          spec.moveAmp = rr(ri.amp[0], ri.amp[1]);
+          spec.moveSpeed = rr(ri.speed[0], ri.speed[1]);
+          spec.movePhase = Math.PI - e * spec.moveSpeed + rr(-0.25, 0.25);
+        } else {
+          spec.moveAmp = rr(0.06, 0.13);
+        }
+        // The line that makes a deeper amplitude free and safe: the full travel
+        // is reserved before the centre is clamped into it, exactly as it is for
+        // Classic's moving gates.
+        pad += spec.moveAmp;
+      }
       if (kind === 'pulsing') spec.pulseAmp = 0.36;
       if (kind === 'double') {
         spec.doubleGapH = gapH * 0.62;
@@ -2862,7 +3095,7 @@
         // there is nothing for it to protect against there anyway.
         : Game.makeSpec(this.rng, this.elapsed, this.lastC,
           { gapMul: this.gapMul, minGap: this.minGapFrac,
-            rampT: this.rampT });
+            rampT: this.rampT, rise: this.world && this.world.rise });
       this.lastC = spec.c;
       this._lastSpecTight = !!spec.tight;
 
@@ -3056,6 +3289,21 @@
       this.scoreMusic();
       this.elapsed += gdt;
       if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - realDt);
+      // ALOFT: altitude is a throttle. This is the entire mechanic -- no button,
+      // no hold, no second meaning for the tap. The orb's own height, which the
+      // one input was already deciding, is read as a number.
+      //
+      // It samples the ORB and nothing else, so nothing off-screen can change the
+      // world's speed, and the 0.30s ease means it never snaps. `gdt` is
+      // deliberate: slow-mo slows the wind too, so flow still feels like flow.
+      // This must run BEFORE scrollSpeed is read or the frame uses last frame's
+      // wind.
+      const _wd = this.mode && this.mode.wind;
+      if (_wd && !this.attract && this.playH > 0) {
+        const alt = clamp((this.playBottom - this.player.y) / this.playH, 0, 1);
+        const want = _wd.lo + (_wd.hi - _wd.lo) * alt;
+        this.wind += (want - this.wind) * Math.min(1, gdt / _wd.ease);
+      }
       const scroll = this.scrollSpeed;
       this.distance += scroll * gdt;
       this.score += gdt * 8; // survival points
@@ -3163,7 +3411,7 @@
         // passed scoring (+ tight "CLOSE!" near-miss reward)
         if (!ob.passed && ob.x + ob.w < p.x - p.r) {
           ob.passed = true;
-          this.score += 6;
+          this.score += this.windPay(6);
           // Both gate-counting lessons score here. The mode lesson counts gates
           // too, and listing only 'thread' left it stuck on 0/6 forever with no
           // way to finish the tutorial.
@@ -3173,7 +3421,7 @@
           const edgeDist = Math.min(Math.abs(p.y - (g.y - g.h * 0.5)), Math.abs(p.y - (g.y + g.h * 0.5)));
           if (edgeDist < p.r * (this.mod ? this.mod.closeWindow : 2.0)) {
             // threaded it tight — bonus, keep the combo breathing, extra juice
-            this.score += (this.mod ? this.mod.closeBonus : 8);
+            this.score += this.windPay(this.mod ? this.mod.closeBonus : 8);
             this.nearMissRun++;
             this.texts.add(p.x + 28, p.y - p.r - 14, T('close') + ' +' + (this.mod ? this.mod.closeBonus : 8), 'hsl(190 100% 70%)', 15);
             this.particles.burst(ob.x + ob.w, p.y, 8, { color: 'hsl(190 100% 72%)', spMax: 140, lifeMax: 0.5, sizeMax: 3.5 });
@@ -3851,7 +4099,7 @@
       if (m.bounty) this.motesRun += 1;
       const mult = this.comboMult();
       const pts = Math.round(10 * mult * (m.bounty ? 2 : 1) * ((this.world && this.world.moteWorth) || 1));
-      this.score += pts;
+      this.score += this.windPay(pts);
 
       const col = m.bounty ? 'hsl(45 100% 66%)' : this.moteColor();
       this.texts.add(m.x, m.y - 18, '+' + pts, col, (16 + Math.min(10, mult)) * (m.bounty ? 1.35 : 1));
@@ -3921,6 +4169,12 @@
       this.combo = 0;
       this.flowActive = false;
     }
+    // ALOFT: what an award is worth right now. 1 everywhere else. Applied to the
+    // things you EARN by acting -- motes and gates -- and deliberately NOT to
+    // the per-second survival trickle, which would pay for sitting still at
+    // altitude.
+    windPay(n) { return this.mode && this.mode.wind ? Math.round(n * this.wind) : n; }
+
     comboMult() { return clamp(1 + Math.floor(this.combo / 4), 1, 12); }
 
     // ---- colors ----------------------------------------------------------
@@ -4278,12 +4532,12 @@
 
       // bright inner lips framing every opening
       ctx.fillStyle = crispLips ? '#ffffff' : colLip;
-      const torii = !crispLips && this.world && this.world.gateCap === 'torii';
+      const cap = crispLips ? null : ((this.world && this.world.gateCap) || null);
       for (const ob of this.obstacles) {
         ctx.globalAlpha = ob._a;
         for (const g of ob.gaps) {
           const top = g.y - g.h * 0.5, bot = g.y + g.h * 0.5;
-          if (torii) {
+          if (cap === 'torii') {
             // The bars keep their danger colour — that is a promise — but their
             // ENDS become torii lintels: a kasagi that overhangs the pillar
             // with upswept tips, and a slimmer nuki beam beneath it. Shape is
@@ -4301,6 +4555,30 @@
               ctx.fillRect(ob.x - ov, bot + 4, 3, 6);
               ctx.fillRect(ob.x + ob.w + ov - 3, bot + 4, 3, 6);
               this.roundRect(ctx, ob.x - ov * 0.4, bot - 5, ob.w + ov * 0.8, 3, 1.5); ctx.fill();
+            }
+          } else if (cap === 'capstone') {
+            // The bars keep their hue -- that is a promise -- but their ENDS
+            // become fairy chimneys: a narrow neck and a domed slab WIDER than
+            // it, with an underside bulge so it reads as a boulder and not a
+            // beam. Shape is free where hue is not, and every opening in the
+            // corridor is framed by two of them, so the theme reaches the thing
+            // the player is actually looking at. Skipped under colourblind and
+            // high contrast, whose white lips are doing accessibility work --
+            // the same contract torii has.
+            const ov = Math.max(4, ob.w * 0.30);
+            if (top > this.playTop + 2) {
+              ctx.fillRect(ob.x + ob.w * 0.30, top - 11, ob.w * 0.40, 5);
+              this.roundRect(ctx, ob.x - ov, top - 7, ob.w + ov * 2, 6, 3); ctx.fill();
+              ctx.beginPath();
+              ctx.ellipse(ob.x + ob.w * 0.5, top - 1, (ob.w + ov * 2) * 0.46, 2.5, 0, 0, Math.PI);
+              ctx.fill();
+            }
+            if (bot < this.playBottom - 2) {
+              ctx.fillRect(ob.x + ob.w * 0.30, bot + 6, ob.w * 0.40, 5);
+              this.roundRect(ctx, ob.x - ov, bot + 1, ob.w + ov * 2, 6, 3); ctx.fill();
+              ctx.beginPath();
+              ctx.ellipse(ob.x + ob.w * 0.5, bot + 1, (ob.w + ov * 2) * 0.46, 2.5, 0, Math.PI, TAU);
+              ctx.fill();
             }
           } else {
             if (top > this.playTop + 2) { this.roundRect(ctx, ob.x, top - 5, ob.w, 5, 2); ctx.fill(); }

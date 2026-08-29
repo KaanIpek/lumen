@@ -4843,8 +4843,13 @@
   // Every themed map rides an EXISTING, tested trait — a new mechanic smuggled
   // in through the catalogue would dodge every gameplay test in this file.
   test('Themes: new worlds reuse tested traits only', () => {
+    // `buoyant` is the twelfth and the first added since this guard was written:
+    // ASHRISE, where every plain gate floats upward instead of standing still.
+    // It earns its place on the list by having its own tests below -- the travel
+    // is reserved before the centre is clamped, and a gate never reverses while
+    // it is on screen.
     const KNOWN = ['none', 'updraft', 'sink', 'tide', 'sparse', 'heavy', 'haunted',
-                   'stately', 'weightless', 'breathing', 'leaden'];
+                   'stately', 'weightless', 'breathing', 'leaden', 'buoyant'];
     for (const m of L.Cosmetics.MAPS) {
       assert(KNOWN.indexOf(m.trait) >= 0, m.id + ' has unknown trait "' + m.trait + '"');
     }
@@ -6277,6 +6282,155 @@
       const chips = [...c.querySelectorAll('.map-trait')].map((x) => x.textContent.trim());
       assert(chips.length > 0, 'a world card names at least one rule');
       for (const t of chips) assert(t && t.indexOf('trait') !== 0, 'the chip is translated, not a raw key: ' + t);
+    }
+  });
+
+  // ---- ALOFT and ASHRISE ----------------------------------------------------
+  test('ALOFT: wind moves the world and the payout, and nothing spatial', () => {
+    // This is the guard the mode's own comment points at. If wind ever reaches
+    // spawnInterval, gapFrac or gapMul, the corridor can serve a gate pair no
+    // input can answer: spawnInterval floors at 0.80s and 0.80/1.40 = 0.57s,
+    // while a maxJump crossing takes ~0.61s at NORMAL.
+    freshStorage();
+    L.Store.difficulty = 'normal';
+    L.Modes.setCurrent('aloft');
+    const g = newGame(390, 844);
+    g.start();
+    const read = () => ({ spawn: g.spawnInterval, gapFrac: g.gapFrac, gapMul: g.gapMul, scroll: g.scrollSpeed });
+    g.wind = 1;    const calm = read();
+    g.wind = 1.40; const gale = read();
+    g.wind = 0.78; const still = read();
+    assert(gale.spawn === calm.spawn && still.spawn === calm.spawn,
+      'spawnInterval never reads the wind');
+    assert(gale.gapFrac === calm.gapFrac && still.gapFrac === calm.gapFrac, 'gapFrac never reads the wind');
+    assert(gale.gapMul === calm.gapMul && still.gapMul === calm.gapMul, 'gapMul never reads the wind');
+    // …but scroll does, in both directions
+    assert(gale.scroll > calm.scroll && still.scroll < calm.scroll,
+      'scrollSpeed rides the wind (' + still.scroll.toFixed(0) + ' < ' + calm.scroll.toFixed(0) + ' < ' + gale.scroll.toFixed(0) + ')');
+    assert(Math.abs(gale.scroll / calm.scroll - 1.40) < 1e-6, 'and exactly proportionally');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
+  test('ALOFT: altitude drives the wind, and only the orb does', () => {
+    freshStorage();
+    L.Modes.setCurrent('aloft');
+    const g = newGame(390, 844);
+    g.start();
+    // Pin the orb each frame at a height it can actually survive: parking it 4px
+    // off the wall kills the run, updatePlay stops, and the wind freezes at
+    // whatever it happened to be -- which is how this test first "passed" a
+    // floor reading of 1.396.
+    // Each reading gets a FRESH run with the corridor cleared. Holding the orb at
+    // one height for five seconds otherwise flies it straight into a gate: the
+    // run ends, updatePlay stops, and the wind freezes at whatever it was --
+    // which is how the floor first read 1.363, a roof value.
+    const hold = (frac) => {
+      g.start();
+      const y = g.playBottom - g.playH * frac;
+      let w = 0;
+      for (let i = 0; i < 300; i++) {
+        g.obstacles.length = 0; g.traps.length = 0;
+        g.player.y = y; g.player.vy = 0;
+        g.update(1 / 60);
+        w = g.wind;
+      }
+      return w;
+    };
+    const md = L.Modes.def('aloft');
+    const hi = hold(0.94), lo = hold(0.06), mid = hold(0.50);
+    const want = (f) => md.wind.lo + (md.wind.hi - md.wind.lo) * f;
+    assert(Math.abs(hi - want(0.94)) < 0.05, 'near the roof the wind is near hi (' + hi.toFixed(3) + ')');
+    assert(Math.abs(lo - want(0.06)) < 0.05, 'near the floor it is near lo (' + lo.toFixed(3) + ')');
+    assert(Math.abs(mid - want(0.50)) < 0.05, 'mid-corridor sits on the line (' + mid.toFixed(3) + ')');
+    assert(lo < mid && mid < hi, 'and it is monotonic in altitude');
+    // The number that actually matters: the mode's 0.92 speed and the wind's
+    // 1.09 at mid-corridor cancel, so a player who does not manage altitude at
+    // all is playing Classic's pace rather than being punished for it.
+    const net = md.speed * want(0.50);
+    assert(Math.abs(net - 1) < 0.01,
+      'mid-corridor is Classic pace once the mode speed is applied (' + net.toFixed(4) + ')');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
+  test('ALOFT: every other mode is untouched by the wind', () => {
+    freshStorage();
+    for (const id of L.Modes.MODES.map((m) => m.id)) {
+      if (id === 'aloft') continue;
+      L.Modes.setCurrent(id);
+      const g = newGame(390, 844);
+      g.start();
+      assert(g.windMul === 1, id + ' has no wind (got ' + g.windMul + ')');
+      assert(g.windPay(100) === 100, id + ' pays flat (got ' + g.windPay(100) + ')');
+      g.toMenu();
+    }
+    L.Modes.setCurrent('classic');
+  });
+
+  test('ASHRISE: gates float, but only after the player has seen a still one', () => {
+    const world = L.Cosmetics.MAPS.find((m) => m.id === 'ashrise');
+    assert(!!world && world.rise, 'ashrise declares a rise');
+    const GAME = newGame(390, 844);
+    const rng = (() => { let s = 7; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; })();
+    // before `from`, plain gates stay plain
+    let stillPlain = 0;
+    for (let i = 0; i < 40; i++) {
+      const spec = GAME.constructor.makeSpec(rng, 3, 0.5, { gapMul: 1, minGap: 0.17, rise: world.rise });
+      if (spec.kind === 'normal') stillPlain++;
+    }
+    assert(stillPlain > 0, 'before the rise begins, some gates are still');
+    // after it, nothing is still
+    let plainAfter = 0;
+    for (let i = 0; i < 60; i++) {
+      const spec = GAME.constructor.makeSpec(rng, 30, 0.5, { gapMul: 1, minGap: 0.17, rise: world.rise });
+      if (spec.kind === 'normal') plainAfter++;
+    }
+    assert(plainAfter === 0, 'after it, nothing in the corridor sits still (' + plainAfter + ' still gates)');
+  });
+
+  test('ASHRISE: a floating gate reserves its whole travel', () => {
+    // The fairness line: pad += moveAmp before the centre is clamped, so a
+    // deeper swing can never walk an opening off the playfield.
+    const world = L.Cosmetics.MAPS.find((m) => m.id === 'ashrise');
+    const GAME = newGame(390, 844);
+    const rng = (() => { let s = 11; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; })();
+    for (let i = 0; i < 300; i++) {
+      const e = 20 + i;
+      const spec = GAME.constructor.makeSpec(rng, e, 0.5, { gapMul: 1.08, minGap: 0.17, rise: world.rise });
+      const amp = spec.moveAmp || 0;
+      const half = spec.gapH * 0.5;
+      assert(spec.c - amp - half >= -1e-9, 'top of the swing stays on the field (c=' + spec.c.toFixed(3) + ' amp=' + amp.toFixed(3) + ')');
+      assert(spec.c + amp + half <= 1 + 1e-9, 'bottom of the swing stays on the field');
+    }
+  });
+
+  test('ASHRISE: a floating gate never reverses while it is on screen', () => {
+    // It enters at its resting height and rises for the whole time you can see
+    // it -- the first reversal is a quarter period away, and a quarter period is
+    // at least 2.0s against roughly 1.1s of sight time.
+    const w = L.Cosmetics.MAPS.find((m) => m.id === 'ashrise');
+    const slowest = w.rise.speed[1];               // fastest angular speed
+    const quarterPeriod = (Math.PI / 2) / slowest;
+    assert(quarterPeriod > 1.6,
+      'the first reversal is ' + quarterPeriod.toFixed(2) + 's after it appears, longer than it is on screen');
+  });
+
+  test('ASHRISE and ALOFT are in the catalogue properly', () => {
+    const w = L.Cosmetics.MAPS.find((m) => m.id === 'ashrise');
+    assert(!!w, 'the world exists');
+    assert(typeof w.gate === 'number', 'and it declares a gate hue');
+    assert(L.i18n.t('cos_ashrise') !== 'cos_ashrise', 'the world is named');
+    assert(L.i18n.t('cosd_ashrise') !== 'cosd_ashrise', 'and described');
+    assert(L.i18n.t('trait_buoyant') !== 'trait_buoyant', 'its trait has a label');
+    const m = L.Modes.def('aloft');
+    assert(!!m && m.wind, 'the mode exists and carries wind');
+    assert(L.i18n.t('mode_aloft') !== 'mode_aloft', 'the mode is named');
+    assert(L.i18n.t('moded_aloft') !== 'moded_aloft', 'and explained');
+    // and it is not in the daily rotation: the shared course must not depend on
+    // a world nobody owns
+    if (L.Daily && L.Daily.MODES) {
+      assert(L.Daily.MODES.indexOf('aloft') < 0, 'the daily never draws ALOFT');
     }
   });
 

@@ -179,6 +179,32 @@
         cap: 240,       // hard ceiling; the ramp saturates long before this
       },
     },
+
+    {
+      // The twelfth mode, and the only one whose difficulty the PLAYER sets --
+      // continuously, in both directions, with the input they already have.
+      //
+      // Height was the one signal the single tap already carried and nothing
+      // ever read. ALOFT reads it: the higher you fly, the faster the wind
+      // carries the world past you, and the more everything pays. Descend and it
+      // all slows down again. flip() is untouched -- there is no second control,
+      // no hold, no swipe, and a tap does exactly what it does in Classic.
+      //
+      // Mid-corridor is Classic to three decimals (0.92 x 1.09 = 1.0028), which
+      // is deliberate: a player who cannot manage altitude precisely gets the
+      // baseline game rather than a penalty.
+      //
+      // THE ONE EDIT THAT WOULD MAKE THIS UNFAIR is `wind` touching
+      // spawnInterval -- gates would arrive sooner without arriving further
+      // apart, which is a reading-time cut disguised as a speed-up. Wind
+      // multiplies scrollSpeed and the payout, and nothing else. See `windMul`
+      // in js/game.js.
+      id: 'aloft',
+      gap: 1.04, speed: 0.92, spawn: 1.00, ramp: 0.95,
+      scoreMul: 1.35, shardMul: 1.25, ranked: true, lethal: true,
+      accent: 228,                   // 32 off classic's 196, 37 off blackout's 265
+      wind: { lo: 0.78, hi: 1.40, ease: 0.30 },
+    },
   ];
 
   const byId = {};

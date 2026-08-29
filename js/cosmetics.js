@@ -221,6 +221,24 @@
     // Lantern-festival night over water: the tide is the dragon's own motion.
     { id: 'lanternmoon', shards: 4600, bg: 250, bg2: 344, neb: [8, 44],   dust: 14,  wall: 36, gate: 6,
       trait: 'tide', tide: { amp: 0.07, speed: 0.42 } },
+
+    // Cappadocia an hour before sunrise: a valley of tuff cones wearing basalt
+    // hats, and a hundred balloons going up with the light. The one thing in the
+    // corridor no other world does -- nothing here sits still. From six seconds
+    // in, every opening floats upward on its own phase, slowly, at about a third
+    // of a Classic moving gate's frequency. Paid for with 8% wider gaps, because
+    // you never get a still reference to aim at.
+    //
+    // gate 137 sits in the largest hole left in the catalogue (118 -> 155): 19
+    // degrees off moss, 18 off gloamvale, 87 off the gold reward. wall 62 takes
+    // the widest open stretch of the legal wall band, 22 off rooftops and 20 off
+    // hallowmere.
+    { id: 'ashrise',   shards: 5000, bg: 232, bg2: 246, neb: [26, 240],  dust: 26,  wall: 62, gate: 137,
+      trait: 'buoyant', gap: 1.08, nebA: 0.40,
+      rise: { from: 6, amp: [0.08, 0.14], speed: [0.40, 0.75] },
+      scene: 'ashrise', dustMode: 'lift', gateCap: 'capstone',
+      sky: [[0, 234, 62, 13], [0.16, 242, 58, 18], [0.26, 268, 48, 24],
+            [0.32, 26, 82, 32], [0.38, 20, 56, 14], [0.66, 236, 46, 8], [1, 232, 50, 6]] },
   ];
 
   const DEFAULTS = { skin: 'ion', trail: 'dust', map: 'deepfield' };
