@@ -76,7 +76,7 @@ concurrency:
 # on the current build is told to update to the build they already have -- so
 # the first step of the Android job fails the run rather than ship that.
 env:
-  VERSION_NAME: '1.0.2'
+  VERSION_NAME: '1.0.3'
 
 jobs:
   android:
