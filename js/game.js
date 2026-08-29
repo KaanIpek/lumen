@@ -1440,27 +1440,78 @@
     // these is deliberately a single exaggerated trait on a plain orb. They are
     // archetypes, and archetypes belong to nobody.
 
-    // NUMBER 9: the eternally offside striker, with the linesman's flag that
-    // followed him home still stuck in his hair.
+    // A football, but the panels are cut out of deep space.
+    //
+    // The first version drew all six pentagons properly and at the size the game
+    // actually uses -- a 19px orb -- it read as cracked glass, not a ball. This
+    // is the icon lesson again: a decoration is not a small picture. What makes
+    // a football legible at that size is ONE pentagon in the middle and the
+    // seams running out of its corners, so that is all this draws.
     striker(ctx, r, hue, game) {
       const t = game ? game.elapsed : 0;
-      // the shirt number, big and dumb
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      ctx.font = 'bold ' + (r * 1.05).toFixed(1) + 'px system-ui, sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('9', 0, r * 0.06);
-      // the flag: a stick and a pennant that flutters
-      const fx = r * 0.62, fy = -r * 0.66;
-      ctx.strokeStyle = 'hsl(30 20% 88%)';
-      ctx.lineWidth = Math.max(1, r * 0.09);
-      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + r * 0.10, fy - r * 0.85); ctx.stroke();
-      const wag = Math.sin(t * 6) * 0.14;
-      ctx.fillStyle = 'hsl(52 95% 58%)';
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.99, 0, TAU); ctx.clip();
+
+      // the sphere is a dark thing with light inside it, not a lit ball
+      const void_ = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+      void_.addColorStop(0, 'hsl(266 55% 24%)');
+      void_.addColorStop(1, 'hsl(258 62% 9%)');
+      ctx.fillStyle = void_;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+
+      // a few big stars. Four, not fourteen: at 19px more than a handful is
+      // texture noise, and texture noise is what killed the first attempt.
+      for (let i = 0; i < 4; i++) {
+        const a = 0.7 + i * 1.9, d = r * (0.34 + (i % 3) * 0.22);
+        const tw = 0.5 + 0.5 * Math.sin(t * 2.0 + i * 2.1);
+        ctx.fillStyle = `hsla(${i % 2 ? 190 : 305} 95% 90% / ${0.45 + tw * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * d, Math.sin(a) * d, r * (i === 0 ? 0.10 : 0.065), 0, TAU);
+        ctx.fill();
+      }
+
+      // THE PENTAGON, and the seams leaving its corners. This is the whole read.
+      const R5 = r * 0.42, seam = Math.max(1.6, r * 0.115);
+      const pts = [];
+      for (let i = 0; i < 5; i++) {
+        const a = i * TAU / 5 - Math.PI / 2;
+        pts.push([Math.cos(a) * R5, Math.sin(a) * R5]);
+      }
       ctx.beginPath();
-      ctx.moveTo(fx + r * 0.10, fy - r * 0.85);
-      ctx.lineTo(fx + r * 0.86, fy - r * 0.70 + wag * r);
-      ctx.lineTo(fx + r * 0.12, fy - r * 0.44);
-      ctx.closePath(); ctx.fill();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < 5; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath();
+      ctx.fillStyle = 'hsla(258 62% 7% / 0.92)';
+      ctx.fill();
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.strokeStyle = 'hsl(188 95% 72%)';
+      ctx.lineWidth = seam;
+      ctx.stroke();
+      // seams out to the limb, straight, from each corner
+      ctx.beginPath();
+      for (const [px, py] of pts) {
+        const m = r * 1.02 / Math.hypot(px, py);
+        ctx.moveTo(px, py);
+        ctx.lineTo(px * m, py * m);
+      }
+      ctx.stroke();
+
+      // one band of nebula so it is a sphere with weather, not a badge
+      const neb = ctx.createLinearGradient(-r, -r * 0.5, r, r * 0.5);
+      neb.addColorStop(0, 'hsla(305 85% 62% / 0)');
+      neb.addColorStop(0.5, `hsla(305 85% 62% / ${0.16 + 0.06 * Math.sin(t * 0.7)})`);
+      neb.addColorStop(1, 'hsla(188 90% 60% / 0)');
+      ctx.fillStyle = neb;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+
+      // and the dark limb, so it turns away from you at the edge
+      const sh = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.15, 0, 0, r);
+      sh.addColorStop(0, 'hsla(0 0% 100% / 0.10)');
+      sh.addColorStop(0.62, 'hsla(0 0% 0% / 0)');
+      sh.addColorStop(1, 'hsla(258 75% 3% / 0.55)');
+      ctx.fillStyle = sh;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+      ctx.restore();
     },
 
     // KEEPER: gloves too big to hold anything.

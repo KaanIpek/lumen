@@ -95,7 +95,7 @@
     // is also the legal one: identification comes from STACKING signals, so a
     // single exaggerated idea per orb keeps every one of these an archetype
     // rather than a portrait of somebody real.
-    { id: 'striker',  tier: 'premium', hue: 8,   sat: 78, light: 58, deco: 'striker' },
+    { id: 'striker',  tier: 'premium', hue: 262, sat: 62, light: 46, deco: 'striker' },
     { id: 'keeper',   tier: 'mid',     hue: 44,  sat: 88, light: 60, deco: 'keeper' },
     { id: 'gaffer',   tier: 'mid',     hue: 214, sat: 30, light: 52, deco: 'gaffer' },
   ];
