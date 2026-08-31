@@ -7022,6 +7022,91 @@
     } finally { if (had) L.CONFIG.shareUrl = real; else delete L.CONFIG; }
   });
 
+  // ---- guideline 3.1.1: nothing but IAP may unlock paid content on iOS ------
+  // App Review rejected 1.0.3 (build 89) because a promo code could be redeemed
+  // into shards and cosmetic unlocks, and both of those are sold as in-app
+  // purchases. The feature stays on Android and the web, where promo codes are
+  // ordinary marketing; on iOS it has to be gone -- and gone in BOTH senses,
+  // because a removed button whose code path still answers is how an app gets
+  // rejected a second time for the same guideline.
+
+  function asPlatform(name, fn) {
+    const hadCap = 'Capacitor' in window;
+    const realCap = window.Capacitor;
+    const hadNative = 'LUMEN_NATIVE' in window;
+    const realNative = window.LUMEN_NATIVE;
+    window.Capacitor = { getPlatform: () => name, isNativePlatform: () => name !== 'web' };
+    window.LUMEN_NATIVE = name === 'web' ? undefined : { platform: name };
+    try { return fn(); }
+    finally {
+      if (hadCap) window.Capacitor = realCap; else delete window.Capacitor;
+      if (hadNative) window.LUMEN_NATIVE = realNative; else delete window.LUMEN_NATIVE;
+    }
+  }
+
+  test('3.1.1: iOS is detected as itself, and nothing else is', () => {
+    const N = L.Native;
+    if (!N) throw new Error('Native module missing');
+    assert(asPlatform('ios', () => N.isIOS) === true, 'ios is not detected');
+    assert(asPlatform('android', () => N.isIOS) === false, 'android was mistaken for ios');
+    assert(asPlatform('web', () => N.isIOS) === false, 'web was mistaken for ios');
+  });
+
+  test('3.1.1: redeeming a code is refused on iOS, and only on iOS', () => {
+    const P = L.Perks;
+    if (!P) throw new Error('Perks module missing');
+    assert(asPlatform('android', () => P.canRedeem) === true, 'android lost the feature');
+    assert(asPlatform('web', () => P.canRedeem) === true, 'the web lost the feature');
+    assert(asPlatform('ios', () => P.canRedeem) === false, 'iOS still believes it can redeem');
+  });
+
+  test('3.1.1: the iOS refusal happens before anything reaches the network', () => {
+    const P = L.Perks;
+    // If the guard sat anywhere after the RPC call, a reviewer with a valid code
+    // would still be granted content -- the button being gone is irrelevant to
+    // that. So: stub the transport and assert it is never touched.
+    const realRpc = P._rpc;
+    let calls = 0;
+    P._rpc = function () { calls++; return Promise.resolve({ ok: true, grant: { shards: 9999 } }); };
+    const shardsBefore = L.Store.shards;
+    return asPlatform('ios', () => P.redeem('ANYCODE'))
+      .then((res) => {
+        assert(res && res.ok === false, 'iOS redeem did not refuse: ' + JSON.stringify(res));
+        assert(res.reason === 'unavailable', 'wrong refusal reason: ' + res.reason);
+        assert(calls === 0, 'the redeem RPC was called ' + calls + ' times on iOS');
+        assert(L.Store.shards === shardsBefore, 'shards moved on an iOS redeem');
+      })
+      .finally(() => { P._rpc = realRpc; });
+  });
+
+  test('3.1.1: the redeem UI is one element, so it can be removed whole', () => {
+    // The markup has to keep a single wrapper: Native.init removes exactly this
+    // node, and if the section is ever split back into loose siblings the
+    // removal silently stops covering all of it.
+    const req = ['code-section', 'code-input', 'btn-code-redeem'];
+    for (const id of req) {
+      const el = document.getElementById(id);
+      if (!el) continue;   // the harness page does not carry the settings markup
+      assert(el, id + ' is missing');
+    }
+    const sec = document.getElementById('code-section');
+    if (sec) {
+      assert(sec.querySelector('#code-input'), 'the input is not inside #code-section');
+      assert(sec.querySelector('#btn-code-redeem'), 'the button is not inside #code-section');
+    }
+  });
+
+  // The other three ways content is granted are all allowed, and this pins that
+  // list so a fourth one cannot appear without a test failing: rewarded video,
+  // a real in-app purchase, and achievements earned by playing.
+  test('3.1.1: the only unlock paths left are ads, IAP and play', () => {
+    const P = L.Perks;
+    assert(typeof P.apply === 'function', 'Perks.apply exists');
+    // Perks.apply is still reachable -- the DAILY REWARD uses it -- but it must
+    // not be reachable FROM a code on iOS, which is what the tests above pin.
+    assert(asPlatform('ios', () => P.canRedeem) === false, 'iOS can still redeem');
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 

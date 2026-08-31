@@ -8,7 +8,7 @@
   <title>LUMEN — flip · thread · flow</title>
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
-  <link rel="manifest" href="manifest.json?v=260831011813" />
+  <link rel="manifest" href="manifest.json?v=260831172206" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta property="og:title" content="LUMEN — flip · thread · flow" />
@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=260831011813" />
+  <link rel="stylesheet" href="css/style.css?v=260831172206" />
 </head>
 <body>
   <canvas id="game" role="img" aria-label="LUMEN gameplay" data-i18n-aria="ariaCanvas"></canvas>
@@ -370,13 +370,20 @@
         <div class="setting"><span data-i18n="shareStats">Share anonymous stats</span><button class="toggle ui-interactive" data-set="consent"></button></div>
         <div class="setting-hint"><span data-i18n="privacyHint">No personal data, ever. Off by default.</span> <a href="privacy.html" target="_blank" rel="noopener" class="privacy-link" data-i18n="privacyPolicy">Privacy policy</a></div>
       </div>
-      <div class="set-sec" data-i18n="secCode">REDEEM A CODE</div>
-      <div class="setting-hint" data-i18n="codeHint"></div>
-      <div class="transfer-row">
-        <input id="code-input" class="code-input" type="text" maxlength="32" autocomplete="off"
-               spellcheck="false" autocapitalize="characters" inputmode="text"
-               data-i18n-ph="codePlaceholder" />
-        <button id="btn-code-redeem" class="btn btn-ghost ui-interactive"><span data-i18n="codeRedeem">REDEEM</span></button>
+      <!-- Wrapped so ONE element carries the whole feature. App Review rejected
+           1.0.3 under 3.1.1 for redeeming codes into shards and cosmetics, both
+           of which are sold as IAP; Native.init hides this entire block on iOS
+           and Perks.redeem refuses there too, so there is no half-present
+           feature for a reviewer to find. -->
+      <div id="code-section">
+        <div class="set-sec" data-i18n="secCode">REDEEM A CODE</div>
+        <div class="setting-hint" data-i18n="codeHint"></div>
+        <div class="transfer-row">
+          <input id="code-input" class="code-input" type="text" maxlength="32" autocomplete="off"
+                 spellcheck="false" autocapitalize="characters" inputmode="text"
+                 data-i18n-ph="codePlaceholder" />
+          <button id="btn-code-redeem" class="btn btn-ghost ui-interactive"><span data-i18n="codeRedeem">REDEEM</span></button>
+        </div>
       </div>
 
       <div class="set-sec" data-i18n="secTransfer">PROGRESS</div>
@@ -439,35 +446,35 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="js/audio.js?v=260831011813"></script>
-  <script src="js/game.js?v=260831011813"></script>
-  <script src="js/i18n.js?v=260831011813"></script>
-  <script src="js/cosmetics.js?v=260831011813"></script>
-  <script src="js/modes.js?v=260831011813"></script>
-  <script src="js/missions.js?v=260831011813"></script>
-  <script src="js/analytics.js?v=260831011813"></script>
-  <script src="js/auth.js?v=260831011813"></script>
-  <script src="js/leaderboard.js?v=260831011813"></script>
-  <script src="js/perks.js?v=260831011813"></script>
-  <script src="js/ads.js?v=260831011813"></script>
-  <script src="js/iap.js?v=260831011813"></script>
-  <script src="js/voice.js?v=260831011813"></script>
-  <script src="js/cheats.js?v=260831011813"></script>
-  <script src="js/input.js?v=260831011813"></script>
-  <script src="js/progression.js?v=260831011813"></script>
-  <script src="js/scores.js?v=260831011813"></script>
-  <script src="js/save.js?v=260831011813"></script>
-  <script src="js/steam.js?v=260831011813"></script>
-  <script src="js/native.js?v=260831011813"></script>
-  <script src="js/update.js?v=260831011813"></script>
-  <script src="js/poll.js?v=260831011813"></script>
-  <script src="js/rating.js?v=260831011813"></script>
-  <script src="js/ui.js?v=260831011813"></script>
+  <script src="js/audio.js?v=260831172206"></script>
+  <script src="js/game.js?v=260831172206"></script>
+  <script src="js/i18n.js?v=260831172206"></script>
+  <script src="js/cosmetics.js?v=260831172206"></script>
+  <script src="js/modes.js?v=260831172206"></script>
+  <script src="js/missions.js?v=260831172206"></script>
+  <script src="js/analytics.js?v=260831172206"></script>
+  <script src="js/auth.js?v=260831172206"></script>
+  <script src="js/leaderboard.js?v=260831172206"></script>
+  <script src="js/perks.js?v=260831172206"></script>
+  <script src="js/ads.js?v=260831172206"></script>
+  <script src="js/iap.js?v=260831172206"></script>
+  <script src="js/voice.js?v=260831172206"></script>
+  <script src="js/cheats.js?v=260831172206"></script>
+  <script src="js/input.js?v=260831172206"></script>
+  <script src="js/progression.js?v=260831172206"></script>
+  <script src="js/scores.js?v=260831172206"></script>
+  <script src="js/save.js?v=260831172206"></script>
+  <script src="js/steam.js?v=260831172206"></script>
+  <script src="js/native.js?v=260831172206"></script>
+  <script src="js/update.js?v=260831172206"></script>
+  <script src="js/poll.js?v=260831172206"></script>
+  <script src="js/rating.js?v=260831172206"></script>
+  <script src="js/ui.js?v=260831172206"></script>
   <!-- Optional local settings (leaderboard project, etc). Deliberately loaded
        WITHOUT a version stamp and with onerror swallowed: the file is not in the
        repo, so a build that has no config.js must boot exactly as before rather
        than log a 404 the player can see. Copy config.example.js to config.js. -->
-  <script src="config.js?v=260831011813" onerror="void 0"></script>
-  <script src="js/main.js?v=260831011813"></script>
+  <script src="config.js?v=260831172206" onerror="void 0"></script>
+  <script src="js/main.js?v=260831172206"></script>
 </body>
 </html>

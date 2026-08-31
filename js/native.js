@@ -18,6 +18,22 @@
     get isApp() { return !!(window.LUMEN_NATIVE || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())); },
     get isDesktop() { return !!window.LUMEN_STEAM; },
 
+    // iOS specifically, because one feature is not allowed to exist there.
+    //
+    // App Review rejected 1.0.3 under guideline 3.1.1: "the app uses code
+    // redemption to unlock or enable digital features". A promo code can mint
+    // shards and unlock cosmetics, and both of those are sold as in-app
+    // purchases — so on Apple's platform that is an alternative payment
+    // mechanism, whatever it is called. It stays on Android and on the web,
+    // where promo codes are ordinary marketing; it is removed from iOS.
+    get isIOS() {
+      try {
+        const C = window.Capacitor;
+        if (C && typeof C.getPlatform === 'function') return C.getPlatform() === 'ios';
+      } catch (e) { /* fall through */ }
+      return !!(window.LUMEN_NATIVE && window.LUMEN_NATIVE.platform === 'ios');
+    },
+
     init() {
       if (!this.isApp && !this.isDesktop) return false;
 
@@ -26,6 +42,16 @@
       if (this.isApp) {
         const fs = document.getElementById('btn-fs');
         if (fs) fs.classList.add('hidden');
+      }
+
+      // Guideline 3.1.1. Removed rather than merely hidden: the input is taken
+      // out of the document entirely, so it cannot be reached by a reviewer
+      // poking at the DOM, by a stale screenshot, or by focus order. Perks.redeem
+      // refuses on iOS as well — a hidden control whose code path still works is
+      // the shape of bug that gets an app rejected twice.
+      if (this.isIOS) {
+        const sec = document.getElementById('code-section');
+        if (sec && sec.parentNode) sec.parentNode.removeChild(sec);
       }
 
       this.wireBackButton();

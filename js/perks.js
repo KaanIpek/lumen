@@ -94,7 +94,18 @@
       try { localStorage.setItem('lumen_codes', JSON.stringify(seen)); } catch (e) { /* full */ }
     },
 
+    // Whether this build may redeem at all. iOS may not: a code mints shards and
+    // unlocks cosmetics, both of which are sold as in-app purchases, and App
+    // Review called that out under guideline 3.1.1 on 1.0.3. Android and the web
+    // are untouched — a promo code is ordinary marketing there.
+    get canRedeem() { return !(LUMEN.Native && LUMEN.Native.isIOS); },
+
     redeem(code) {
+      // Checked FIRST, before the input is even looked at, so no path through
+      // this function can reach the server on iOS. The UI is removed too; this
+      // is the second lock, because a removed button and a live code path is
+      // exactly how a feature comes back by accident.
+      if (!this.canRedeem) return Promise.resolve({ ok: false, reason: 'unavailable' });
       const typed = String(code || '').trim();
       if (!typed) return Promise.resolve({ ok: false, reason: 'unknown' });
       if (!this.enabled) return Promise.resolve({ ok: false, reason: 'offline' });
