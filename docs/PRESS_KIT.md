@@ -49,15 +49,19 @@ one-more-run arcade.
 
 **Features**
 - One-thumb gravity-flip gameplay — pure skill
-- **Seven game modes**: Classic, Vortex (the world turns as you fly), Mirror
+- **Thirteen game modes**: Classic, Vortex (the world turns as you fly), Mirror
   (everything runs backwards), Sprint, Blackout (light arrives in pulses),
-  Precision, and Zen (nothing can kill you). Each keeps its own record
+  Precision, Zen (nothing can kill you), Abandon Hope (a gate appears only once
+  it is nearly on you), Glutton (every mote makes you bigger), Rubber (the walls
+  throw you back), Brittle (smash the fault beside the gap), Aloft (altitude is
+  the throttle — the wind carries you faster and pays more), and Hold (hold a
+  finger down and steer the orb by hand). Each keeps its own record
 - Flow state: slow-motion bullet-time you *earn*
 - Combo multiplier up to ×12 with a greed-driving decay timer
 - Four gate archetypes: static, moving, breathing and twin double-gaps
-- Six worlds to unlock, 25 orb skins and 13 light trails — four skins can't be
+- Twenty worlds to unlock, 35 orb skins and 21 light trails — six skins can't be
   bought at any price, only earned
-- 26 achievements, five skill lines, and items you carry into a run and fire by
+- 32 achievements, five skill lines, and items you carry into a run and fire by
   hand — from a button, the number keys, or by saying *"shield"*
 - Rotating missions, a local top-10 leaderboard, an optional online board,
   and a paid revive

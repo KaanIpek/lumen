@@ -103,7 +103,7 @@ uluslararası.
 
     LUMEN is a neon arcade game about one decision made over and over, faster and
     faster: fall up, or fall down. Chain gates without touching one and the world
-    slips into slow motion. 10 modes, 11 worlds, a daily challenge. Plays offline.
+    slips into slow motion. 13 modes, 20 worlds, a daily challenge. Plays offline.
 
 **Testçiye yönelik not** — "testers should focus on" gibi bir alan varsa:
 

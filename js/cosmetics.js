@@ -273,6 +273,56 @@
       gate: 127, gateSat: 88, gateLight: 80,
       trait: 'heavy', gMul: 1.14, gap: 1.10, spawn: 1.04,
       scene: 'eventhorizon', dustMode: 'spiral' },
+
+    // ---- living worlds (2026-08-30) ----------------------------------------
+    // The first three worlds whose SCENERY moves. Every world before this one
+    // paints its picture once into the background bake and then blits that same
+    // picture for the whole run: measured, the scenery of all twenty contributed
+    // exactly ZERO pixels of change per frame, and the five with the prettiest
+    // painted scenes were the deadest of all, because a big still picture freezes
+    // the most pixels. These three declare `live`, which is a second table beside
+    // `scene` in game.js — data, never a callback, so the per-frame cost is
+    // structural rather than promised.
+    //
+    // The same rules as every themed world still apply: hue-only colour, every
+    // trait a trade, wall >= 28 degrees from every colourblind danger hue and
+    // dust >= 20 from every reward hue. One rule is added, because these worlds
+    // move: the GATE hue must also clear the three world-spawned power hues
+    // (magnet 150, shield 195, slow 265) by 20, since a moving background makes
+    // a mis-read pickup much more expensive.
+
+    // A rolling mill. The only light in the world is the furnace slot; the
+    // flywheel, the gears, the belt and the presses are all silhouettes in front
+    // of it, so nothing that moves can out-glow a bar. The presses are the tell:
+    // a gate can only enter the corridor on a stamp.
+    { id: 'foundry',   shards: 5400, bg: 230, bg2: 236, neb: [22, 232], dust: 160, wall: 157,
+      gate: 109, gateSat: 86, gateLight: 70, nebA: 0.45,
+      trait: 'geared', tick: 1.9, spawn: 0.88, gap: 0.94,
+      scene: 'foundry', live: 'foundry', gateCap: 'press',
+      sky: [[0, 230, 34, 7], [0.16, 226, 40, 10], [0.24, 20, 72, 19],
+            [0.30, 24, 86, 26], [0.36, 18, 58, 13], [0.56, 232, 34, 8], [1, 236, 36, 5]] },
+
+    // A salt flat at noon — the game's first daylight world. The heat bends the
+    // air, and it bends the gates too: a far bar is drawn where the hot air says
+    // it is, not where it is. The lie decays to nothing before you have to act,
+    // so it taxes planning and never execution.
+    { id: 'saltglare', shards: 4800, bg: 32,  bg2: 24,  neb: [40, 26],  dust: 240, wall: 236,
+      gate: 342, gateSat: 88, gateLight: 76, nebA: 0.30,
+      trait: 'mirage', refract: { reach: 0.62, ax: 5, ay: 0.022 }, gap: 1.06, spawn: 0.96,
+      scene: 'saltglare', live: 'saltglare', gateCap: 'ledge', dustMode: 'lift', dustFade: 'up',
+      sky: [[0, 30, 46, 20], [0.18, 34, 58, 26], [0.30, 38, 70, 30],
+            [0.40, 28, 50, 17], [0.60, 22, 36, 11], [1, 20, 38, 8]] },
+
+    // A flooded fen under a murmuration. The flock is the first background in the
+    // game that REMOVES light instead of adding it, and it is also a gauge: the
+    // birds gather while the flow tank fills and scatter while it burns. LUMEN
+    // ships no fuel display, so this world's sky is the only one there is.
+    { id: 'murmurfen', shards: 4600, bg: 232, bg2: 240, neb: [214, 26], dust: 232, wall: 91,
+      gate: 228, gateSat: 55, gateLight: 80, nebA: 0.30,
+      trait: 'roost', flow: { refill: 1.7, drain: 1.45 }, gap: 0.96,
+      scene: 'murmurfen', live: 'murmurfen', gateCap: 'cattail', dustMode: 'murmur',
+      sky: [[0, 214, 26, 27], [0.24, 224, 32, 21], [0.40, 26, 30, 16],
+            [0.58, 238, 40, 9], [1, 244, 44, 4]] },
   ];
 
   const DEFAULTS = { skin: 'ion', trail: 'dust', map: 'deepfield' };

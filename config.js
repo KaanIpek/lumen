@@ -144,5 +144,28 @@
     // moderation problem and, once shown to other players, your liability.
     // Collect wherever your community already is; you pick the five.
     ideasUrl: '',             // e.g. a Discord invite or a form
+
+    // Where a shared score card points. This is one line, and which line it is
+    // decides whether the Daily actually spreads.
+    //
+    // WHY THE WEB BUILD AND NOT A STORE PAGE. A Daily card's whole promise is
+    // "we all played the same run today — beat me". A store link cannot keep
+    // that promise for the person who receives it:
+    //   * the App Store link is iOS-only, so every Android recipient is sent
+    //     to a page for a phone they do not own;
+    //   * the Play listing is on a closed track, so it is not installable by
+    //     the public at all yet;
+    //   * and either way it asks for an install BEFORE the run, which is the
+    //     opposite of a challenge you can take right now.
+    // The web build is live, works on every platform, and `?mode=daily` (see
+    // openDeepLink in js/main.js) drops the visitor straight into the same
+    // seeded course. The landing page links to both stores for anyone who
+    // wants to install afterwards.
+    //
+    // To point cards at the App Store instead, replace the value below with
+    // 'https://apps.apple.com/us/app/lumen-flip-thread-flow/id6797276640'.
+    // Nothing else needs to change; the Daily suffix is appended only when the
+    // URL has no query of its own.
+    shareUrl: 'https://kaanipek.github.io/lumen/',
   };
 })();

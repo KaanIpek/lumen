@@ -2428,6 +2428,24 @@
       this._lastScore = data.score;
       this._lastCombo = data.combo;
       this._lastIsBest = data.isBest;
+      // Remembered so the share card can say WHICH run this was. The Daily is
+      // the one thing in LUMEN that is the same for everybody on a given day —
+      // which is exactly what makes it shareable — and the card was throwing
+      // that away: `data.daily` was read two lines below for the rating prompt
+      // and then dropped on the floor.
+      //
+      // The DAY AND THE TWIST are captured here, at the end of the run, not
+      // when the share button is pressed. The game already keeps the run's own
+      // date for the same reason (game.dailyDate, set at run start, because a
+      // run begun at 23:59:30 belongs to the day it was played) — and a player
+      // who dies at 23:58 and shares at 00:02 would otherwise post a card
+      // stamped with tomorrow's date and tomorrow's twist, advertising a course
+      // they never played.
+      this._lastDaily = !!data.daily;
+      this._lastDailyDate = this._lastDaily
+        ? ((this.game && this.game.dailyDate) || (D ? D.todayStr() : '')) : '';
+      this._lastDailyTwist = this._lastDaily && D ? (D.twistName() || '') : '';
+      this._lastDailyStreak = this._lastDaily && D ? (D.status().streak || 0) : 0;
       this.showScreen('gameover');
 
       // Ask for a rating on a GOOD run only, and never on the frame that just
@@ -2471,12 +2489,41 @@
       if (!muted) { Audio.unlock(); Audio.sfx('ui'); }
     },
 
+    // The link a card carries. For a Daily it gets `?mode=daily`, which the deep
+    // link in js/main.js turns into the same seeded course the sharer just
+    // played — the difference between "look what I scored" and "here, try it".
+    // Appended only when the configured URL has no query of its own, so pointing
+    // shareUrl at a store page cannot produce a malformed link.
+    shareLink(daily) {
+      const base = (LUMEN.CONFIG && LUMEN.CONFIG.shareUrl) || '';
+      if (!base) return '';
+      if (!daily) return base;
+      return base.indexOf('?') >= 0 ? base : base + '?mode=daily';
+    },
+
     share() {
       this.click();
       const s = this._lastScore || 0;
       const c = this._lastCombo || 0;
-      const text = T('shareText', { s: s, c: c });
-      const data = { score: s, combo: c, isBest: !!this._lastIsBest };
+      const daily = !!this._lastDaily;
+      const url = this.shareLink(daily);
+      // twistName() is already localised and already returns '' on a day whose
+      // draw is classic + none, so an untwisted day draws no twist line rather
+      // than an empty one.
+      const data = {
+        score: s, combo: c, isBest: !!this._lastIsBest,
+        daily: daily,
+        dailyDate: this._lastDailyDate || '',
+        dailyTwist: this._lastDailyTwist || '',
+        dailyStreak: this._lastDailyStreak || 0,
+        url: url,
+      };
+      // The daily line ends in "Beat me: {u}". With no shareUrl configured that
+      // is a sentence with nothing after the colon, so fall back to the ordinary
+      // text rather than posting a dangling invitation.
+      const text = daily && url
+        ? T('shareTextDaily', { s: s, c: c, d: data.dailyDate, u: url })
+        : T('shareText', { s: s, c: c });
       // A generated image travels far better than a line of text.
       if (LUMEN.Share) {
         LUMEN.Share.share(this.game, data, text).then((how) => {

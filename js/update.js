@@ -79,6 +79,12 @@
     _dueForPrompt(now) {
       try {
         const last = parseInt(localStorage.getItem(KEY_SEEN) || '0', 10) || 0;
+        // A stamp in the FUTURE means the device clock was ahead when we wrote
+        // it — a wrong timezone, a dead coin cell, a manual change — and once
+        // the clock is corrected `now - last` is negative forever, so the
+        // prompt goes quiet permanently on exactly the devices whose owner
+        // never notices. Treat any future stamp as "never asked".
+        if (last > now) return true;
         return (now - last) > DAY;
       } catch (e) { return true; }
     },

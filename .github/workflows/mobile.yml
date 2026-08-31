@@ -76,7 +76,7 @@ concurrency:
 # on the current build is told to update to the build they already have -- so
 # the first step of the Android job fails the run rather than ship that.
 env:
-  VERSION_NAME: '1.0.3'
+  VERSION_NAME: '1.0.4'
 
 jobs:
   android:
@@ -102,7 +102,15 @@ jobs:
           RJ=$(node -p "require('./release.json').version")
           RB=$(node -p "require('./release.json').build")
           RM=$(node -p "require('./release.json').minBuild")
-          echo "release.json=$RJ($RB) min=$RM   building=$VERSION_NAME($GITHUB_RUN_NUMBER)"
+          # The PER-PLATFORM fields are the ones an installed player is actually
+          # judged against -- js/update.js _feedBuild prefers them and only falls
+          # back to `build` -- and until now this guard checked none of them, so
+          # androidBuild could name a build that does not exist and nothing here
+          # would notice. Resolved exactly the way the game resolves them, so a
+          # feed that omits one is checked as the phone will read it.
+          RI=$(node -p "const r=require('./release.json'); (parseInt(r.iosBuild,10)>0?r.iosBuild:r.build)")
+          RA=$(node -p "const r=require('./release.json'); (parseInt(r.androidBuild,10)>0?r.androidBuild:r.build)")
+          echo "release.json=$RJ(build $RB, ios $RI, android $RA) min=$RM   building=$VERSION_NAME($GITHUB_RUN_NUMBER)"
           if [ "$RJ" != "$VERSION_NAME" ]; then
             echo "::error::release.json says $RJ but this build is $VERSION_NAME. Update release.json before releasing."
             exit 1
@@ -112,16 +120,30 @@ jobs:
           # newest one -- is told to update, sent to a store that says they are
           # current, and told again tomorrow. There is no way out of that loop
           # from the player's side, so it must not be possible to ship it.
-          if [ "$RB" -gt "$GITHUB_RUN_NUMBER" ]; then
-            echo "::error::release.json advertises build $RB but this run is $GITHUB_RUN_NUMBER. That would nag every player forever, including the ones who are up to date."
-            exit 1
-          fi
+          for pair in "build:$RB" "iosBuild:$RI" "androidBuild:$RA"; do
+            FIELD=${pair%%:*}; VAL=${pair##*:}
+            if [ "$VAL" -gt "$GITHUB_RUN_NUMBER" ]; then
+              echo "::error::release.json $FIELD advertises $VAL but this run is $GITHUB_RUN_NUMBER. That would nag every player on that platform forever, including the ones who are up to date."
+              exit 1
+            fi
+          done
           # minBuild is the hard block. It can never point past a build that
           # exists, or the game locks out its entire install base.
           if [ "$RM" -gt "$GITHUB_RUN_NUMBER" ]; then
             echo "::error::minBuild $RM is beyond build $GITHUB_RUN_NUMBER -- that hard-blocks everyone, including this build."
             exit 1
           fi
+          # minBuild is ONE number while `latest` is per-platform, so a value
+          # that is reasonable for the platform that is ahead hard-blocks the
+          # platform that is behind -- with no dismiss button and no build for
+          # those players to move to.
+          for pair in "iosBuild:$RI" "androidBuild:$RA"; do
+            FIELD=${pair%%:*}; VAL=${pair##*:}
+            if [ "$RM" -gt "$VAL" ]; then
+              echo "::error::minBuild $RM is past $FIELD $VAL -- every player on that platform would be hard-blocked with nothing to update to."
+              exit 1
+            fi
+          done
           if [ "$RB" -lt "$GITHUB_RUN_NUMBER" ]; then
             echo "::warning::release.json build is $RB but this run is $GITHUB_RUN_NUMBER. Players on $RB..$((GITHUB_RUN_NUMBER-1)) will not be prompted. Fine for a re-run; bump it for a real release."
           fi

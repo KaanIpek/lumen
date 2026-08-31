@@ -4827,7 +4827,8 @@
     const DANGER = [350, 288, 276, 352];
     const REWARD = [50, 52, 56, 128];
     const THEMED = ['hallowmere', 'regalia', 'nullpoint', 'weave', 'hoarfrost',
-                    'rooftops', 'bloomward', 'andromeda', 'nightway', 'gloamvale', 'lanternmoon'];
+                    'rooftops', 'bloomward', 'andromeda', 'nightway', 'gloamvale', 'lanternmoon',
+                    'foundry', 'saltglare', 'murmurfen'];
     const circ = (a, b) => { const d = Math.abs(((a % 360) + 360) % 360 - ((b % 360) + 360) % 360); return Math.min(d, 360 - d); };
     for (const id of THEMED) {
       const m = L.Cosmetics.def(id);
@@ -4855,8 +4856,14 @@
     // It earns its place on the list by having its own tests below -- the travel
     // is reserved before the centre is clamped, and a gate never reverses while
     // it is on screen.
+    // 'geared', 'mirage' and 'roost' are the thirteenth through fifteenth, and
+    // the first three added by worlds whose SCENERY moves. Each earns its place
+    // the same way `buoyant` did -- by having its own tests further down: the
+    // tick can only ever add time, the refraction never reaches collision, and
+    // the flow tank returns sooner while lasting less.
     const KNOWN = ['none', 'updraft', 'sink', 'tide', 'sparse', 'heavy', 'haunted',
-                   'stately', 'weightless', 'breathing', 'leaden', 'buoyant'];
+                   'stately', 'weightless', 'breathing', 'leaden', 'buoyant',
+                   'geared', 'mirage', 'roost'];
     for (const m of L.Cosmetics.MAPS) {
       assert(KNOWN.indexOf(m.trait) >= 0, m.id + ' has unknown trait "' + m.trait + '"');
     }
@@ -6583,6 +6590,436 @@
       + (100 * (calm - gale) / calm).toFixed(0) + '% less fall)');
     g.toMenu();
     L.Modes.setCurrent('classic');
+  });
+
+  // ---- the living worlds ---------------------------------------------------
+  // Everything in LUMEN before these three painted its scenery ONCE into the
+  // background bake and blitted that same picture for the whole run. Measured
+  // through Background.draw, the scenery of all twenty shipped worlds moved
+  // exactly zero pixels per frame. These tests guard the layer that changed
+  // that, and they are written against the two ways it can go wrong: it can
+  // stop moving, or it can start competing with a gate.
+
+  // A recording context. Budgets are asserted in PIXELS, not in draw calls: one
+  // full-width additive band is a single call and is ruinous, so a call count is
+  // the wrong instrument. This counts blits AND sums destination area.
+  function recorder(W, H) {
+    return {
+      W, H, blits: 0, fills: 0, area: 0, maxAlpha: 0, ops: {},
+      globalAlpha: 1, globalCompositeOperation: 'source-over',
+      fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt',
+      canvas: { width: W, height: H },
+      _note() { this.ops[this.globalCompositeOperation] = true; this.maxAlpha = Math.max(this.maxAlpha, this.globalAlpha); },
+      drawImage() {
+        this._note(); this.blits++;
+        const a = arguments;
+        const dw = a.length >= 9 ? a[7] : a.length >= 5 ? a[3] : (a[0] && a[0].width) || 0;
+        const dh = a.length >= 9 ? a[8] : a.length >= 5 ? a[4] : (a[0] && a[0].height) || 0;
+        this.area += Math.abs(dw * dh);
+      },
+      fillRect(x, y, w, h) { this._note(); this.fills++; this.area += Math.abs(w * h); },
+      fill() { this._note(); this.fills++; },
+      stroke() { this._note(); this.fills++; },
+      save() {}, restore() {}, beginPath() {}, closePath() {}, clip() {},
+      rect() {}, arc() {}, ellipse() {}, moveTo() {}, lineTo() {},
+      quadraticCurveTo() {}, translate() {}, rotate() {}, scale() {},
+      setTransform() {}, clearRect() {},
+      createLinearGradient() { return { addColorStop() {} }; },
+      createRadialGradient() { return { addColorStop() {} }; },
+    };
+  }
+
+  // The test page never creates L.game -- it builds its own Games through
+  // newGame() -- so the Background constructor has to come from one of those.
+  let _BG = null;
+  function liveBg(id, W, H) {
+    if (!_BG) { const g0 = newGame(390, 844); _BG = Object.getPrototypeOf(g0.bg).constructor; g0.toMenu(); }
+    const prev = L.Cosmetics.preview;
+    L.Cosmetics.setPreview(id);
+    const bg = new _BG();
+    bg.resize(W, H);
+    bg._restore = () => L.Cosmetics.setPreview(prev);
+    return bg;
+  }
+
+  test('Live: every entry declares a budget it is allowed to have', () => {
+    const LIM = L.LIVE_LIMITS;
+    assert(LIM && LIM.cover === 0.35 && LIM.blits === 6, 'limits are exported');
+    const ids = Object.keys(L.LIVE);
+    assert(ids.length >= 3, 'there are living worlds to check');
+    for (const id of ids) {
+      const e = L.LIVE[id];
+      assert(['subtract', 'refract', 'light'].indexOf(e.mode) >= 0, id + ' declares a legal mode, not "' + e.mode + '"');
+      assert(e.band <= LIM.band, id + ' band ' + e.band + ' over ' + LIM.band);
+      assert(e.cover <= LIM.cover, id + ' cover ' + e.cover + ' over ' + LIM.cover);
+      assert(e.blits <= LIM.blits, id + ' blits ' + e.blits + ' over ' + LIM.blits);
+      if (e.mode === 'light') assert(e.peak != null && e.peak <= 0.16, id + ' is additive and must declare peak <= 0.16');
+      for (const p of e.parts || []) {
+        assert(L.POSE[p.pose], id + ' part uses unknown pose "' + p.pose + '"');
+        assert(e.cels[p.cel], id + ' part names a cel "' + p.cel + '" that is not in the atlas');
+      }
+    }
+    for (const m of L.Cosmetics.MAPS) {
+      if (m.live) assert(L.LIVE[m.live], m.id + ' names live "' + m.live + '" which does not exist');
+    }
+  });
+
+  // The colour rules are not relaxed for a world that moves -- they are
+  // tightened. A moving background makes a mis-read pickup more expensive, so
+  // the three new GATE hues must also clear the three world-spawned power hues.
+  // Scoped to the living worlds: tidal's gate 187 is 8 degrees from shield and
+  // has shipped for a year, and is not up for renegotiation.
+  test('Live: hues clear the colourblind palette and the pickups', () => {
+    const DANGER = [350, 288, 276, 352], REWARD = [50, 52, 56, 128];
+    const POWERS = [150, 195, 265];
+    const circ = (a, b) => { const d = Math.abs(((a % 360) + 360) % 360 - ((b % 360) + 360) % 360); return Math.min(d, 360 - d); };
+    for (const m of L.Cosmetics.MAPS) {
+      if (!m.live) continue;
+      for (const d of DANGER) assert(circ(m.wall, d) >= 28, m.id + ' wall ' + m.wall + ' is ' + circ(m.wall, d) + ' from danger ' + d);
+      for (const r of REWARD) assert(circ(m.dust, r) >= 20, m.id + ' dust ' + m.dust + ' is ' + circ(m.dust, r) + ' from reward ' + r);
+      for (const p of POWERS) assert(circ(m.gate, p) >= 20, m.id + ' gate ' + m.gate + ' is only ' + circ(m.gate, p) + ' from power hue ' + p);
+      assert(circ(m.gate, 50) >= 20, m.id + ' gate ' + m.gate + ' is too near the gold mote');
+    }
+    // and no cel may paint a hue its entry did not declare
+    for (const id of Object.keys(L.LIVE)) {
+      const e = L.LIVE[id];
+      const srcs = Object.keys(e.cels).map((k) => String(e.cels[k].draw));
+      if (e.strip) srcs.push(String(e.strip.draw));
+      for (const src of srcs) {
+        const found = src.match(/hsla?\(\s*(\d+)/g) || [];
+        for (const f of found) {
+          const hue = parseInt(f.replace(/[^0-9]/g, ''), 10);
+          assert(e.hues.indexOf(hue) >= 0, id + ' paints undeclared hue ' + hue);
+        }
+      }
+    }
+  });
+
+  // THE BUG THIS EXISTS FOR: the live clock is advanced in Background.update,
+  // and every dustMode branch below it RETURNS. Two of the three living worlds
+  // declare a dustMode, so putting the three accumulator lines under those
+  // branches would freeze the whole layer at t=0 while it kept drawing happily,
+  // with no error anywhere -- the same shape as the bug that once killed this
+  // game's post-ad audio.
+  test('Live: the clock runs on worlds that have their own dust', () => {
+    for (const id of ['saltglare', 'murmurfen', 'foundry', 'bloomward']) {
+      const bg = liveBg(id, 390, 844);
+      for (let i = 0; i < 60; i++) bg.update(1 / 60, 300);
+      assert(bg.lt > 0.9, id + ': the live clock did not advance (lt=' + bg.lt + ')');
+      assert(bg.pan > 0, id + ': pan did not advance (pan=' + bg.pan + ')');
+      bg._restore();
+    }
+  });
+
+  test('Live: the cost is what the entry declared, on a phone and on a wide glass', () => {
+    for (const size of [[390, 844], [1440, 900]]) {
+      const W = size[0], H = size[1];
+      for (const id of Object.keys(L.LIVE)) {
+        const e = L.LIVE[id];
+        const bg = liveBg(id, W, H);
+        for (let i = 0; i < 240; i++) bg.update(1 / 60, 300);
+        bg.draw(recorder(W, H), 200, 0, { fuel: 0.6, tick: 0.3 });
+        const rec = recorder(W, H);
+        bg._drawLive(rec, 0.4, { fuel: 0.6, tick: 0.3 });
+        const cover = rec.area / (W * H);
+        assert(rec.blits <= e.blits, id + ' @' + W + 'x' + H + ': ' + rec.blits + ' blits over the declared ' + e.blits);
+        assert(cover <= e.cover + 0.05, id + ' @' + W + 'x' + H + ': cover ' + cover.toFixed(3) + ' over the declared ' + e.cover);
+        if (e.mode !== 'light') assert(!rec.ops.lighter, id + ' is mode "' + e.mode + '" and must never composite additively');
+        bg._restore();
+      }
+    }
+  });
+
+  // A resize must RE-PROJECT the layer, never re-roll it: parts live in
+  // fractions of W and H exactly so a rotation or a collapsing URL bar cannot
+  // teleport the scenery mid-run. And the atlas is baked at a fixed pixel size,
+  // so neither a resize nor the eight flow buckets may ever rebake it.
+  test('Live: a resize re-projects, and the atlas is baked exactly once', () => {
+    const bg = liveBg('foundry', 390, 844);
+    bg.draw(recorder(390, 844), 200, 0, { fuel: 1, tick: 0 });
+    assert(bg._atlasBakes === 1, 'the atlas baked ' + bg._atlasBakes + ' times, not once');
+    for (let i = 0; i < 6; i++) {
+      bg.resize(i % 2 ? 390 : 412, i % 2 ? 720 : 844);
+      for (let f = 0; f < 8; f++) bg.draw(recorder(412, 844), 200, f / 8, { fuel: 1, tick: 0 });
+    }
+    assert(bg._atlasBakes === 1, 'twelve resizes and eight flow buckets rebaked the atlas ' + bg._atlasBakes + ' times');
+    bg._restore();
+  });
+
+  // Accessibility outranks theme, exactly as gateCap already does. Under high
+  // contrast or any colour-vision preset the PARTS -- the tier big enough to
+  // compete with a bar -- are not drawn at all.
+  test('Live: accessibility removes the near tier, it does not merely dim it', () => {
+    const wasHC = L.Store.highContrast, wasCB = L.Store.colorblind;
+    try {
+      for (const id of Object.keys(L.LIVE)) {
+        const bg = liveBg(id, 390, 844);
+        for (let i = 0; i < 120; i++) bg.update(1 / 60, 300);
+        bg.draw(recorder(390, 844), 200, 0, { fuel: 1, tick: 0 });
+        L.Store.highContrast = false; L.Store.colorblind = 'off';
+        const plainRec = recorder(390, 844);
+        bg._drawLive(plainRec, 0, { fuel: 1, tick: 0 });
+        const full = plainRec.blits;
+        const parts = (L.LIVE[id].parts || []).length;
+        const presets = [['hc', true, 'off'], ['deuter', false, 'deuter'], ['prot', false, 'prot'], ['trit', false, 'trit']];
+        for (const setup of presets) {
+          L.Store.highContrast = setup[1]; L.Store.colorblind = setup[2];
+          const rec = recorder(390, 844);
+          bg._drawLive(rec, 0, { fuel: 1, tick: 0 });
+          if (parts) assert(rec.blits <= full - parts, id + '/' + setup[0] + ': parts were still drawn (' + rec.blits + ' vs ' + full + ')');
+        }
+        L.Store.highContrast = false; L.Store.colorblind = 'off';
+        bg._restore();
+      }
+    } finally { L.Store.highContrast = wasHC; L.Store.colorblind = wasCB; }
+  });
+
+  // ---- FOUNDRY: geared ------------------------------------------------------
+
+  test('geared: the mill tick is defined in crossings, so no setting can outrun it', () => {
+    const g = newGame(390, 844);
+    const was = L.Store.map, wasDiff = L.Store.difficulty;
+    L.Store.map = 'foundry'; L.Cosmetics.invalidate(); g.resolveMode();
+    const seen = [];
+    for (const d of ['veryeasy', 'easy', 'normal', 'hard']) {
+      L.Store.difficulty = d; g.resolveMode();
+      seen.push({ d, tick: g.tickLen, cross: g.crossSeconds });
+    }
+    for (const s of seen) {
+      assert(s.tick > 0, s.d + ': foundry has no tick');
+      assert(Math.abs(s.tick - 1.9 * (s.cross / g.CROSS_TIME)) < 1e-9, s.d + ': the tick is not measured in crossings');
+    }
+    assert(seen[0].tick >= seen[2].tick - 1e-9, 'very easy must not get a tighter tick than normal');
+    L.Store.difficulty = wasDiff; L.Store.map = was; L.Cosmetics.invalidate(); g.toMenu();
+  });
+
+  test('geared: a held spawn can only ever add time, never subtract it', () => {
+    const g = newGame(390, 844);
+    const was = L.Store.map;
+    L.Store.map = 'deepfield'; L.Cosmetics.invalidate(); g.resolveMode();
+    assert(g.tickLen === 0, 'a world without a tick must report 0, not ' + g.tickLen);
+    L.Store.map = 'foundry'; L.Cosmetics.invalidate(); g.resolveMode();
+    g.start();
+    const gaps = [];
+    let last = null, n = 0;
+    for (let i = 0; i < 60 * 120 && n < 20; i++) {
+      const before = g.obstacles.length;
+      const iv = g.spawnInterval, tk = g.tickLen;
+      g.update(1 / 60);
+      if (g.obstacles.length > before) {
+        if (last != null) gaps.push({ dt: g.elapsed - last, iv, tk });
+        last = g.elapsed; n++;
+      }
+      if (g.state !== 'play') { g.start(); last = null; }
+    }
+    assert(gaps.length > 5, 'saw only ' + gaps.length + ' spawns to measure');
+    for (const gp of gaps) {
+      assert(gp.dt >= gp.iv - 0.06, 'a gate arrived SOONER than the plain interval (' + gp.dt.toFixed(3) + ' vs ' + gp.iv.toFixed(3) + ')');
+      assert(gp.dt <= gp.iv + gp.tk + 0.12, 'a hold lasted longer than one whole tick (' + gp.dt.toFixed(3) + ' vs ' + (gp.iv + gp.tk).toFixed(3) + ')');
+    }
+    L.Store.map = was; L.Cosmetics.invalidate(); g.toMenu();
+  });
+
+  // ---- MIRAGE: the lie is in the picture, never in the hitbox ---------------
+
+  test('mirage: the refraction is finite, bounded, and gone before you must act', () => {
+    const g = newGame(390, 844);
+    const was = L.Store.map;
+    L.Store.map = 'saltglare'; L.Cosmetics.invalidate(); g.resolveMode();
+    g.start();
+    let peakY = 0, nearMax = 0, seen = 0;
+    for (let i = 0; i < 900; i++) {
+      g.update(1 / 60); g.render();
+      for (const ob of g.obstacles) {
+        seen++;
+        assert(isFinite(ob._mx) && isFinite(ob._my), 'a refraction offset went non-finite');
+        peakY = Math.max(peakY, Math.abs(ob._my));
+        if (ob.x - g.player.x < g.W * 0.20) nearMax = Math.max(nearMax, Math.abs(ob._my), Math.abs(ob._mx));
+      }
+      if (g.state !== 'play') g.start();
+    }
+    assert(seen > 100, 'saw ' + seen + ' obstacle-frames');
+    assert(peakY <= g.playH * 0.022 + 0.5, 'vertical lie exceeded its ceiling: ' + peakY.toFixed(2));
+    // Anchored to the smallest opening the generator may produce, not to a
+    // number picked by hand: what matters is that the residue inside the
+    // reaction window is negligible COMPARED TO THE GAP the player is aiming at.
+    const minGapPx = g.playH * 0.17;
+    assert(nearMax < minGapPx * 0.03, 'a bar inside the reaction window was drawn '
+      + nearMax.toFixed(2) + 'px off, which is ' + (100 * nearMax / minGapPx).toFixed(1) + '% of the smallest opening');
+    assert(nearMax < peakY * 0.5, 'the lie does not decay: near ' + nearMax.toFixed(2) + ' vs far ' + peakY.toFixed(2));
+    L.Store.map = was; L.Cosmetics.invalidate(); g.toMenu();
+  });
+
+  // Draw-only means draw-only. Two runs on the SAME seeded course, one with the
+  // refraction live and one with it removed, must die at the same instant with
+  // the same score -- and render() is called every frame in both, because the
+  // offsets are only ever computed inside drawObstacles. Without the render the
+  // test would compare two paths that never touched the code it is guarding.
+  // Draw-only means draw-only, and this asserts it DIRECTLY rather than by
+  // comparing two runs: comparing runs was the first attempt and it failed for
+  // an unrelated reason -- LUMEN seeds only its course from this.rng, so scores
+  // drift between two otherwise identical runs and the comparison proves
+  // nothing either way. What actually matters is narrower and checkable: every
+  // value collision reads must come out of render() exactly as it went in.
+  test('saltglare: render never moves anything collision reads', () => {
+    const was = L.Store.map;
+    const g = newGame(390, 844);
+    L.Store.map = 'saltglare'; L.Cosmetics.invalidate(); g.resolveMode();
+    g.start();
+    let checked = 0, offsetFrames = 0;
+    for (let i = 0; i < 900; i++) {
+      g.update(1 / 60);
+      const before = g.obstacles.map((ob) => ({
+        ob, x: ob.x, w: ob.w,
+        gaps: ob.gaps.map((gp) => ({ y: gp.y, h: gp.h })),
+      }));
+      g.render();
+      for (const b of before) {
+        assert(b.ob.x === b.x && b.ob.w === b.w, 'render moved an obstacle: x ' + b.x + ' -> ' + b.ob.x);
+        b.ob.gaps.forEach((gp, k) => {
+          assert(gp.y === b.gaps[k].y && gp.h === b.gaps[k].h,
+            'render moved an opening: y ' + b.gaps[k].y + ' -> ' + gp.y);
+        });
+        checked++;
+        if (Math.abs(b.ob._mx) > 0.01 || Math.abs(b.ob._my) > 0.01) offsetFrames++;
+      }
+      if (g.state !== 'play') g.start();
+    }
+    assert(checked > 200, 'only checked ' + checked + ' obstacle-frames');
+    // and the guard must not be passing vacuously because nothing ever refracted
+    assert(offsetFrames > 50, 'the refraction never fired (' + offsetFrames + ' of ' + checked + ' frames)');
+    g.toMenu();
+    L.Store.map = was; L.Cosmetics.invalidate();
+  });
+
+  // ---- MURMURFEN: roost -----------------------------------------------------
+
+  test('roost: flow comes back sooner and lasts less', () => {
+    const was = L.Store.map;
+    const measure = (id) => {
+      const g = newGame(390, 844);
+      L.Store.map = id; L.Cosmetics.invalidate(); g.resolveMode();
+      g.start();
+      const FULL = g.FLOW_MAX;
+      g.flowFuel = FULL;
+      let burn = 0;
+      while (g.flowFuel > 0 && burn < 30) { g.flowFuel = Math.max(0, g.flowFuel - (1 / 60) * g.flowDrain); burn += 1 / 60; }
+      let fill = 0;
+      while (g.flowFuel < FULL * 0.85 && fill < 90) { g.flowFuel = Math.min(FULL, g.flowFuel + (1 / 60) * 0.34 * g.flowRefill); fill += 1 / 60; }
+      g.toMenu();
+      return { burn: +burn.toFixed(2), fill: +fill.toFixed(2) };
+    };
+    const plain = measure('deepfield'), roost = measure('murmurfen');
+    assert(roost.burn < plain.burn, 'a roost burst is not shorter (' + roost.burn + ' vs ' + plain.burn + ')');
+    assert(roost.fill < plain.fill, 'a roost refill is not quicker (' + roost.fill + ' vs ' + plain.fill + ')');
+    const duty = (r) => r.burn / (r.burn + r.fill);
+    const rise = duty(roost) - duty(plain);
+    assert(rise > 0 && rise < 0.09, 'the duty cycle moved by ' + (rise * 100).toFixed(1) + ' points, which is not a trade');
+    L.Store.map = was; L.Cosmetics.invalidate();
+  });
+
+  // ---- the share card ------------------------------------------------------
+  // A Daily card is the only thing LUMEN has that a stranger can act on: the
+  // course is the same for everyone that day, so "beat me" is a real offer --
+  // but only if the card says WHICH day, what the twist was, and where to go.
+  // Before this it said none of the three, which made "can you beat it?" a
+  // question with no answer available.
+
+  test('Share card: a daily card carries the day, the twist, the streak and a link', () => {
+    const g = newGame(390, 844);
+    const D = L.Daily;
+    // config.js is not loaded here on purpose (see the AdMob test), so the link
+    // has to be stood up for the duration.
+    const had = !!L.CONFIG;
+    if (!had) L.CONFIG = { shareUrl: 'https://kaanipek.github.io/lumen/' };
+    const data = {
+      score: 4321, combo: 9, isBest: true,
+      daily: true,
+      dailyDate: D.todayStr(),
+      dailyTwist: D.twistName(),
+      dailyStreak: 4,
+      url: L.UI.shareLink(true),
+    };
+    const card = L.Share.render(g, data);
+    assert(card && card.width === 1200 && card.height === 630, 'the card is still 1200x630');
+    // The link must be the deep link, or the recipient lands on the menu and
+    // has to find the Daily by hand -- which is the friction this removes.
+    assert(/mode=daily/.test(data.url) || /apps\.apple\.com|play\.google\.com/.test(data.url),
+      'a daily card links somewhere useful, got "' + data.url + '"');
+    g.toMenu();
+    if (!had) delete L.CONFIG;
+  });
+
+  test('Share card: an untwisted day draws no twist, and a zero streak draws no badge', () => {
+    const g = newGame(390, 844);
+    // Both of these are the "empty" cases the card has to survive without
+    // leaving a gap where a line used to be.
+    const bare = { score: 10, combo: 0, isBest: false, daily: true,
+                   dailyDate: '2026-01-01', dailyTwist: '', dailyStreak: 0, url: 'https://example.test/' };
+    const card = L.Share.render(g, bare);
+    assert(card.width === 1200, 'a bare daily card still renders');
+    // and an ordinary run renders with no daily block at all
+    const plain = L.Share.render(g, { score: 10, combo: 0, isBest: false, url: 'https://example.test/' });
+    assert(plain.width === 1200, 'a non-daily card still renders');
+    // and it survives having no url configured
+    const nolink = L.Share.render(g, { score: 10, combo: 0, isBest: false });
+    assert(nolink.width === 1200, 'a card with no link still renders');
+    g.toMenu();
+  });
+
+  test('Share card: twistName is localised, and empty on a classic/none day', () => {
+    const D = L.Daily;
+    const t = D.twist();
+    const name = D.twistName();
+    assert(typeof name === 'string', 'twistName returns a string');
+    if (t.mode === 'classic' && t.mutator === 'none') {
+      assert(name === '', 'an untwisted day must name no twist, got "' + name + '"');
+    } else {
+      assert(name.length > 0, 'a twisted day must name its twist');
+      // and it must be a translated string, never a raw key
+      assert(!/^mut_/.test(name), 'the mutator name leaked its i18n key: ' + name);
+    }
+  });
+
+  test('Share: the daily text is translated in all four languages and carries the link', () => {
+    const was = L.Store.lang;
+    try {
+      for (const lang of ['en', 'tr', 'es', 'zh']) {
+        L.Store.lang = lang;
+        const out = L.t('shareTextDaily', { s: 1234, c: 7, d: '2026-08-31', u: 'https://x.test/?mode=daily' });
+        assert(out && out !== 'shareTextDaily', lang + ': shareTextDaily is missing');
+        assert(out.indexOf('1234') >= 0, lang + ': the score was not substituted');
+        assert(out.indexOf('https://x.test/?mode=daily') >= 0, lang + ': the link was not substituted');
+        assert(out.indexOf('2026-08-31') >= 0, lang + ': the date was not substituted');
+        assert(!/\{[a-z]\}/.test(out), lang + ': an unsubstituted placeholder survived: ' + out);
+        const tag = L.t('shareDailyTag');
+        assert(tag && tag !== 'shareDailyTag', lang + ': shareDailyTag is missing');
+      }
+    } finally { L.Store.lang = was; }
+  });
+
+  // The link is one config line, and getting it wrong is the difference between
+  // a challenge somebody can take and a dead end. This pins the two shapes it
+  // has to produce rather than the specific host, so pointing it at a store
+  // page later does not fail the suite.
+  test('Share: the daily link deep-links, and a store URL is never malformed', () => {
+    // The harness deliberately does NOT load config.js -- an adjacent test
+    // depends on real AdMob ids being invisible here -- so stand up a CONFIG
+    // for the duration and take it away again.
+    const had = !!L.CONFIG;
+    const real = had ? L.CONFIG.shareUrl : undefined;
+    if (!had) L.CONFIG = {};
+    try {
+      L.CONFIG.shareUrl = 'https://kaanipek.github.io/lumen/';
+      assert(L.UI.shareLink(true) === 'https://kaanipek.github.io/lumen/?mode=daily', 'a bare base gets the daily suffix');
+      assert(L.UI.shareLink(false) === 'https://kaanipek.github.io/lumen/', 'an ordinary card gets the plain base');
+      // a URL that already carries a query must not grow a second '?'
+      L.CONFIG.shareUrl = 'https://apps.apple.com/us/app/id6797276640?ppid=x';
+      const s = L.UI.shareLink(true);
+      assert((s.match(/\?/g) || []).length === 1, 'a second question mark was appended: ' + s);
+      L.CONFIG.shareUrl = '';
+      assert(L.UI.shareLink(true) === '', 'no configured url yields no link');
+    } finally { if (had) L.CONFIG.shareUrl = real; else delete L.CONFIG; }
   });
 
   // ---- report --------------------------------------------------------------

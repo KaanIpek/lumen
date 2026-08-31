@@ -32,6 +32,11 @@ stamp('index.html', [
   /(href="css\/[\w.-]+\.css)(?:\?v=[^"]*)?"/g,
   /(src="js\/[\w.-]+\.js)(?:\?v=[^"]*)?"/g,
   /(href="manifest\.json)(?:\?v=[^"]*)?"/g,
+  // config.js sits at the ROOT, not under js/, so the pattern above never saw
+  // it -- and an unstamped script is served from the browser cache forever.
+  // That is how a config change (a new shareUrl, a new endpoint) can ship and
+  // then do nothing at all for every returning player.
+  /(src="config\.js)(?:\?v=[^"]*)?"/g,
 ]);
 
 // sw.js: './js/x.js?v=..' etc, plus a fresh cache name so old entries are evicted

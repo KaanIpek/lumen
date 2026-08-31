@@ -83,7 +83,7 @@ stories. Stories create shares.
   has its own recorded theme, made locally with Stable Audio 3 and fetched
   lazily, so the first screen never waits on it — and if one never arrives the
   live sequencer covers for it. *Powered by Stability AI*
-- ✦ **Cosmetics shop** — **35 orb skins**, **21 trail styles**, **20 worlds**,
+- ✦ **Cosmetics shop** — **35 orb skins**, **21 trail styles**, **23 worlds**,
   and **16 signatures**: what your flip, your flow and your death look like.
   **12 sets** buy a whole look at once and never charge for a piece you own.
   Everything cosmetic; nothing sold here touches the difficulty. Every one has a

@@ -35,10 +35,16 @@
   // canvas is ~14.7M pixels and every full-screen pass costs all of them. These
   // presets scale the expensive things (resolution, glow, particle count) and the
   // game auto-drops a tier if real frames come in late.
+  // `live` scales the LIVE SCENE LAYER the same way `dust` and `particles` scale
+  // theirs: it is an item-count multiplier, not a switch, so a world that moves
+  // still moves on a cheap phone — it just moves with fewer parts. `atlas` is the
+  // edge of the one offscreen canvas each living world bakes its cels into; it is
+  // deliberately a FIXED pixel size and not a function of W/H/dpr, so a rotation,
+  // a collapsing URL bar or a window drag costs zero atlas work.
   const QUALITY = {
-    high:     { name: 'High',     maxDpr: 2,    particles: 1,    dust: 1,    nebula: true,  glow: true,  trailLen: 30, blurUI: true },
-    balanced: { name: 'Balanced', maxDpr: 1.5,  particles: 0.7,  dust: 0.7,  nebula: true,  glow: true,  trailLen: 24, blurUI: true },
-    low:      { name: 'Low',      maxDpr: 1,    particles: 0.4,  dust: 0.4,  nebula: false, glow: false, trailLen: 15, blurUI: false },
+    high:     { name: 'High',     maxDpr: 2,    particles: 1,    dust: 1,    nebula: true,  glow: true,  trailLen: 30, blurUI: true,  live: 1,   atlas: 512 },
+    balanced: { name: 'Balanced', maxDpr: 1.5,  particles: 0.7,  dust: 0.7,  nebula: true,  glow: true,  trailLen: 24, blurUI: true,  live: 1,   atlas: 512 },
+    low:      { name: 'Low',      maxDpr: 1,    particles: 0.4,  dust: 0.4,  nebula: false, glow: false, trailLen: 15, blurUI: false, live: 0.5, atlas: 256 },
   };
   LUMEN.QUALITY = QUALITY;
   LUMEN.Q = QUALITY.balanced; // replaced once Store is available (see applyQuality)
@@ -257,6 +263,19 @@
   // entries even with the rainbow skin cycling hue every frame.
   // matches both `hsl(H S% L%)` and `hsla(H S% L% / A)`
   const HSL_RE = /^hsla?\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*(?:\/\s*([\d.]+)\s*)?\)$/;
+  // A stable per-gate phase, DERIVED rather than drawn. An obstacle carries no
+  // phase of its own, and the obvious fix — one more this.rrand() at spawn —
+  // would consume a draw from the seeded stream and desync every player's Daily
+  // from every other player's. This reads two numbers the spec already has, so
+  // it is deterministic, free, and invisible to the RNG.
+  function obPhase(ob) {
+    if (ob._ph == null) {
+      const sp = ob.spec || {};
+      ob._ph = (((sp.c || 0) * 37.7 + (sp.gapH || 0) * 91.3 + (sp.moveAmp || 0) * 13.1) % TAU + TAU) % TAU;
+    }
+    return ob._ph;
+  }
+
   function glowKey(color) {
     const m = HSL_RE.exec(color);
     if (!m) return color;
@@ -1055,10 +1074,445 @@
       }
     },
 
+    // ---- the three living worlds' STILL half -------------------------------
+    // Each of these paints only what genuinely never moves. The moving half is
+    // a LIVE entry below, and the split is deliberate: a pixel that is painted
+    // here is free forever, so anything that can be still, is.
+
+    // FOUNDRY: the building the machinery is bolted into. Everything here is
+    // near-black except one furnace slot, and that is the whole lighting design
+    // — the world has exactly one light source, it sits in the upper third, and
+    // every live part in front of it is a silhouette. A silhouette cannot
+    // out-glow a gate, which is why this world can afford to move so much.
+    foundry(x, w, h) {
+      // the furnace slot: the one lit thing, a long horizontal mouth
+      const fy = h * 0.30, fh = h * 0.038;
+      const heat = x.createLinearGradient(0, fy - fh, 0, fy + fh * 2);
+      heat.addColorStop(0, 'hsla(24 90% 52% / 0)');
+      heat.addColorStop(0.42, 'hsla(28 96% 62% / 0.55)');
+      heat.addColorStop(0.62, 'hsla(20 92% 44% / 0.30)');
+      heat.addColorStop(1, 'hsla(16 80% 30% / 0)');
+      x.fillStyle = heat;
+      x.fillRect(w * 0.06, fy - fh, w * 0.62, fh * 3);
+      x.fillStyle = 'hsl(34 98% 70%)';
+      x.fillRect(w * 0.10, fy, w * 0.52, fh * 0.42);
+
+      // the far wall: a flat plate of soot with a few blind windows, so the
+      // machinery in front of it has something to be in front of
+      x.fillStyle = 'hsla(228 30% 5% / 0.88)';
+      x.fillRect(0, h * 0.36, w, h * 0.10);
+      x.fillStyle = 'hsla(26 40% 26% / 0.35)';
+      for (let i = 0; i < 7; i++) x.fillRect(w * (0.08 + i * 0.13), h * 0.385, w * 0.045, h * 0.022);
+
+      // gantry beams. The flywheel's lower third is hidden behind the lower
+      // beam at draw time, so it reads as bolted into a building rather than
+      // floating in front of one.
+      x.fillStyle = 'hsla(228 26% 4% / 0.95)';
+      x.fillRect(0, h * 0.215, w, h * 0.016);            // the beam the belt runs under
+      x.fillRect(0, h * 0.086, w, h * 0.012);            // the roof truss
+      for (let i = 0; i < 5; i++) {                       // columns tying them together
+        const cx = w * (0.09 + i * 0.21);
+        x.fillRect(cx, h * 0.086, w * 0.012, h * 0.145);
+      }
+      // diagonal bracing in the truss — three strokes, and it is what makes the
+      // roof read as steel instead of as a bar
+      x.strokeStyle = 'hsla(228 26% 4% / 0.9)';
+      x.lineWidth = Math.max(1, w * 0.006);
+      x.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const cx = w * (0.09 + i * 0.21);
+        x.moveTo(cx, h * 0.098); x.lineTo(cx + w * 0.10, h * 0.215);
+      }
+      x.stroke();
+
+      // the mill floor, low and flat, so the lower half is a dark plate
+      x.fillStyle = 'hsla(230 28% 3% / 0.92)';
+      x.fillRect(0, h * 0.93, w, h * 0.07);
+    },
+
+    // MIRAGE: the thing the heat bends. This scene exists for a technical
+    // reason before an artistic one — the live layer's whole effect is a
+    // horizontal re-blit of the band below, and a vertical-only gradient is
+    // INVARIANT under horizontal displacement. Without hard vertical edges in
+    // y 0.16h..0.46h the shimmer would be a mathematically perfect no-op that
+    // costs five blits and shows nothing.
+    saltglare(x, w, h) {
+      const horizon = h * 0.44;
+
+      // the far ridge: low, pale, and continuous
+      x.fillStyle = 'hsla(28 34% 44% / 0.34)';
+      x.beginPath();
+      x.moveTo(0, horizon - h * 0.055);
+      x.quadraticCurveTo(w * 0.3, horizon - h * 0.085, w * 0.62, horizon - h * 0.048);
+      x.quadraticCurveTo(w * 0.85, horizon - h * 0.030, w, horizon - h * 0.052);
+      x.lineTo(w, horizon); x.lineTo(0, horizon);
+      x.closePath(); x.fill();
+
+      // Five mesas, and they are DARK. Contrast here is not decoration: the live
+      // layer's whole effect is a horizontal re-blit of this band, so the amount
+      // of shimmer a player can see is bounded by how much horizontal structure
+      // there is to displace. Measured, the first pale draft gave the band a
+      // horizontal contrast of 0.92 and the shimmer could not be seen at any
+      // honest amplitude. Hard vertical sides and erosion gullies are what make
+      // the effect exist at all.
+      const mesa = (cx, cw, top, a) => {
+        const x0 = cx - cw * 0.5;
+        x.fillStyle = `hsla(16 52% 17% / ${a})`;
+        x.fillRect(x0, top, cw, horizon - top);
+        x.fillStyle = `hsla(34 62% 52% / ${a * 0.9})`;    // the sunlit cap
+        x.fillRect(x0, top, cw, h * 0.010);
+        x.fillStyle = `hsla(10 46% 9% / ${a * 0.85})`;    // the shaded face
+        x.fillRect(x0, top, cw * 0.26, horizon - top);
+        // erosion gullies: vertical stripes down the lit face, which is where
+        // most of the band's horizontal structure comes from
+        x.fillStyle = `hsla(12 44% 12% / ${a * 0.55})`;
+        for (let i = 1; i < 6; i++) {
+          const gx = x0 + cw * (0.30 + i * 0.115);
+          x.fillRect(gx, top + h * 0.010, cw * 0.030, horizon - top - h * 0.010);
+        }
+      };
+      mesa(w * 0.14, w * 0.19, h * 0.250, 0.80);
+      mesa(w * 0.37, w * 0.11, h * 0.300, 0.70);
+      mesa(w * 0.55, w * 0.15, h * 0.268, 0.86);
+      mesa(w * 0.75, w * 0.13, h * 0.310, 0.66);
+      mesa(w * 0.93, w * 0.20, h * 0.238, 0.78);
+
+      // the salt crust: a hard horizontal line with a paler flat below it, and
+      // the false water that the whole world is named for
+      x.fillStyle = 'hsla(40 30% 62% / 0.30)';
+      x.fillRect(0, horizon, w, h * 0.010);
+      x.fillStyle = 'hsla(200 40% 58% / 0.13)';
+      x.fillRect(0, horizon + h * 0.010, w, h * 0.030);
+      x.fillStyle = 'hsla(36 26% 40% / 0.16)';
+      x.fillRect(0, horizon + h * 0.040, w, h * 0.10);
+    },
+
+    // MURMURFEN: the drowned reed bed. It sits at the BOTTOM, it is near-black,
+    // and it never moves — the first draft had it swaying, which put dark motion
+    // in the exact band the orb flies through. Its crest at 0.88h is Ashrise's
+    // shipped ridge height, which is the precedent for how low a silhouette may
+    // reach without eating the corridor.
+    murmurfen(x, w, h) {
+      const crest = h * 0.88;
+
+      // the last light on the water, a cold band just above the reeds
+      const glim = x.createLinearGradient(0, crest - h * 0.10, 0, crest);
+      glim.addColorStop(0, 'hsla(212 30% 46% / 0)');
+      glim.addColorStop(1, 'hsla(206 34% 54% / 0.16)');
+      x.fillStyle = glim;
+      x.fillRect(0, crest - h * 0.10, w, h * 0.10);
+      x.fillStyle = 'hsla(200 30% 60% / 0.14)';
+      x.fillRect(0, crest - h * 0.004, w, h * 0.004);      // the water line itself
+
+      // the reed bed: vertical strokes of varying height, deterministic so the
+      // bake is stable, dense enough to read as a mass and not as a comb
+      const rnd = mulberry32(0x5eed);
+      x.strokeStyle = 'hsla(232 32% 4% / 0.95)';
+      x.lineCap = 'round';
+      for (let i = 0; i < 90; i++) {
+        const rx = w * (i / 90) + rnd() * w * 0.012;
+        const rh = h * (0.035 + rnd() * 0.075);
+        const lean = (rnd() - 0.5) * w * 0.020;
+        x.lineWidth = Math.max(1, w * (0.0035 + rnd() * 0.004));
+        x.beginPath();
+        x.moveTo(rx, crest + h * 0.02);
+        x.quadraticCurveTo(rx + lean * 0.5, crest - rh * 0.5, rx + lean, crest - rh);
+        x.stroke();
+      }
+      x.fillStyle = 'hsla(232 32% 3% / 0.96)';
+      x.fillRect(0, crest + h * 0.02, w, h * 0.10);
+    },
+
   };
 
+  // ---- the live scene layer ------------------------------------------------
+  // SCENES paints a world ONCE. This is the other half: scenery that moves every
+  // frame, for the worlds that declare `live: '<id>'`.
+  //
+  // THE SHAPE, AND WHY IT IS THIS SHAPE
+  // A world supplies DATA, never a per-frame callback. An entry is cels
+  // (pictures baked once into one small atlas), parts (each naming a cel and a
+  // POSE), and optionally one scrolling strip. POSE is a closed, engine-owned
+  // table of pure functions; a world picks a pose by name and can never write
+  // one. That is the difference between a budget that is promised and a budget
+  // that is structural: with an open callback, "only call drawImage" is a
+  // convention no compiler enforces, and the first author in a hurry breaks it.
+  //
+  // `mode` IS THE READABILITY CONTRACT, AND IT IS NOT A HEIGHT LIMIT.
+  // The obvious guard — "keep live scenery in the top 45% of the screen" — is
+  // worth nothing: playTop is about 0.13H, so 0.45H is squarely inside the
+  // corridor and over the top third of every bar. Height buys bounded COST, not
+  // readability. Readability is carried by mode:
+  //   subtract — source-over in a colour no lighter than the sky's own floor. It
+  //              can only ever REMOVE light, so it may reach any band.
+  //   refract  — re-blits pixels the bake already painted. Adds no light and no
+  //              new silhouette, so it may reach any band.
+  //   light    — additive, the only mode allowed to set 'lighter'. Must declare
+  //              a `peak` alpha and stays inside `band`.
+  //
+  // The budget is declared in PIXELS (`cover`, destination area as a fraction of
+  // one full-screen pass) and not in draw calls, because a single full-width
+  // additive band is one call and is ruinous — and because bg.resize is given
+  // viewW (see Game.resize: the sky fills the glass, not the column), so on a
+  // tablet every full-width element is up to 2.6x the phone's arithmetic.
+  const LIVE_BAND_MAX = 0.45;
+  const LIVE_COVER_MAX = 0.35;
+  const LIVE_BLITS_MAX = 6;
+
+  // Poses are pure: they read a part and the clock and write a placement into a
+  // preallocated object. No allocation on the hot path, and every one of them is
+  // testable without a canvas.
+  const POSE = {
+    // Bolted down. Still exists because a part may want the atlas and the band
+    // clip without any motion of its own.
+    park(p, o) { o.x = p.x; o.y = p.y; o.rot = 0; o.a = 1; },
+
+    // A sum of sines on each axis, plus an optional linear traverse that wraps.
+    // Two incommensurable sine rates never repeat, which is how a wandering
+    // thing stops looking like a metronome.
+    drift(p, o, c) {
+      const damp = c.calm ? (p.calmAmp == null ? 0.30 : p.calmAmp) : 1;
+      let dx = 0, dy = 0;
+      if (p.wx) for (let i = 0; i < p.wx.length; i++) dx += p.wx[i][0] * Math.sin(c.lt * p.wx[i][1] + (p.wx[i][2] || 0));
+      if (p.wy) for (let i = 0; i < p.wy.length; i++) dy += p.wy[i][0] * Math.sin(c.lt * p.wy[i][1] + (p.wy[i][2] || 0));
+      o.x = p.x + dx * damp;
+      o.y = p.y + dy * damp;
+      if (p.vx) {
+        // Right-to-left, wrapping. The first version negated vx inside the
+        // modulo AND subtracted the result, which double-negated it: JS `%`
+        // keeps the sign of the dividend, so the term was always <= 0 and
+        // `p.x + span - term` landed between 1.25 and 2.70 -- entirely off the
+        // right edge of a screen whose width is 1.0. The part existed, cost a
+        // blit, and was never once visible.
+        const span = p.span == null ? 1.4 : p.span;
+        const travelled = ((c.lt * p.vx * damp) % span + span) % span;
+        o.x = p.x + span - travelled;
+      }
+      // MURMURFEN's whole conceit: the flock GATHERS as the flow tank refills
+      // and SCATTERS while you burn it, so the sky is the fuel gauge the game
+      // otherwise does not draw. Without this the two bodies drifted on their
+      // own sines and the world's description was simply untrue.
+      if (p.fuelSpread) o.x += p.fuelSpread * (1 - (c.st ? c.st.fuel : 1));
+      o.rot = 0;
+      o.a = 1;
+      if (p.yMax != null && o.y > p.yMax) o.y = p.yMax;
+    },
+
+    // Constant rotation. The cheapest convincing motion there is: one setTransform
+    // and one blit of a cel that was baked exactly once.
+    spin(p, o, c) {
+      o.x = p.x; o.y = p.y;
+      o.rot = p.rate * c.lt * (c.calm ? 0.35 : 1);
+      o.a = 1;
+    },
+
+    // A reciprocating stroke locked to the SHARED tick, not to wall-clock time.
+    // That is the whole reason this pose exists: the machine and the mechanic it
+    // announces read one number, so the tell cannot drift out of phase with the
+    // thing it is telling you about.
+    press(p, o, c) {
+      const u = (((c.st.tick + (p.lag || 0)) % 1) + 1) % 1;
+      let e = 0;
+      if (u < 0.11) { const k = u / 0.11; e = k * k; }        // down, ease-in
+      else if (u < 0.14) e = 1;                               // seated
+      else if (u < 0.33) e = 1 - (u - 0.14) / 0.19;           // return, linear
+      o.x = p.x;
+      o.y = p.y + e * p.travel * (c.calm ? 0.40 : 1);
+      o.rot = 0;
+      o.a = 1;
+    },
+  };
+
+  // Every hue any cel below paints. Declared here and linted by a test that
+  // greps the cel sources, so a colour cannot be smuggled past the palette rules
+  // by writing it inline.
+  const LIVE = {
+    // FOUNDRY — a rolling mill seen from the floor. Everything here is near-black
+    // and composited source-over: the only light in this world is the furnace
+    // slot, and that lives in the bake. A silhouette loses to a lit bar every
+    // time, which is exactly the argument that lets this world move this much.
+    foundry: {
+      mode: 'subtract', band: 0.45, blits: 6, cover: 0.19, hues: [228, 230],
+      // 2W-wide belt tile, read through a moving source window: one blit, no
+      // seam, and none of the wrap arithmetic a two-blit scroll needs.
+      strip: {
+        y: 0.185, h: 0.024, rate: 1.6,
+        draw(x, w, h) {
+          x.fillStyle = 'hsla(228 26% 4% / 0.95)';
+          x.fillRect(0, h * 0.30, w, h * 0.40);
+          for (let i = 0; i * 18 < w; i++) x.fillRect(i * 18, 0, 7, h);   // cleats
+        },
+      },
+      cels: {
+        wheel: {
+          w: 128, h: 128,
+          draw(x, w, h) {
+            const r = w * 0.47, cx = w * 0.5, cy = h * 0.5;
+            x.fillStyle = 'hsla(228 26% 4% / 0.96)';
+            x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.arc(cx, cy, r * 0.80, 0, TAU, true); x.fill();
+            for (let i = 0; i < 8; i++) {                                  // spokes
+              const a = (i / 8) * TAU;
+              x.save(); x.translate(cx, cy); x.rotate(a);
+              x.fillRect(-w * 0.022, -r * 0.84, w * 0.044, r * 0.84);
+              x.restore();
+            }
+            x.beginPath(); x.arc(cx, cy, r * 0.16, 0, TAU); x.fill();      // hub
+          },
+        },
+        gear: {
+          w: 96, h: 96,
+          draw(x, w, h) {
+            const r = w * 0.44, cx = w * 0.5, cy = h * 0.5;
+            x.fillStyle = 'hsla(230 28% 4% / 0.96)';
+            x.beginPath();
+            for (let i = 0; i < 14; i++) {                                 // teeth
+              const a = (i / 14) * TAU;
+              x.save(); x.translate(cx, cy); x.rotate(a);
+              x.rect(-w * 0.032, -r * 1.11, w * 0.064, r * 0.20);
+              x.restore();
+            }
+            x.fill();
+            x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.arc(cx, cy, r * 0.24, 0, TAU, true); x.fill();
+          },
+        },
+        shoe: {
+          w: 96, h: 64,
+          draw(x, w, h) {
+            x.fillStyle = 'hsla(228 26% 4% / 0.96)';
+            x.fillRect(w * 0.06, h * 0.58, w * 0.88, h * 0.30);            // the shoe
+            x.fillRect(w * 0.20, 0, w * 0.12, h * 0.60);                   // two rods
+            x.fillRect(w * 0.68, 0, w * 0.12, h * 0.60);
+            x.fillRect(w * 0.02, h * 0.86, w * 0.96, h * 0.10);            // the die
+          },
+        },
+      },
+      parts: [
+        // The flywheel's lower third sits behind the bake's gantry beam, so it
+        // reads as bolted into a building rather than floating in front of one.
+        // 1.05 rad/s is a six-second turn. The drafted 0.50 was a truer flywheel
+        // speed and measured, at 12.6 s per turn, as very nearly nothing: an
+        // eight-spoke wheel that slow is a still picture to anyone glancing at
+        // the sky between gates.
+        { cel: 'wheel', pose: 'spin', x: 0.17, y: 0.150, s: 0.20, rate: 1.05 },
+        // The two gear rates are the INVERSE RATIO of the two radii (0.11 and
+        // 0.08), so the teeth genuinely drive each other instead of merely both
+        // turning. Get this wrong and the eye reads it as broken machinery.
+        { cel: 'gear', pose: 'spin', x: 0.64, y: 0.098, s: 0.11, rate: 0.90, calmDrop: true, lowDrop: true },
+        { cel: 'gear', pose: 'spin', x: 0.77, y: 0.150, s: 0.08, rate: -1.24, calmDrop: true, lowDrop: true },
+        // The presses carry INFORMATION — they are the tell for when a gate may
+        // enter — so calm damps their travel but may never drop them. Cutting a
+        // tell while keeping its tax is strictly unfair to the player who asked
+        // for less motion.
+        { cel: 'shoe', pose: 'press', x: 0.30, y: 0.255, s: 0.11, travel: 0.045 },
+        { cel: 'shoe', pose: 'press', x: 0.46, y: 0.255, s: 0.11, travel: 0.045, lag: 0.16, lowDrop: true },
+      ],
+    },
+
+    // MIRAGE — heat over a salt flat. The cheapest possible living layer: it adds
+    // no sprite, no light and no silhouette, because it re-blits pixels the bake
+    // already painted. It needs SCENES.saltglare to exist, because a horizontal
+    // displacement of a vertical-only gradient is a perfect no-op.
+    saltglare: {
+      // band 0.45, not the drafted 0.60: LIVE_BAND_MAX clamps it anyway, and a
+      // declared number that the engine silently overrides is a lie in a table
+      // that a test reads. The refract band ends at 0.44 so no slice is clipped.
+      mode: 'refract', band: 0.45, blits: 6, cover: 0.33, hues: [24],
+      // Heat shimmers FAST and small. rate 4.2 rad/s (a 1.5 s cycle) with a 9 px
+      // peak reads as air; the 24 px it would take to hit the same measured
+      // motion at the drafted 2.42 rad/s reads as jelly.
+      refract: { y0: 0.15, y1: 0.44, slices: 5, amp0: 9, amp1: 2.2, rate: 4.2, step: 0.9, inset: 10 },
+      cels: {
+        devil: {
+          w: 48, h: 160,
+          draw(x, w, h) {
+            // A dark tapered column, not a lit wisp: subtractive, so it can never
+            // out-glow anything in a world whose reward is a small bright mote.
+            const g = x.createLinearGradient(0, 0, 0, h);
+            g.addColorStop(0, 'hsla(24 30% 12% / 0)');
+            g.addColorStop(0.45, 'hsla(24 30% 12% / 0.85)');
+            g.addColorStop(1, 'hsla(24 30% 12% / 0)');
+            x.fillStyle = g;
+            x.beginPath();
+            x.moveTo(w * 0.50, 0);
+            x.quadraticCurveTo(w * 0.92, h * 0.45, w * 0.62, h);
+            x.lineTo(w * 0.38, h);
+            x.quadraticCurveTo(w * 0.08, h * 0.45, w * 0.50, 0);
+            x.closePath(); x.fill();
+          },
+        },
+      },
+      parts: [
+        { cel: 'devil', pose: 'drift', x: -0.20, y: 0.34, s: 0.22, vx: 0.056, span: 1.45, a: 0.22, calmDrop: true, lowDrop: true },
+      ],
+    },
+
+    // MURMURFEN — a flooded fen under a murmuration. The first background element
+    // in LUMEN that REMOVES light instead of adding it, and that is precisely why
+    // it is safe: dark specks are legible only against the lit upper sky, and they
+    // fade to nothing before they reach the half of the screen the game is
+    // played in.
+    murmurfen: {
+      mode: 'subtract', band: 0.42, blits: 2, cover: 0.17, hues: [232],
+      cels: {
+        flock: {
+          w: 192, h: 72,
+          draw(x, w, h) {
+            // ~90 three-pixel chevrons laid out in a lens. Where two BODIES
+            // overlap at draw time the silhouette doubles, and that overlap is
+            // the murmuration's breathing — with no per-bird work at all.
+            const rnd = mulberry32(0xb15d);
+            x.lineWidth = 1.6;
+            x.lineCap = 'round';
+            for (let i = 0; i < 120; i++) {
+              const u = rnd(), v = rnd();
+              const bx = u * w;
+              // A lens: dense in the middle, thinning to both tips. The DENSITY
+              // has to taper too, not just the height — the first version tapered
+              // only the spread and drew every chevron at one alpha, which made
+              // the flock read as a rectangle full of birds with two pointed
+              // ends. A flock has no edge; a sprite does, and the sprite's edge
+              // is what the eye finds.
+              const spread = Math.sin((bx / w) * Math.PI);
+              const by = h * 0.5 + (v - 0.5) * h * spread;
+              const edge = spread * (1 - Math.abs(v - 0.5) * 2 * 0.55);
+              if (rnd() > edge * 1.15) continue;         // thin toward every edge
+              const s = 1.2 + rnd() * 1.7;
+              x.strokeStyle = `hsla(232 30% 8% / ${(0.22 + 0.42 * edge).toFixed(3)})`;
+              x.beginPath();
+              x.moveTo(bx - s, by + s * 0.6);
+              x.lineTo(bx, by - s * 0.4);
+              x.lineTo(bx + s, by + s * 0.6);
+              x.stroke();
+            }
+          },
+        },
+      },
+      parts: [
+        { cel: 'flock', pose: 'drift', x: 0.50, y: 0.13, s: 0.12, yMax: 0.26, fuelSpread: -0.16,
+          wx: [[0.34, 0.41, 0], [0.16, 0.97, 1.1]], wy: [[0.06, 0.63, 0]] },
+        { cel: 'flock', pose: 'drift', x: 0.50, y: 0.155, s: 0.115, yMax: 0.28, lowDrop: true, fuelSpread: 0.16,
+          wx: [[0.34, 0.56, 2.1], [0.16, 1.33, 0.4]], wy: [[0.06, 0.87, 2.1]] },
+      ],
+    },
+  };
+
+  LUMEN.LIVE = LIVE;
+  LUMEN.POSE = POSE;
+  LUMEN.LIVE_LIMITS = { band: LIVE_BAND_MAX, cover: LIVE_COVER_MAX, blits: LIVE_BLITS_MAX };
+
   class Background {
-    constructor() { this.dots = []; this.blobs = []; this.t = 0; this.layer = null; this._layerKey = ''; }
+    constructor() {
+      this.dots = []; this.blobs = []; this.t = 0; this.layer = null; this._layerKey = '';
+      // the live layer's own clock and its baked surfaces. `lt` is seconds, `pan`
+      // is screen-widths travelled and `sx` is the run's real speed in screens
+      // per second — a rate and a distance, because poses need both.
+      this.lt = 0; this.pan = 0; this.sx = 0;
+      this.live = null; this._liveKey = '';
+      this.atlas = null; this.atlasRects = null; this._atlasKey = ''; this._atlasBakes = 0;
+      this.strip = null; this._stripKey = '';
+      this._o = { x: 0, y: 0, rot: 0, a: 1 };            // preallocated pose output
+      this._c = { lt: 0, pan: 0, sx: 0, calm: false, st: null };
+    }
 
     resize(W, H) {
       this.W = W; this.H = H;
@@ -1073,10 +1527,24 @@
         this.blobs.push({ i, x: rand(0, W), y: rand(0, H), r: rand(H * 0.25, H * 0.55), hue: rand(230, 300) });
       }
       this.layer = null; // force a rebake at the new size
+      // The strip is the ONE live surface whose size follows W, so it is the one
+      // a resize invalidates. The atlas is deliberately untouched: it is baked at
+      // a fixed pixel size in cel units and scaled at blit time, so a rotation, a
+      // collapsing URL bar or a window drag costs zero atlas work.
+      this._stripKey = '';
     }
 
     update(dt, scroll) {
       this.t += dt;
+      // THESE THREE LINES MUST STAY ABOVE THE dustMode BRANCHES BELOW. Every one
+      // of those branches `return`s, and two of the three living worlds declare a
+      // dustMode — so putting the live clock underneath them would freeze the
+      // whole layer at t=0 while it kept drawing happily, with no error anywhere.
+      // That is the same shape as the bug that killed this game's post-ad audio:
+      // state written inside a path that had already returned.
+      this.lt += dt;
+      this.sx = scroll / Math.max(1, this.W || 1);
+      this.pan = (this.pan + this.sx * dt) % 1e4;
       const M = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
       if (M && M.dustMode === 'spiral') {
         // Everything is falling in. Dust drifts toward one point and speeds up
@@ -1109,6 +1577,38 @@
         }
         return;
       }
+      if (M && M.dustMode === 'murmur') {
+        // The dust field re-tasked as BIRDS. One shared attractor wanders the
+        // upper sky and every speck steers toward it, with a tangential term
+        // taken from its own phase so the field orbits and folds instead of
+        // collapsing to a point. It costs nothing new — the count already rides
+        // LUMEN.Q.dust and the draw is one fillRect per speck, which is cheaper
+        // than the arc+fill the default does.
+        // Under reduce-motion the attractor is FROZEN at the centre rather than
+        // removed: the specks then drift slowly toward one still point, which
+        // still reads as a flock and never as a stopped frame.
+        const still = calmVisuals();
+        const calm = still ? 0.30 : 1;
+        const ax = still ? this.W * 0.5
+          : this.W * (0.50 + 0.28 * Math.sin(this.t * 0.19) + 0.12 * Math.sin(this.t * 0.47));
+        const ay = still ? this.H * 0.20
+          : clamp(this.H * (0.20 + 0.07 * Math.sin(this.t * 0.31)), 0, this.H * 0.42);
+        for (const d of this.dots) {
+          const dx = ax - d.x, dy = ay - d.y;
+          const dist = Math.max(20, Math.hypot(dx, dy));
+          const pull = (40 + 220 * d.depth) * dt * calm;
+          // a tangential push, so the flock folds around the attractor instead
+          // of falling into it
+          const tx = -dy / dist, ty = dx / dist;
+          const swirl = Math.sin(d.tw) * 46 * dt * calm;
+          d.x += (dx / dist) * pull * 0.55 + tx * swirl - scroll * d.depth * dt * 0.06;
+          d.y += (dy / dist) * pull * 0.55 + ty * swirl;
+          d.tw += dt * (0.7 + d.depth * 1.3);
+          if (d.x < -8) d.x = this.W + 8; else if (d.x > this.W + 8) d.x = -8;
+          if (d.y < -8) d.y = this.H * 0.5; else if (d.y > this.H + 8) d.y = this.H * 0.5;
+        }
+        return;
+      }
       if (M && M.dustMode === 'petal') {
         // Petals FALL. They still ride the scroll a little so the world keeps
         // moving past, but the read is downward drift with a sideways sway —
@@ -1125,6 +1625,186 @@
         d.x -= scroll * d.depth * dt;
         if (d.x < -4) { d.x = this.W + 4; d.y = rand(0, this.H); }
         d.tw += dt * (1 + d.depth);
+      }
+    }
+
+    // ---- live scene ---------------------------------------------------------
+
+    // What this tier is allowed to spend. A tier change already nulls the bake and
+    // re-runs resize (see LUMEN.applyQuality), and both keys below carry the tier,
+    // so nothing extra has to be invalidated by hand.
+    _liveCaps() {
+      const q = LUMEN.Q || QUALITY.balanced;
+      return { atlas: q.atlas || 512, live: q.live == null ? 1 : q.live, tier: q.name };
+    }
+
+    // Resolve `live: '<id>'` on the equipped world. Cheap and memoised on the id,
+    // so the fifteen worlds that declare nothing pay one string compare a frame.
+    _resolveLive(M) {
+      const want = (M && M.live) || '';
+      if (this._liveKey === want) return;
+      this._liveKey = want;
+      this.live = want && LIVE[want] ? LIVE[want] : null;
+    }
+
+    // One canvas per living world, at a FIXED pixel size. Cels are baked already
+    // coloured, so the eight flow buckets that re-key the main bake never touch
+    // this; flow is expressed later as a free alpha lift on a blit that is
+    // happening anyway.
+    _bakeAtlas(spec, caps) {
+      const key = this._liveKey + ':' + caps.atlas;
+      if (this._atlasKey === key && this.atlas) return;
+      const edge = caps.atlas;
+      const unit = edge / 512;                       // cel units are authored at 512
+      if (!this.atlas) this.atlas = document.createElement('canvas');
+      if (this.atlas.width !== edge || this.atlas.height !== edge >> 1) {
+        this.atlas.width = edge; this.atlas.height = edge >> 1;
+      }
+      const x = this.atlas.getContext('2d');
+      x.setTransform(1, 0, 0, 1, 0, 0);
+      x.clearRect(0, 0, this.atlas.width, this.atlas.height);
+      const rects = {};
+      let px = 1, py = 1, rowH = 0;
+      for (const name of Object.keys(spec.cels)) {
+        const cel = spec.cels[name];
+        const cw = Math.max(2, Math.round(cel.w * unit)), ch = Math.max(2, Math.round(cel.h * unit));
+        if (px + cw + 1 > this.atlas.width) { px = 1; py += rowH + 1; rowH = 0; }
+        x.save(); x.translate(px, py); x.beginPath(); x.rect(0, 0, cw, ch); x.clip();
+        cel.draw(x, cw, ch);
+        x.restore();
+        rects[name] = { x: px, y: py, w: cw, h: ch };
+        px += cw + 1; rowH = Math.max(rowH, ch);
+      }
+      this.atlasRects = rects;
+      this._atlasKey = key;
+      this._atlasBakes++;
+    }
+
+    // The one surface that follows W: a 2W-wide periodic tile, read through a
+    // moving source window. One blit, no seam, and none of the wrap arithmetic a
+    // two-blit scroll needs.
+    _bakeStrip(spec, caps) {
+      const key = this._liveKey + ':' + Math.round(this.W) + ':' + caps.tier;
+      if (this._stripKey === key && this.strip) return;
+      const w = Math.max(8, Math.round(this.W)) * 2;
+      const h = Math.max(2, Math.round(this.H * spec.strip.h));
+      if (!this.strip) this.strip = document.createElement('canvas');
+      if (this.strip.width !== w || this.strip.height !== h) { this.strip.width = w; this.strip.height = h; }
+      const x = this.strip.getContext('2d');
+      x.setTransform(1, 0, 0, 1, 0, 0);
+      x.clearRect(0, 0, w, h);
+      // Painted twice at exactly W apart, so any source window of width W lands
+      // on a continuous picture no matter where it starts.
+      spec.strip.draw(x, w, h);
+      this._stripKey = key;
+    }
+
+    // Draw the live layer. Runs on top of the baked blit and behind the dust,
+    // which is the nearest plane and must stay in front of everything.
+    _drawLive(ctx, flow, st) {
+      const spec = this.live;
+      if (!spec) return;
+      const { W, H } = this;
+      const caps = this._liveCaps();
+      this._bakeAtlas(spec, caps);
+      if (spec.strip) this._bakeStrip(spec, caps);
+
+      // Accessibility outranks theme, exactly as gateCap already does: under high
+      // contrast or any colour-vision preset the PARTS — the tier big enough to
+      // compete with a bar — are not drawn at all, and what is left is halved.
+      const plain = Store.highContrast || Store.colorblind !== 'off';
+      const calm = calmVisuals();
+      const lean = caps.live < 1;
+
+      const c = this._c;
+      c.lt = this.lt; c.pan = this.pan; c.sx = this.sx; c.calm = calm;
+      c.st = st || { fuel: 1, tick: 0 };
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, H * Math.min(spec.band, LIVE_BAND_MAX));
+      ctx.clip();
+      if (spec.mode === 'light') ctx.globalCompositeOperation = 'lighter';
+
+      if (spec.refract) this._drawRefract(ctx, spec, plain, calm, lean);
+
+      if (spec.strip && this.strip) {
+        const s = spec.strip;
+        const sw = this.strip.width * 0.5;
+        // The belt runs AGAINST the scroll, which is what reads as driven rather
+        // than as parallax. `pan` and not `lt * rate`, because scrollSpeed changes
+        // continuously and a rate times wall-clock jumps backwards every time the
+        // difficulty ramp tightens.
+        const sxw = (((this.pan * s.rate * (calm ? 0.45 : 1)) % 1) + 1) % 1 * sw;
+        ctx.globalAlpha = plain ? 0.5 : 1;
+        ctx.drawImage(this.strip, sxw, 0, sw, this.strip.height, 0, H * s.y, W, H * s.h);
+        ctx.globalAlpha = 1;
+      }
+
+      if (!plain && spec.parts) {
+        const o = this._o;
+        for (const p of spec.parts) {
+          if (calm && p.calmDrop) continue;          // calm is a COST knob: the bake
+          if (lean && p.lowDrop) continue;           // already painted what sits under
+          const r = this.atlasRects && this.atlasRects[p.cel];
+          if (!r) continue;
+          POSE[p.pose](p, o, c);
+          const dh = H * p.s, dw = dh * (r.w / r.h);
+          ctx.globalAlpha = (p.a == null ? 1 : p.a) * o.a;
+          if (o.rot) {
+            // save/restore, NOT setTransform. The canvas already carries the
+            // device-pixel-ratio scale that Game.resize applied once and never
+            // re-applies, so resetting to identity here silently dropped it —
+            // and not just for this part: every part drawn after it, and the
+            // non-rotated branch below, inherited the flattened matrix. On a
+            // dpr-2 phone the whole machinery came out at half size in the
+            // top-left quadrant. Measured at the blit: the scale factor went
+            // 2, 2, 0.75, 0.96, -0.40, 1, 1 across one frame.
+            ctx.save();
+            ctx.translate(W * o.x, H * o.y); ctx.rotate(o.rot);
+            ctx.drawImage(this.atlas, r.x, r.y, r.w, r.h, -dw * 0.5, -dh * 0.5, dw, dh);
+            ctx.restore();
+          } else {
+            ctx.drawImage(this.atlas, r.x, r.y, r.w, r.h, W * o.x - dw * 0.5, H * o.y - dh * 0.5, dw, dh);
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+    }
+
+    // Heat haze: re-blit a band of the layer that was ALREADY drawn, in slices,
+    // each displaced sideways. It adds no light and no new silhouette — it moves
+    // pixels the bake put there — which is the strongest readability argument
+    // available to a background that reaches into the corridor.
+    _drawRefract(ctx, spec, plain, calm, lean) {
+      if (calm) return;                     // deleted, not slowed: the base blit
+      const R = spec.refract;               // already painted this band flat
+      const { W, H } = this;
+      const n = lean ? Math.max(2, R.slices - 2) : R.slices;
+      const scale = 0.5;                    // the bake is a half-resolution layer
+      const amp = (lean ? 0.5 : 1) * (plain ? 0.5 : 1);
+      const bandH = (R.y1 - R.y0) / n;
+      for (let i = 0; i < n; i++) {
+        const y0 = R.y0 + bandH * i;
+        // Strongest at the BOTTOM of the band, where the ground is hottest, and a
+        // phase step per slice so the haze travels instead of wobbling in unison.
+        // amp0 belongs at the BOTTOM of the band, nearest the hot ground —
+        // i counts down from the top, so the ends have to be swapped or the
+        // strongest displacement lands on the slice with the least to bend.
+        const a = lerp(R.amp1, R.amp0, i / Math.max(1, n - 1)) * amp;
+        const dx = a * Math.sin(this.lt * R.rate + i * R.step);
+        // SAME SCALE, destination offset. The first version read a source rect
+        // inset by `inset` and drew it to a destination WIDENED by `inset`,
+        // which magnified every slice horizontally by ~12% — so the band did not
+        // shimmer, it stepped, and each slice boundary read as a hard horizontal
+        // seam across the whole screen. A seam does not look like heat; it looks
+        // like a rendering fault. The <= amp px of screen edge left uncovered by
+        // the offset still shows the base blit, which is the same picture, so
+        // there is nothing to fill.
+        ctx.drawImage(this.layer,
+          0, y0 * this.layer.height, this.layer.width, bandH * this.layer.height,
+          dx, y0 * H, W, bandH * H);
       }
     }
 
@@ -1188,29 +1868,58 @@
       if (M && M.scene && SCENES[M.scene]) SCENES[M.scene](x, w, h);
     }
 
-    draw(ctx, hue, flow) {
+    draw(ctx, hue, flow, st) {
       const { W, H } = this;
-      const mapId = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef().id : 'deepfield';
+      const M0 = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
+      const mapId = M0 ? M0.id : 'deepfield';
       const key = mapId + ':' + Math.round(flow * 8) + ':' + W + 'x' + H;
       if (!this.layer || this._layerKey !== key) { this._bake(flow); this._layerKey = key; }
       ctx.drawImage(this.layer, 0, 0, W, H);
+
+      // The living half, on top of the still one and behind the dust.
+      this._resolveLive(M0);
+      if (this.live) this._drawLive(ctx, flow, st);
 
       // parallax star-dust stays live — it's cheap and carries all the motion
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const MD = LUMEN.Cosmetics ? LUMEN.Cosmetics.mapDef() : null;
+      if (MD && MD.dustMode === 'murmur') {
+        // Birds, not stars: the ONE dust field in the game painted source-over in
+        // near-black instead of additively in light. Dark specks are legible only
+        // against a lit upper sky, so the alpha is ramped to zero before they
+        // reach the half of the screen the game is played in — a fade and not a
+        // clip, so there is no cut line anywhere.
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'hsl(232 30% 8%)';
+        const fadeFrom = this.H * 0.32, fadeTo = this.H * 0.52;
+        for (const d of this.dots) {
+          const f = clamp((fadeTo - d.y) / (fadeTo - fadeFrom), 0, 1);
+          if (f <= 0) continue;
+          ctx.globalAlpha = (0.10 + d.depth * 0.20) * f;
+          ctx.fillRect(d.x, d.y, 2, 2);
+        }
+        ctx.restore();
+        return;
+      }
       if (MD && MD.dustMode === 'lift') {
         // A short warm lozenge and the tail it left, not a dot: two fillRects,
         // no path and no save/restore, which is CHEAPER than the arc+fill the
         // default does. One fillStyle for the whole field; depth rides alpha.
         ctx.fillStyle = `hsl(${lerp(MD.dust, 300, flow)} 90% ${72 + flow * 12}%)`;
         const sway = calmVisuals() ? 0 : 1;
+        // `dustFade: 'up'` ramps the grit to nothing in the LOWER half. Mirage is
+        // a daylight world, so its additive grit would otherwise be sitting in
+        // the one band that is deliberately dark to buy back contrast.
+        const fadeUp = MD.dustFade === 'up';
         for (const d of this.dots) {
           const lx = d.x + Math.sin(d.tw * 1.1) * 5 * d.depth * sway;
           const bw = Math.max(1, d.r * 0.7), bh = d.r * 2.2;
-          ctx.globalAlpha = d.depth * 0.8;
+          const f = fadeUp ? clamp((this.H * 0.55 - d.y) / (this.H * 0.20), 0, 1) : 1;
+          if (f <= 0) continue;
+          ctx.globalAlpha = d.depth * 0.8 * f;
           ctx.fillRect(lx, d.y, bw, bh);
-          ctx.globalAlpha = d.depth * 0.28;
+          ctx.globalAlpha = d.depth * 0.28 * f;
           ctx.fillRect(lx, d.y + bh, bw, bh * 1.6);
         }
         ctx.restore();
@@ -1928,6 +2637,13 @@
       this.CROSS_TIME = 0.78; // seconds to fall wall-to-wall (higher = floatier / more forgiving)
       this.flow = 0;          // 0..1 smoothed flow amount
       this.modalOpen = false; // true while a menu-level modal (shop) is open
+      // What a living world is allowed to read from the run. Preallocated so
+      // render() never allocates, and deliberately TINY: a background may know
+      // how full the flow tank is and where the mill's tick sits, and nothing
+      // else. `gearT` is a monotonic tick counter, so the machine that announces
+      // a gate and the gate itself read ONE number and cannot drift apart.
+      this._bgs = { fuel: 1, tick: 0 };
+      this.gearT = 0;
       this._bind();
       this.resize();
       this.reset();
@@ -2094,6 +2810,10 @@
       this.shield = false;              // absorbs exactly one hit
       this.hasFlipped = false;    // drives the first-run "tap to flip" hint
       this.spawnTimer = 1.1;      // lead-in before first obstacle
+      // The mill's clock and any held spawn belong to the RUN, not to the
+      // session: a fresh run must not inherit the last one's phase, or the very
+      // first gate of a foundry run arrives on a stamp the player never saw.
+      this.gearT = 0; this._heldSpawn = false; this._heldAt = 0;
       this.moteTimer = 0.5;
       this.lastC = 0.5;          // last gap centre, as a fraction of the playfield
       this.spawnIndex = 0;       // index into `plan` for daily runs
@@ -2199,6 +2919,15 @@
     // short enough that it is a moment rather than a mode.
     get FLOW_MAX() { return 4.5; }
 
+    // MURMURFEN's `roost` is the only trait in the catalogue that touches flow,
+    // which is the game's core reward loop. Draining faster AND refilling faster
+    // is not a buff and not a nerf: the burst gets shorter and comes back sooner,
+    // so bullet-time stops being something you bank and becomes something that
+    // keeps arriving. Every other world leaves both undefined, which reads as 1
+    // and leaves the loop exactly as it has always been.
+    get flowDrain() { const f = this.world && this.world.flow; return (f && f.drain) || 1; }
+    get flowRefill() { const f = this.world && this.world.flow; return (f && f.refill) || 1; }
+
     // Traps join the run once the basics have stopped being the problem — or
     // immediately, if the day is a trap day.
     get trapsOn() {
@@ -2297,6 +3026,19 @@
       const t = this.rampT;
       return clamp(1.55 - t * 0.005, 0.80, 1.55) * (this.diff || DIFFICULTY.normal).spawn * (m ? m.spawn : 1) * ((this.world && this.world.spawn) || 1);
     }
+
+    // FOUNDRY's mill tick, in SECONDS but defined in CROSSINGS. `world.tick` is
+    // how many wall-to-wall falls one stamp is worth, so when a mode speeds the
+    // corridor up or an easier difficulty caps the orb's speed and stretches a
+    // crossing, the stamp stretches with it. Fix the tick in wall-clock seconds
+    // instead and the one world built on predictable arrival becomes the world
+    // that serves gates the orb cannot physically reach, at the settings chosen
+    // by the players least able to absorb it.
+    get tickLen() {
+      const t = this.world && this.world.tick;
+      return t ? t * (this.crossSeconds / this.CROSS_TIME) : 0;
+    }
+
     get gapFrac() {
       if (this.tutorial) return 0.42;   // generous openings while learning
       const d = this.diff || DIFFICULTY.normal;
@@ -2995,6 +3737,12 @@
       p.trail.length = 0;
       // clear anything that could kill instantly on resume
       this.obstacles = this.obstacles.filter((ob) => ob.x > p.x + this.W * 0.55);
+      // FOUNDRY's held spawn is part of "anything that could kill instantly".
+      // If the run ended while a gate was waiting on the mill's next stamp, the
+      // hold survives the revive, and `Math.floor(gearT) > _heldAt` is already
+      // true by the time play resumes — so a bar enters on the very first frame
+      // back, straight into the runway the two lines above just cleared.
+      this._heldSpawn = false; this._heldAt = Math.floor(this.gearT);
       // Anything ATTACHED to a gate we just deleted has to go with it.
       //
       // A power-up reads its position from its gate every frame
@@ -3686,6 +4434,8 @@
       // background + particles keep moving a touch even when idle
       const scroll = this.state === State.PLAY ? this.scrollSpeed : 40;
       this.hueBase = 190 + Math.sin(this.elapsed * 0.15) * 12;
+      this._bgs.fuel = this.state === State.PLAY ? clamp(this.flowFuel / this.FLOW_MAX, 0, 1) : 1;
+      this._bgs.tick = ((this.gearT % 1) + 1) % 1;
       this.bg.update(dt, scroll);
       this.particles.update(dt);
       this.rings.update(dt);
@@ -3850,10 +4600,33 @@
       if (this.tutorial) { this.tutSpawn(gdt); if (this.state !== State.PLAY) return; }
       else {
         this.spawnTimer -= gdt;
+        // FOUNDRY's `geared`: a gate may only ENTER the corridor on a stamp of the
+        // mill. When the timer expires the spawn is HELD until the tick wraps, so
+        // the press you can see and the gate you have to fly are one number and
+        // cannot drift apart.
+        //
+        // The hold can only ever ADD time, never subtract it, which is the whole
+        // fairness argument: `geared` cannot make a gate arrive sooner than the
+        // ordinary spawn interval would have, at any difficulty, in any mode.
+        // And the tick is defined in CROSSINGS rather than in wall-clock seconds
+        // (see tickLen), so neither a mode's speed multiplier nor the very-easy
+        // speed ceiling can serve an opening the orb has no time to reach.
+        const tick = this.tickLen;
+        if (tick) this.gearT += gdt / tick;
         if (this.spawnTimer <= 0) {
-          this.spawnObstacle();
-          // a "rush" daily plans its gates closer together than the clock alone
-          this.spawnTimer = this.spawnInterval * (this._lastSpecTight ? 0.78 : 1);
+          if (tick) {
+            if (!this._heldSpawn) { this._heldSpawn = true; this._heldAt = Math.floor(this.gearT); }
+            // fire on the next stamp after the hold began
+            if (Math.floor(this.gearT) > this._heldAt) {
+              this._heldSpawn = false;
+              this.spawnObstacle();
+              this.spawnTimer = this.spawnInterval * (this._lastSpecTight ? 0.78 : 1);
+            }
+          } else {
+            this.spawnObstacle();
+            // a "rush" daily plans its gates closer together than the clock alone
+            this.spawnTimer = this.spawnInterval * (this._lastSpecTight ? 0.78 : 1);
+          }
         }
         this.moteTimer -= gdt;
         // must go through this.rng, or a daily run's seeded stream desyncs per player
@@ -4014,14 +4787,14 @@
         // marking, and firing it continuously would bury the screen in rings
         if (!this.flowActive) this.signatureFx('flow', this.player.x, this.player.y);
         this.flowActive = true;
-        this.flowFuel = Math.max(0, this.flowFuel - gdt);
+        this.flowFuel = Math.max(0, this.flowFuel - gdt * this.flowDrain);
         this.flowSecRun += gdt;
       } else {
         if (this.flowActive) Audio && this._sfx('flowEnd');
         this.flowActive = false;
         // refills at about a third of the rate it drains, so back-to-back flows
         // are possible but never free
-        this.flowFuel = Math.min(this.FLOW_MAX, this.flowFuel + gdt * 0.34);
+        this.flowFuel = Math.min(this.FLOW_MAX, this.flowFuel + gdt * 0.34 * this.flowRefill);
       }
       const targetFlow = this.flowActive ? 1 : this.combo >= flowAt - 6 ? 0.5 : 0;
       this.flow += (targetFlow - this.flow) * clamp(realDt * 3, 0, 1);
@@ -4730,7 +5503,7 @@
       // transform, so on a tablet the sky reaches both edges while the corridor
       // stays a phone-shaped column in the middle. On a phone stageX is 0 and
       // this is exactly what it always was.
-      this.bg.draw(ctx, hue, this.flow);
+      this.bg.draw(ctx, hue, this.flow, this._bgs);
 
       ctx.save();
       if (this.stageX) ctx.translate(this.stageX, 0);
@@ -5037,16 +5810,52 @@
         for (const ob of this.obstacles) ob._a = brk(ob);
       }
 
+      // MIRAGE: a distant bar is DRAWN where the hot air says it is. Computed in
+      // the same loop as _a and for the same reason — the halo pass, the bodies
+      // and both lip passes all have to carry the identical offset or the parts
+      // of one bar come apart.
+      //
+      // COLLISION NEVER SEES THIS. updatePlay reads ob.x and g.y untouched, and
+      // that is the invariant a test asserts: the lie is in the picture, never in
+      // the hitbox. The falloff is SQUARED, so it has collapsed to nothing well
+      // before a bar enters the reaction window — the trait taxes planning and
+      // never execution.
+      const rf = this.world && this.world.refract;
+      if (rf && !calmVisuals()) {
+        const reach = this.W * rf.reach;
+        for (const ob of this.obstacles) {
+          const away = clamp((ob.x - this.player.x) / reach, 0, 1);
+          const f = away * away;
+          const ph = obPhase(ob);
+          ob._mx = f * rf.ax * Math.sin(this.elapsed * 2.4 + ph);
+          ob._my = f * this.playH * rf.ay * Math.sin(this.elapsed * 1.7 + ph * 1.7);
+        }
+      } else if (rf) {
+        // Under reduce-motion the wobble becomes a per-gate CONSTANT seeded from
+        // the gate's own phase: the bar sits at a fixed refraction, so the
+        // planning tax survives intact and only the motion goes. Damping the
+        // visuals while keeping the tax would be the reverse.
+        for (const ob of this.obstacles) {
+          const away = clamp((ob.x - this.player.x) / (this.W * rf.reach), 0, 1);
+          const f = away * away;
+          const ph = obPhase(ob);
+          ob._mx = f * rf.ax * Math.sin(ph);
+          ob._my = f * this.playH * rf.ay * Math.sin(ph * 1.7);
+        }
+      } else {
+        for (const ob of this.obstacles) { ob._mx = 0; ob._my = 0; }
+      }
+
       const segs = [];
       for (const ob of this.obstacles) {
         if (ob._a <= 0) continue;
         let cursor = this.playTop;
         for (const g of ob.gaps) {
           const top = g.y - g.h * 0.5, bot = g.y + g.h * 0.5;
-          if (top - cursor > 1) segs.push({ ob, y0: cursor, y1: top });
+          if (top - cursor > 1) segs.push({ ob, y0: cursor + ob._my, y1: top + ob._my });
           cursor = bot;
         }
-        if (this.playBottom - cursor > 1) segs.push({ ob, y0: cursor, y1: this.playBottom });
+        if (this.playBottom - cursor > 1) segs.push({ ob, y0: cursor + ob._my, y1: this.playBottom + ob._my });
       }
 
       {
@@ -5067,7 +5876,7 @@
           // height and a stub glows like a stub instead of a laser.
           const hp = Math.min(hpad, s.y1 - s.y0);
           ctx.globalAlpha = base * s.ob._a;
-          ctx.drawImage(halo, s.ob.x - hp, s.y0, s.ob.w + hp * 2, s.y1 - s.y0);
+          ctx.drawImage(halo, s.ob.x + s.ob._mx - hp, s.y0, s.ob.w + hp * 2, s.y1 - s.y0);
         }
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
@@ -5075,7 +5884,7 @@
 
       for (const s of segs) {
         ctx.globalAlpha = s.ob._a;
-        ctx.drawImage(sprite, s.ob.x - pad, s.y0, s.ob.w + pad * 2, s.y1 - s.y0);
+        ctx.drawImage(sprite, s.ob.x + s.ob._mx - pad, s.y0, s.ob.w + pad * 2, s.y1 - s.y0);
       }
       ctx.globalAlpha = 1;
 
@@ -5084,6 +5893,11 @@
       const cap = crispLips ? null : ((this.world && this.world.gateCap) || null);
       for (const ob of this.obstacles) {
         ctx.globalAlpha = ob._a;
+        // MIRAGE again: shift the whole lip pass rather than every coordinate
+        // inside the cap branches. Costs one save/restore, and only in a world
+        // that refracts — everywhere else _mx and _my are 0 and this is skipped.
+        const bent = ob._mx || ob._my;
+        if (bent) { ctx.save(); ctx.translate(ob._mx, ob._my); }
         for (const g of ob.gaps) {
           const top = g.y - g.h * 0.5, bot = g.y + g.h * 0.5;
           if (cap === 'torii') {
@@ -5129,11 +5943,69 @@
               ctx.ellipse(ob.x + ob.w * 0.5, bot + 1, (ob.w + ov * 2) * 0.46, 2.5, 0, Math.PI, TAU);
               ctx.fill();
             }
+          } else if (cap === 'press') {
+            // FOUNDRY. The ends of the bars are DIE BLOCKS: a chamfered slab
+            // widest at its OUTER edge and narrowing toward the opening, with a
+            // lug bar across it that reads as rack teeth at thumbnail size.
+            // Like torii and capstone it only ever grows sideways and away from
+            // the gap, so the straight edge you aim at never moves.
+            //
+            // The SEAM — and only the seam — slides 2px out and back on the
+            // mill's own tick, so on every stamp all ten lips on screen visibly
+            // seat. Moving the block itself would be a lie about the hitbox,
+            // which is the failure mode this whole cap was designed around.
+            const ov = Math.max(4, ob.w * 0.26);
+            const seat = 2 * Math.sin(this._bgs.tick * TAU);
+            if (top > this.playTop + 2) {
+              ctx.beginPath();
+              ctx.moveTo(ob.x - ov, top - 9); ctx.lineTo(ob.x + ob.w + ov, top - 9);
+              ctx.lineTo(ob.x + ob.w + ov * 0.45, top); ctx.lineTo(ob.x - ov * 0.45, top);
+              ctx.closePath(); ctx.fill();
+              ctx.fillRect(ob.x - ov * 0.9, top - 7 - seat, ob.w + ov * 1.8, 2);
+            }
+            if (bot < this.playBottom - 2) {
+              ctx.beginPath();
+              ctx.moveTo(ob.x - ov, bot + 9); ctx.lineTo(ob.x + ob.w + ov, bot + 9);
+              ctx.lineTo(ob.x + ob.w + ov * 0.45, bot); ctx.lineTo(ob.x - ov * 0.45, bot);
+              ctx.closePath(); ctx.fill();
+              ctx.fillRect(ob.x - ov * 0.9, bot + 5 + seat, ob.w + ov * 1.8, 2);
+            }
+          } else if (cap === 'ledge') {
+            // MIRAGE. Mesa strata: a bright caprock line, then two slabs
+            // stepping BACK toward the bar. Everything grows away from the gap.
+            const ov = Math.max(4, ob.w * 0.28);
+            if (top > this.playTop + 2) {
+              ctx.fillRect(ob.x - ov, top - 9, ob.w + ov * 2, 2);
+              ctx.fillRect(ob.x - ov * 0.7, top - 7, ob.w + ov * 1.4, 4);
+              ctx.fillRect(ob.x - ov * 0.35, top - 3, ob.w + ov * 0.7, 3);
+            }
+            if (bot < this.playBottom - 2) {
+              ctx.fillRect(ob.x - ov, bot + 7, ob.w + ov * 2, 2);
+              ctx.fillRect(ob.x - ov * 0.7, bot + 3, ob.w + ov * 1.4, 4);
+              ctx.fillRect(ob.x - ov * 0.35, bot, ob.w + ov * 0.7, 3);
+            }
+          } else if (cap === 'cattail') {
+            // MURMURFEN, and the cheapest cap in the catalogue at two ops. A
+            // bulrush head OUTSIDE the existing lip, plus a whisker beyond its
+            // tip. The lip bar itself is untouched and never moves; the head
+            // LEANS on the flow tank, so the corridor carries the same gauge the
+            // sky does.
+            const lean = (1 - this._bgs.fuel) * ob.w * 0.5;
+            const hw = ob.w * 0.44, hx = ob.x + ob.w * 0.5 - hw * 0.5;
+            if (top > this.playTop + 2) {
+              this.roundRect(ctx, hx + lean * 0.5, top - 18, hw, 13, hw * 0.5); ctx.fill();
+              ctx.fillRect(hx + hw * 0.5 - 1 + lean, top - 25, 2, 7);
+            }
+            if (bot < this.playBottom - 2) {
+              this.roundRect(ctx, hx + lean * 0.5, bot + 5, hw, 13, hw * 0.5); ctx.fill();
+              ctx.fillRect(hx + hw * 0.5 - 1 + lean, bot + 18, 2, 7);
+            }
           } else {
             if (top > this.playTop + 2) { this.roundRect(ctx, ob.x, top - 5, ob.w, 5, 2); ctx.fill(); }
             if (bot < this.playBottom - 2) { this.roundRect(ctx, ob.x, bot, ob.w, 5, 2); ctx.fill(); }
           }
         }
+        if (bent) ctx.restore();
       }
       ctx.globalAlpha = 1;
       // and a hot additive kiss along those lips so the opening glows too
@@ -5145,9 +6017,10 @@
         for (const ob of this.obstacles) {
           ctx.globalAlpha = ob._a;
           for (const g of ob.gaps) {
-            const top = g.y - g.h * 0.5, bot = g.y + g.h * 0.5;
-            if (top > this.playTop + 2) { this.roundRect(ctx, ob.x - 2, top - 7, ob.w + 4, 8, 3); ctx.fill(); }
-            if (bot < this.playBottom - 2) { this.roundRect(ctx, ob.x - 2, bot - 1, ob.w + 4, 8, 3); ctx.fill(); }
+            const top = g.y - g.h * 0.5 + ob._my, bot = g.y + g.h * 0.5 + ob._my;
+            const bx = ob.x + ob._mx;
+            if (top > this.playTop + 2) { this.roundRect(ctx, bx - 2, top - 7, ob.w + 4, 8, 3); ctx.fill(); }
+            if (bot < this.playBottom - 2) { this.roundRect(ctx, bx - 2, bot - 1, ob.w + 4, 8, 3); ctx.fill(); }
           }
         }
         ctx.globalAlpha = 1;
@@ -5171,6 +6044,12 @@
           if (!b || ob._a <= 0) continue;
           const h = b.y1 - b.y0;
           if (h < 2) continue;
+          // SALTGLARE refracts the bar; the fault has to travel with it, or the
+          // thing you are aiming AT comes away from the thing you are aiming it
+          // ON. Same reason the halo, the body and both lip passes all carry
+          // ob._mx / ob._my.
+          const bent = ob._mx || ob._my;
+          if (bent) { ctx.save(); ctx.translate(ob._mx, ob._my); }
           // A slow breathe when motion is allowed; a static outline when it is
           // not. Nothing is lost either way, because the pulse was never the
           // channel carrying the information.
@@ -5199,6 +6078,7 @@
             ctx.lineWidth = 2;
             ctx.stroke();
           }
+          if (bent) ctx.restore();
         }
         ctx.globalAlpha = 1;
         ctx.restore();

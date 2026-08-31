@@ -104,7 +104,7 @@ falls back to the sequencer, so the game is never silent because of a missing fi
 ## 6. Retention & monetisation (built)
 
 - **Daily run** — one seeded layout per day, leaderboard, streak. ✅
-- **Cosmetics** — 25 orb skins, 13 trails, 11 worlds, 8 signatures and 4 sets.
+- **Cosmetics** — 35 orb skins, 21 trails, 23 worlds, 16 signatures and 12 sets.
   The only things sold, and none of it touches how the game plays. ✅
 - **Missions** — three rotating goals, light dopamine + session goals. ✅
 - **Achievements** — 26 across five categories, paying shards, four of them

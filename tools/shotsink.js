@@ -41,9 +41,12 @@ http.createServer((req, res) => {
     // .webm too: an App Preview is recorded in the page with MediaRecorder off
     // canvas.captureStream and posted here as one file. Sending 600 PNG frames
     // over 600 round trips is the alternative, and it is neither fast nor robust.
-    if (!/^[\w.-]+\.(png|webm)$/.test(name)) { res.writeHead(400); return res.end('bad name'); }
-    const m = /^data:(?:image\/png|video\/webm[^;]*);base64,(.+)$/.exec(String(msg.data || ''));
-    if (!m) { res.writeHead(400); return res.end('not a png or webm data url'); }
+    // .jpg too: the shop's map cards are captured frames of the real game and
+    // ship as JPEG, so the capture has to be able to hand back what ships rather
+    // than a PNG that then needs a second tool to convert.
+    if (!/^[\w.-]+\.(png|jpg|webm)$/.test(name)) { res.writeHead(400); return res.end('bad name'); }
+    const m = /^data:(?:image\/png|image\/jpeg|video\/webm[^;]*);base64,(.+)$/.exec(String(msg.data || ''));
+    if (!m) { res.writeHead(400); return res.end('not a png, jpg or webm data url'); }
     const buf = Buffer.from(m[1], 'base64');
     fs.writeFileSync(path.join(OUT, name), buf);
     // eslint-disable-next-line no-console

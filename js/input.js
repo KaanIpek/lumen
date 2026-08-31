@@ -117,7 +117,68 @@
         x.shadowColor = '#ffd15c'; x.shadowBlur = 18;
         x.fillText(T('newBest'), W / 2, 545);
       }
+
+      // ---- what run was this, and where do I go to try it? -------------------
+      // The card used to say "can you beat it?" and then hand the reader no way
+      // to try: no date (the course is seeded from the date, so tomorrow's is a
+      // different game), no twist, and no link. Everything below is that gap.
+      x.shadowBlur = 0;
+
+      if (data.daily) {
+        // ONE line, left-aligned: date and twist together. Two stacked lines
+        // collided with the centred LUMEN wordmark at y=108 whenever the twist
+        // ran long, and a wordmark with text through it is worse than no twist.
+        const tag = T('shareDailyTag');
+        const label = tag + ' · ' + (data.dailyDate || '') +
+          (data.dailyTwist ? '  —  ' + data.dailyTwist : '');
+        x.textAlign = 'left';
+        x.font = '700 26px "Rajdhani", system-ui, sans-serif';
+        const wLabel = x.measureText(label).width;
+        // The card is composited over the LIVE canvas, and some worlds put
+        // something bright in that corner — BLACKOUT's light pulse, the furnace
+        // slot in FOUNDRY. Without a plate behind it this line disappears on
+        // exactly the maps that look best in a screenshot.
+        x.fillStyle = 'rgba(5,6,15,0.72)';
+        Share._plate(x, 34, 30, wLabel + 28, 44, 10);
+        x.fillStyle = 'rgba(234,246,255,0.92)';
+        x.fillText(label, 48, 60);
+
+        if (data.dailyStreak > 0) {
+          x.textAlign = 'right';
+          const streak = '🔥 ' + data.dailyStreak;
+          x.font = '700 26px "Rajdhani", system-ui, sans-serif';
+          const wStreak = x.measureText(streak).width;
+          x.fillStyle = 'rgba(5,6,15,0.72)';
+          Share._plate(x, W - 34 - (wStreak + 28), 30, wStreak + 28, 44, 10);
+          x.fillStyle = '#ffd15c';
+          x.fillText(streak, W - 48, 60);
+        }
+        x.textAlign = 'center';
+      }
+
+      // Every card carries the link, daily or not. It is the only thing on here
+      // that turns a screenshot into an install or a run.
+      if (data.url) {
+        x.font = '600 24px "Rajdhani", system-ui, sans-serif';
+        const wUrl = x.measureText(data.url).width;
+        x.fillStyle = 'rgba(5,6,15,0.62)';
+        Share._plate(x, (W - wUrl - 32) / 2, 578, wUrl + 32, 38, 9);
+        x.fillStyle = 'rgba(234,246,255,0.72)';
+        x.fillText(data.url, W / 2, 604);
+      }
       return c;
+    },
+
+    // A rounded plate behind text drawn over the live canvas. roundRect is not
+    // on every engine this ships to (older WebViews), so it is done by hand.
+    _plate(x, px, py, pw, ph, r) {
+      x.beginPath();
+      x.moveTo(px + r, py);
+      x.lineTo(px + pw - r, py); x.quadraticCurveTo(px + pw, py, px + pw, py + r);
+      x.lineTo(px + pw, py + ph - r); x.quadraticCurveTo(px + pw, py + ph, px + pw - r, py + ph);
+      x.lineTo(px + r, py + ph); x.quadraticCurveTo(px, py + ph, px, py + ph - r);
+      x.lineTo(px, py + r); x.quadraticCurveTo(px, py, px + r, py);
+      x.closePath(); x.fill();
     },
 
     // Share an actual image when the platform supports it; otherwise fall back

@@ -335,6 +335,56 @@
       snare: [], open: [7, 15],
     },
 
+    // ---- the living worlds ---------------------------------------------------
+
+    // A mill floor. Everything here is MACHINE time: a four-square kick you could
+    // set a stamping press to, a hat on the offbeat that reads as steam escaping,
+    // and a bass that walks the same four steps forever because a machine has no
+    // reason to vary. The lead is three notes hammered on the beat -- it is a
+    // work whistle, not a melody. Deliberately the most metronomic piece in the
+    // game, because this is the one world whose gates arrive on a clock.
+    foundry: {
+      bpm: 104, wave: 'square', sub: 'sawtooth',
+      kick: [0, 4, 8, 12], hat: 2,
+      A: [[36, 43, 48], [36, 43, 48], [34, 41, 46], [36, 43, 48]],
+      B: [[39, 46, 51], [38, 45, 50], [36, 43, 48], [34, 41, 46]],
+      arp: [0, 0, 2, 1],
+      lead: [12, N, N, N, 12, N, N, N, 15, N, N, N, 12, N, N, N],
+      bass: [0, 0, 0, 7, 0, 0, 0, 7],
+      snare: [8], open: [6, 14],
+    },
+
+    // Noon heat. Almost nothing happens, and what does happen is BENT: the lead
+    // is a slow bend between two notes a whole tone apart, the hat is sparse
+    // because nothing wants to move at this temperature, and there is no snare
+    // at all. Fastest tempo in the game paired with the emptiest pattern, so it
+    // shimmers rather than drives -- the same trick the world plays with its air.
+    saltglare: {
+      bpm: 138, wave: 'triangle', sub: 'sine',
+      kick: [0, 10], hat: 7,
+      A: [[41, 45, 48], [41, 46, 48], [40, 45, 47], [41, 45, 48]],
+      B: [[43, 47, 50], [41, 46, 48], [39, 44, 46], [41, 45, 48]],
+      arp: [0, 1, 0, 2, 0, 1],
+      lead: [N, N, 14, N, N, N, 16, N, N, N, 14, N, N, N, N, N, 12, N, N, N],
+      bass: [0, N, N, N, 5, N, N, N],
+      snare: [], open: [11],
+    },
+
+    // A fen at dusk. Two ideas: a low drone that never resolves, and an arp that
+    // GATHERS and SCATTERS -- six steps that climb then fall away, which is the
+    // flock and the flow tank both. The kick is a heartbeat rather than a beat,
+    // and the open hat on the last step is the whole thing lifting off at once.
+    murmurfen: {
+      bpm: 78, wave: 'sine', sub: 'triangle',
+      kick: [0, 9], hat: 5,
+      A: [[38, 45, 50], [40, 45, 52], [38, 43, 50], [36, 43, 48]],
+      B: [[43, 48, 55], [41, 48, 53], [38, 45, 50], [36, 43, 50]],
+      arp: [0, 1, 2, 2, 1, 0],
+      lead: [N, N, N, 19, N, N, 17, N, N, N, N, 14, N, N, N, N, N, 12, N, N, N, N],
+      bass: [0, N, N, 5, N, N, 3, N],
+      snare: [], open: [15],
+    },
+
     // ---- a MODE's music, not a world's ---------------------------------------
     // Claimed by ABANDON HOPE through `mode.song`, so it follows you onto every
     // map. Everything here is chosen to withhold:

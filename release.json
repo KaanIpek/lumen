@@ -3,7 +3,7 @@
   "_platforms": "iOS and Android do not go live at the same moment, and their live build numbers differ -- App Store 1.0.1 was build 86 while Play was still serving 85. A single `build` cannot be right for both: whichever store is behind sends its players to a listing that says they are already current. So each platform carries its own number, and `build` is only the fallback for anything else (desktop, an unknown platform).",
   "_releaseOrder": "`build` must never name a build that is not INSTALLABLE yet. Advertising one sends every player to a store that says they are already current, and then tells them again tomorrow -- a loop they cannot escape. So the bump comes LAST: ship the binary, wait for it to go live on both stores, then raise `build` here and push. The push redeploys Pages, and only then do older installs start seeing the prompt.",
   "_minBuild": "The hard block, with no way to dismiss it. Leave at 0. Move it only for a build that is genuinely unsafe to keep playing -- it locks out everyone below it.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "build": 88,
   "iosBuild": 88,
   "androidBuild": 88,
