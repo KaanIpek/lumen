@@ -7107,6 +7107,105 @@
     assert(asPlatform('ios', () => P.canRedeem) === false, 'iOS can still redeem');
   });
 
+  // ---- the tap ---------------------------------------------------------------
+  // This suite had 273 tests and not one of them dispatched a pointer event at
+  // the canvas, so when the HOLD rebuild replaced the pointerdown binding with
+  // one that only set `held` and called `track` — and `track` returns
+  // immediately on the twelve modes that are not HOLD — tapping stopped flipping
+  // the orb and everything stayed green. Keyboard and gamepad reach action() by
+  // their own paths, so it looked fine on a desktop. It shipped: the game was
+  // unplayable by touch, which is every phone.
+
+  function tapCanvas(g, atX, atY) {
+    const r = g.canvas.getBoundingClientRect();
+    const ev = new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true,
+      clientX: atX == null ? r.left + r.width / 2 : r.left + atX,
+      clientY: atY == null ? r.top + r.height / 2 : r.top + atY,
+    });
+    g.canvas.dispatchEvent(ev);
+    return ev;
+  }
+
+  // Count action() rather than watching player.dir. In HOLD the orb's direction
+  // legitimately follows the finger, so `dir` changes for reasons that have
+  // nothing to do with a flip — asserting on it would report the mode as broken
+  // while it worked, and (worse) could report it as working while it did not.
+  function countsActions(g, fn) {
+    const real = g.action.bind(g);
+    let n = 0;
+    g.action = function () { n++; return real.apply(g, arguments); };
+    try { fn(); } finally { g.action = real; }
+    return n;
+  }
+
+  test('A tap on the canvas flips the orb, in every mode that flips', () => {
+    const g = newGame(390, 844);
+    const skip = { hold: 1 };            // HOLD steers; it has its own test below
+    const broken = [];
+    for (const m of L.Modes.MODES) {
+      if (skip[m.id]) continue;
+      L.Modes.setCurrent(m.id);
+      g.start();
+      for (let i = 0; i < 20; i++) g.update(1 / 60);
+      if (g.state !== 'play') { g.toMenu(); continue; }
+      const n = countsActions(g, () => tapCanvas(g));
+      if (n !== 1) broken.push(m.id + '=' + n);
+      g.toMenu();
+    }
+    L.Modes.setCurrent('classic');
+    assert(broken.length === 0, 'a tap did not reach action() in: ' + broken.join(', '));
+  });
+
+  test('A tap in HOLD grabs for steering instead of flipping', () => {
+    const g = newGame(390, 844);
+    L.Modes.setCurrent('hold');
+    g.start();
+    for (let i = 0; i < 20; i++) g.update(1 / 60);
+    const n = countsActions(g, () => tapCanvas(g));
+    assert(n === 0, 'HOLD flipped on a tap (' + n + ' action calls) — it must steer');
+    assert(g.held === true, 'HOLD did not register the finger as held');
+    assert(g.touchY != null, 'HOLD did not record where the finger is');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
+  test('A tap from the menu still starts HOLD', () => {
+    // The carve-out above is scoped to a LIVE run on purpose. Without that
+    // scope the one mode you steer would be the one mode you could never start
+    // with a thumb.
+    const g = newGame(390, 844);
+    L.Modes.setCurrent('hold');
+    g.toMenu();
+    const n = countsActions(g, () => tapCanvas(g));
+    assert(n === 1, 'a tap from the menu did not reach action() in HOLD (' + n + ')');
+    g.toMenu();
+    L.Modes.setCurrent('classic');
+  });
+
+  test('The canvas-drawn buttons are reachable by touch', () => {
+    // Item buttons and the tutorial skip pill are PAINTED on the canvas, so the
+    // only thing that can hit them is the same handler the flip goes through.
+    // When that handler was unbound they were unreachable too, and nothing said
+    // so because no test had ever pressed one.
+    const g = newGame(390, 844);
+    L.Modes.setCurrent('classic');
+    g.start();
+    for (let i = 0; i < 20; i++) g.update(1 / 60);
+    g.render();
+    const rects = g._itemRects || [];
+    if (!rects.length) { g.toMenu(); return; }      // no items carried this run
+    const b = rects[0];
+    let used = null;
+    const realUse = g.useItem.bind(g);
+    g.useItem = function (t) { used = t; return realUse(t); };
+    const flips = countsActions(g, () => tapCanvas(g, b.x + b.w / 2, b.y + b.h / 2));
+    g.useItem = realUse;
+    assert(used === b.type, 'tapping an item button did not use it (got ' + used + ')');
+    assert(flips === 0, 'tapping an item button ALSO flipped the orb');
+    g.toMenu();
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 

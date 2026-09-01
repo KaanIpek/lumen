@@ -3196,7 +3196,16 @@
         this.touchY = clamp(e.clientY - r.top, this.playTop, this.playBottom);
       };
       const release = () => { this.held = false; this.touchY = null; };
-      this.canvas.addEventListener('pointerdown', (e) => { this.held = true; track(e); });
+      // `press` MUST be called here. Rebuilding HOLD as finger-steering replaced
+      // this binding with one that only set `held` and called `track`, and
+      // `track` returns immediately on the twelve modes that are not HOLD — so
+      // tapping the canvas stopped flipping the orb, stopped hitting the item
+      // buttons, and stopped dismissing the tutorial's skip pill. Keyboard and
+      // gamepad reach action() by their own paths, which is why nothing looked
+      // wrong on a desktop: the game was unplayable by TOUCH only, which is
+      // every phone. `track` runs first so HOLD has this frame's finger position
+      // before `press` decides whether to fall through to action().
+      this.canvas.addEventListener('pointerdown', (e) => { this.held = true; track(e); press(e); });
       this.canvas.addEventListener('pointermove', track, { passive: true });
       // A pointer that leaves the canvas or is stolen by the OS must count as a
       // release, or the orb keeps chasing a finger that is not there.
