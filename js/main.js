@@ -114,7 +114,16 @@
     // nothing if they never do. Deliberately after the first frame so it cannot
     // hold up the boot.
     if (LUMEN.Leaderboard.enabled) {
-      setTimeout(() => LUMEN.Leaderboard.prefetch(), 400);
+      setTimeout(() => {
+        LUMEN.Leaderboard.prefetch();
+        // THE CHASE reads the board out of this cache and never fetches for
+        // itself, so it has nothing to show until this lands — and nothing else
+        // would redraw the menu to reveal it. One redraw, after the one fetch.
+        // Failures are already swallowed by prefetch; this only ever runs late.
+        LUMEN.Leaderboard.top('daily', 20)
+          .then(() => { LUMEN.UI && LUMEN.UI.refreshMenu && LUMEN.UI.refreshMenu(); })
+          .catch(() => {});
+      }, 400);
     }
   }
 

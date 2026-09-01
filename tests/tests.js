@@ -7258,6 +7258,499 @@
     g.toMenu();
   });
 
+
+  // ---- THE CHASE -----------------------------------------------------------
+  //
+  // The feature ships knowing its own rival pool is empty: on 1 September 2026
+  // the live daily board held 0 rows, yesterday's held 1, and the all-time board
+  // held 5 in the game's entire life. So the PACE path is not a fallback that
+  // rarely runs — it is what every player gets, and it is tested as the primary
+  // case. The board path is tested just as hard because it must be correct on
+  // the day real people arrive, without anyone touching this code again.
+
+  // Pin the calendar. Several of these need "yesterday" to be a stable string,
+  // and a suite that ran at 23:59:59.9 would otherwise flake once a year in a
+  // way nobody could reproduce.
+  function withDay(dayStr, prevStr, fn) {
+    const D = L.Daily;
+    const rt = D.todayStr, ry = D.yesterdayStr;
+    D.todayStr = () => dayStr;
+    D.yesterdayStr = () => prevStr;
+    try { return fn(); } finally { D.todayStr = rt; D.yesterdayStr = ry; }
+  }
+  const chaseRows = (...scores) => scores.map((s, i) => ({
+    name: 'RIVAL' + i, score: s, combo: 1, user_id: 'u' + i,
+  }));
+
+  test('Chase: the target is the NEAREST score above you, not the top of the board', () => {
+    freshStorage();
+    const pick = L.Chase.pickRival(chaseRows(9000, 1400, 700, 300), 600);
+    assert(pick, 'a reachable rival was found');
+    eq(pick.score, 700, 'picked the nearest rung above 600');
+  });
+
+  test('Chase: a score equal to yours is not above you', () => {
+    freshStorage();
+    const pick = L.Chase.pickRival(chaseRows(600, 900), 600);
+    eq(pick && pick.score, 900, 'the equal row was skipped, the higher one taken');
+  });
+
+  test('Chase: an unreachable board hands back your own pace instead of a rival', () => {
+    // The anti-humiliation core. A player doing 500 is never shown 40,000.
+    freshStorage();
+    const C = L.Chase;
+    eq(C.pickRival(chaseRows(40000, 22000), 500), null, 'everything past MAX_GAP is refused');
+    const inside = Math.floor(500 * C.MAX_GAP) - 1;
+    const ok = C.pickRival(chaseRows(40000, inside), 500);
+    eq(ok && ok.score, inside, 'a rival inside the cap is still a rival');
+  });
+
+  test('Chase: it never picks the player, by id or by legacy name', () => {
+    freshStorage();
+    const C = L.Chase, LB = L.Leaderboard, A = L.Auth;
+    const realName = LB.playerName;
+    const realIdDesc = Object.getOwnPropertyDescriptor(A, 'userId');
+    try {
+      Object.defineProperty(A, 'userId', { value: 'me-123', configurable: true });
+      LB.playerName = 'Kestrel';
+      // owned row: matched on id, whatever name is on it
+      let rows = [{ name: 'Someone Else', score: 800, user_id: 'me-123' },
+                  { name: 'Stranger', score: 1000, user_id: 'other' }];
+      eq(C.pickRival(rows, 500).score, 1000, 'my own row was skipped by id');
+      // legacy row: no user_id at all, matched on the cleaned lowercased name
+      rows = [{ name: 'kestrel', score: 800, user_id: null },
+              { name: 'Stranger', score: 1000, user_id: 'other' }];
+      eq(C.pickRival(rows, 500).score, 1000, 'my own legacy row was skipped by name');
+      // …but a DIFFERENT account that merely shares my display name is a rival
+      rows = [{ name: 'Kestrel', score: 800, user_id: 'not-me' }];
+      eq(C.pickRival(rows, 500).score, 800, 'a stranger sharing my name is still a rival');
+    } finally {
+      if (realIdDesc) Object.defineProperty(A, 'userId', realIdDesc);
+      LB.playerName = realName || '';
+      freshStorage();
+    }
+  });
+
+  test('Chase: a name that cleans to nothing is dropped, not drawn', () => {
+    freshStorage();
+    const pick = L.Chase.pickRival([{ name: '<img src=x>', score: 800, user_id: 'a' },
+                                    { name: 'Kestrel', score: 1200, user_id: 'b' }], 500);
+    assert(pick, 'a rival survived');
+    assert(pick.name.indexOf('<') === -1, 'no markup reached the picked name: ' + pick.name);
+  });
+
+  test('Chase: ties are picked the same way however the rows arrive', () => {
+    // The board query is order=score.desc with NO secondary sort, so tied rows
+    // genuinely do reorder between fetches.
+    freshStorage();
+    const a = [{ name: 'Bravo', score: 900, user_id: 'b' }, { name: 'Alpha', score: 900, user_id: 'a' }];
+    const p1 = L.Chase.pickRival(a, 500);
+    const p2 = L.Chase.pickRival(a.slice().reverse(), 500);
+    eq(p1.name, p2.name, 'the same rival either way round');
+  });
+
+  test('Chase: a brand-new player is shown nothing at all', () => {
+    // No best today, no pace: the HUD, the menu and the game-over screen must be
+    // byte-identical to a build without this feature. Greeting somebody on their
+    // first ever run with a stranger's number is the worst version of this.
+    freshStorage();
+    withDay('2026-09-01', '2026-08-31', () => {
+      const rec = L.Chase.ensureToday(chaseRows(5000, 3000));
+      eq(rec.k, 'none', 'no target on a first-ever run');
+      eq(rec.s, 0, 'and no number');
+      const g = newGame(390, 844);
+      g.startDaily();
+      eq(g.chaseHudLine(), null, 'the HUD line is absent');
+      g.toMenu();
+    });
+    freshStorage();
+  });
+
+  test('Chase: with a pace but an empty board, the target is your own pace', () => {
+    // THE SHIPPING CASE. This is what every player gets today.
+    freshStorage();
+    L.Store.chasePace = 1000;
+    withDay('2026-09-01', '2026-08-31', () => {
+      const rec = L.Chase.ensureToday([]);
+      eq(rec.k, 'pace', 'an empty board falls to pace');
+      const want = Math.round(1000 * L.Chase.todayMul() * L.Chase.PACE_STRETCH);
+      eq(rec.s, want, 'the target is the pace, stretched');
+      assert(rec.s > Math.round(1000 * L.Chase.todayMul()), 'and it is genuinely above the pace');
+    });
+    freshStorage();
+  });
+
+  test('Chase: the target is locked for the day and never moves under the player', () => {
+    freshStorage();
+    L.Store.chasePace = 1000;
+    withDay('2026-09-01', '2026-08-31', () => {
+      const first = L.Chase.ensureToday([]);
+      // the player then has a huge run; bestToday climbs a long way
+      L.Daily.recordRun(9000, '2026-09-01');
+      const second = L.Chase.ensureToday([]);
+      eq(second.s, first.s, 'the finish line did not move because the player got better');
+      eq(second.k, 'pace', 'and it is still the same kind');
+    });
+    freshStorage();
+  });
+
+  test('Chase: a pace day UPGRADES to a named rival, and a rival day never downgrades', () => {
+    freshStorage();
+    L.Store.chasePace = 1000;
+    withDay('2026-09-01', '2026-08-31', () => {
+      eq(L.Chase.ensureToday([]).k, 'pace', 'started on pace with no board');
+      // The anchor is the pace scaled by TODAY's multiplier, and the faked day's
+      // twist decides that — so derive the rival's score from the anchor rather
+      // than hardcoding one that happens to be above it on a 1.0x day.
+      const anchor = L.Chase.anchor();
+      const up = L.Chase.ensureToday(chaseRows(Math.round(anchor * 1.4)));
+      eq(up.k, 'board', 'upgraded once a reachable human appeared');
+      eq(up.n, 'RIVAL0', 'and it is that human');
+      const back = L.Chase.ensureToday([]);
+      eq(back.k, 'board', 'losing the board again does not take the rival away');
+      eq(back.n, 'RIVAL0', 'the same rival is held');
+    });
+    freshStorage();
+  });
+
+  test('Chase: a win is banked once, however many times the day is replayed', () => {
+    freshStorage();
+    L.Store.chasePace = 1000;
+    withDay('2026-09-01', '2026-08-31', () => {
+      const rec = L.Chase.ensureToday([]);
+      const r1 = L.Chase.settle({ score: rec.s + 10, mul: 1, chase: rec }, '2026-09-01');
+      assert(r1.passed && r1.firstToday, 'the first catch of the day is the first');
+      const r2 = L.Chase.settle({ score: rec.s + 99, mul: 1, chase: rec }, '2026-09-01');
+      assert(r2.passed, 'still caught');
+      eq(r2.firstToday, false, 'but no longer the first time');
+      eq(L.Store.chase.w, 1, 'the win is banked');
+    });
+    freshStorage();
+  });
+
+  test('Chase: settle stamps the day the run STARTED, not the day it ended', () => {
+    // A run begun at 23:59 belongs to the day it was played — the same rule
+    // Daily.recordRun already follows.
+    freshStorage();
+    L.Store.chasePace = 1000;
+    withDay('2026-08-31', '2026-08-30', () => { L.Chase.ensureToday([]); });
+    const rec = L.Store.chase;
+    withDay('2026-09-01', '2026-08-31', () => {
+      L.Chase.settle({ score: rec.s + 5, mul: 1, chase: rec }, '2026-08-31');
+    });
+    eq(L.Store.chase.d, '2026-08-31', 'settled into the day the run was played');
+    eq(L.Store.chase.w, 1, 'and the win landed on that day');
+    freshStorage();
+  });
+
+  test('Chase: the pace is kept in raw units, so a 1.9x day and a 1x day agree', () => {
+    // Without this a 4,000 set on a Blackout day would read back as 4,000 on a
+    // Classic day and hand a strong player a trivial target every time the
+    // twist rolled easy.
+    freshStorage();
+    const rec = { d: 'x', k: 'pace', n: '', s: 100, w: 0, p: 0 };
+    L.Chase.settle({ score: 3800, mul: 1.9, chase: rec }, 'x');
+    eq(L.Store.chasePace, 2000, 'stored raw: 3800 at 1.9x is a 2000-point player');
+    freshStorage();
+  });
+
+  test('Chase: the pace follows the player without chasing one lucky run', () => {
+    freshStorage();
+    const rec = { d: 'x', k: 'pace', n: '', s: 100, w: 0, p: 0 };
+    L.Chase.settle({ score: 1000, mul: 1, chase: rec }, 'x');
+    eq(L.Store.chasePace, 1000, 'the first run sets the pace outright');
+    L.Chase.settle({ score: 5000, mul: 1, chase: rec }, 'x');
+    assert(L.Store.chasePace > 1000 && L.Store.chasePace < 3000,
+      'one huge run moves the pace but does not become it (' + L.Store.chasePace + ')');
+    freshStorage();
+  });
+
+  test('Chase: begin() is synchronous and cannot be delayed by the network', () => {
+    // ?mode=daily starts a run before the menu has ever rendered, so a chase
+    // that awaited anything would delay the start of the game itself.
+    freshStorage();
+    L.Store.chasePace = 1000;
+    const realFetch = window.fetch;
+    let calls = 0;
+    window.fetch = () => { calls++; return new Promise(() => {}); };   // never settles
+    try {
+      const g = newGame(390, 844);
+      g.startDaily();
+      eq(g.state, 'play', 'the run started anyway');
+      assert(g._chase !== null, 'and the target was already assigned');
+      eq(calls, 0, 'and the chase asked the network for nothing');
+      g.toMenu();
+    } finally { window.fetch = realFetch; freshStorage(); }
+  });
+
+  test('Chase: warm() never issues a request of its own', () => {
+    // It used to call top('daily'), which looks free because top() caches — but
+    // refreshMenu runs on every return to the menu, and top() hands the SAME
+    // promise to every caller while one is in flight, so a fetch the chase
+    // started and lost then rejected inside the leaderboard screen's await.
+    freshStorage();
+    const LB = L.Leaderboard, realFetch = window.fetch, realSb = LB._sb;
+    let calls = 0;
+    window.fetch = () => { calls++; return Promise.reject(new Error('no')); };
+    try {
+      LB.useSupabase('https://demo.supabase.co', 'ANON');
+      L.Chase.warm();
+      eq(calls, 0, 'warm() went to the network ' + calls + ' times');
+    } finally {
+      window.fetch = realFetch; LB._sb = realSb; LB.invalidate(); freshStorage();
+    }
+  });
+
+  test('Chase: the catch fires on the score the player is SHOWN, not the raw one', () => {
+    // this.score is raw and the daily's mode multiplier is live (1.9x on a
+    // Blackout day) while the × chip is deliberately hidden.
+    freshStorage();
+    const g = newGame(390, 844);
+    g.startDaily();
+    g._chase = { d: g.dailyDate, k: 'pace', n: '', s: 1900, w: 0, p: 0 };
+    g._chasePassed = false;
+    // scoreMul is a getter over diff and mode, so drive it where the game does.
+    g.diff = Object.assign({}, g.diff, { scoreMul: 1.9 });
+    const mul = g.scoreMul;
+    assert(Math.abs(mul - 1) > 0.01, 'the multiplier is really not 1 (' + mul + ')');
+    g._chase.s = Math.floor(1000 * mul);
+    g.score = 900;                       // below the target once multiplied
+    g.checkChase();
+    eq(g._chasePassed, false, 'the raw score alone did not trigger it');
+    assert(g.score < g._chase.s, 'and the RAW score was still under the target, '
+      + 'so this proves the multiplier is being applied');
+    g.score = 1000;                      // exactly on it once multiplied
+    g.checkChase();
+    eq(g._chasePassed, true, 'the shown score did');
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Chase: the catch happens once, not once per frame', () => {
+    freshStorage();
+    const g = newGame(390, 844);
+    g.startDaily();
+    g._chase = { d: g.dailyDate, k: 'pace', n: '', s: 100, w: 0, p: 0 };
+    g._chasePassed = false;
+    g.score = 5000 * Math.max(1, g.scoreMul);   // overshoot however the day scores
+    let added = 0;
+    const realAdd = g.texts.add.bind(g.texts);
+    g.texts.add = function () { added++; return realAdd.apply(g.texts, arguments); };
+    try {
+      g.checkChase(); g.checkChase(); g.checkChase();
+    } finally { g.texts.add = realAdd; }
+    eq(added, 1, 'CAUGHT was announced once');
+    eq(g._chaseBanner, 1, 'and the banner is up');
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Chase: a Classic run started after a daily inherits nothing', () => {
+    // The mutator is game.js's own cautionary tale: run state that outlived its
+    // run gave every later Classic run traps at 14 seconds.
+    freshStorage();
+    L.Store.chasePace = 1000;
+    const g = newGame(390, 844);
+    g.startDaily();
+    g._chasePassed = true; g._chaseBanner = 1;
+    g.toMenu();
+    g.start();                            // an ordinary Classic run
+    eq(g._chase, null, 'the target is gone');
+    eq(g._chasePassed, false, 'and so is the latch');
+    eq(g.chaseHudLine(), null, 'and the HUD says nothing about a chase');
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Chase: the HUD line replaces the best line and never adds a third row', () => {
+    freshStorage();
+    L.Store.chasePace = 1000;
+    const g = newGame(390, 844);
+    g.startDaily();
+    const line = g.chaseHudLine();
+    assert(line && line.text, 'a chase line exists on a daily with a target');
+    const ctx = g.ctx;
+    const realFill = ctx.fillText.bind(ctx);
+    const drawn = [];
+    ctx.fillText = function (t, x, y) { drawn.push(String(t)); return realFill(t, x, y); };
+    try { g.drawHUD(ctx); } finally { ctx.fillText = realFill; }
+    const best = drawn.filter((t) => t.indexOf(L.t('dailyBest')) === 0);
+    eq(best.length, 0, 'the DAILY BEST line was replaced, not joined');
+    assert(drawn.indexOf(line.text) !== -1, 'the chase line was the one drawn');
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Chase: with no target the HUD draws exactly what it always drew', () => {
+    freshStorage();
+    const g = newGame(390, 844);
+    g.startDaily();
+    eq(g.chaseHudLine(), null, 'no target');
+    const ctx = g.ctx;
+    const realFill = ctx.fillText.bind(ctx);
+    const drawn = [];
+    ctx.fillText = function (t, x, y) { drawn.push(String(t)); return realFill(t, x, y); };
+    try { g.drawHUD(ctx); } finally { ctx.fillText = realFill; }
+    assert(drawn.some((t) => t.indexOf(L.t('dailyBest')) === 0),
+      'the shipped DAILY BEST line is still there: ' + drawn.join(' | '));
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Chase: the HUD line fits the screen in all four languages', () => {
+    freshStorage();
+    const keep = L.i18n.lang;
+    const g = newGame(390, 844);
+    const ctx = g.ctx;
+    const sm = Math.max(12, Math.min(18, g.H * 0.02));
+    const wide = [];
+    try {
+      for (const lang of ['en', 'tr', 'es', 'zh']) {
+        L.i18n.set(lang);
+        for (const nm of ['MMMMMMMMMMMMMMMM', '很长的中文名字很长的名字啊']) {
+          for (const kind of ['board', 'pace']) {
+            g.daily = true; g.attract = false;
+            g._chase = { d: 'x', k: kind, n: nm, s: 1234567, w: 0, p: 0 };
+            g._chasePassed = false; g._chaseBanner = 0;
+            const t = g.chaseHudLine().text;
+            ctx.font = '700 ' + sm + 'px "Rajdhani", system-ui, sans-serif';
+            const w = ctx.measureText(t).width;
+            if (w > g.W * 0.9) wide.push(lang + '/' + kind + ' ' + Math.round(w) + 'px: ' + t);
+          }
+        }
+      }
+    } finally { L.i18n.set(keep); g.daily = false; g._chase = null; }
+    eq(wide.length, 0, 'chase lines wider than 90% of the screen: ' + wide.join(' | '));
+    freshStorage();
+  });
+
+  test('Chase: every chase string exists in all four languages and is translated', () => {
+    const keys = ['chasePace', 'chasePassed', 'chaseCaught', 'chaseCaughtPace',
+                  'chaseShort', 'chaseShortPace'];
+    const keep = L.i18n.lang;
+    const missing = [], untranslated = [];
+    try {
+      const en = {};
+      L.i18n.set('en');
+      for (const k of keys) {
+        en[k] = L.t(k);
+        if (en[k] === k) missing.push('en/' + k);
+      }
+      for (const lang of ['tr', 'es', 'zh']) {
+        L.i18n.set(lang);
+        for (const k of keys) {
+          const v = L.t(k);
+          if (v === k) missing.push(lang + '/' + k);
+          else if (v === en[k]) untranslated.push(lang + '/' + k);
+        }
+      }
+    } finally { L.i18n.set(keep); }
+    eq(missing.length, 0, 'missing chase strings: ' + missing.join(', '));
+    eq(untranslated.length, 0, 'identical to English: ' + untranslated.join(', '));
+  });
+
+  test('Chase: the interpolated strings actually substitute', () => {
+    // t() substitutes {n} and {d} by split/join. A placeholder mistyped in one
+    // language would ship literal braces to that language only, and nothing
+    // else in the suite would notice.
+    const keep = L.i18n.lang;
+    const bad = [];
+    try {
+      for (const lang of ['en', 'tr', 'es', 'zh']) {
+        L.i18n.set(lang);
+        const a = L.t('chaseCaught', { n: 'KESTREL' });
+        const b = L.t('chaseShort', { d: '150', n: 'KESTREL' });
+        const c = L.t('chaseShortPace', { d: '150' });
+        if (a.indexOf('KESTREL') === -1 || a.indexOf('{') !== -1) bad.push(lang + '/chaseCaught: ' + a);
+        if (b.indexOf('KESTREL') === -1 || b.indexOf('150') === -1 || b.indexOf('{') !== -1) bad.push(lang + '/chaseShort: ' + b);
+        if (c.indexOf('150') === -1 || c.indexOf('{') !== -1) bad.push(lang + '/chaseShortPace: ' + c);
+      }
+    } finally { L.i18n.set(keep); }
+    eq(bad.length, 0, bad.join(' | '));
+  });
+
+  test('Chase: the daily course is byte-identical with the chase running', () => {
+    // The invariant the whole feature is built around: every player on a date
+    // plays the same course. If any of this consumed a seeded draw, two runs on
+    // one seed would diverge.
+    freshStorage();
+    L.Store.chasePace = 1000;
+    const g1 = newGame(390, 844); g1.startDaily();
+    const plan1 = JSON.stringify(g1.plan); g1.toMenu();
+    // change everything the chase looks at, then plan again
+    L.Store.chasePace = 7777;
+    L.Store.chase = { d: 'x', k: 'board', n: 'SOMEBODY', s: 4242, w: 1, p: 90 };
+    const g2 = newGame(390, 844); g2.startDaily();
+    const plan2 = JSON.stringify(g2.plan); g2.toMenu();
+    eq(plan1, plan2, 'the planned course moved when the chase changed');
+    freshStorage();
+  });
+
+  test('Chase: the game-over row escapes a hostile rival name', async () => {
+    await loadGameMarkup();
+    freshStorage();
+    const gm = document.getElementById('ge-missions');
+    assert(!!gm, 'the game-over screen is in the document');
+    L.UI.showGameOver({
+      score: 500, combo: 3, isBest: false, daily: true, best: 500,
+      shards: 0, totalShards: 0, missionsDone: [], achievements: [], dailyStreak: 0,
+      rank: 0, mode: 'classic', ranked: true, seconds: 30, motes: 3, nearMiss: 0,
+      flowSec: 0, comboAtDeath: 3, revived: false, prevBest: 0,
+      chase: { kind: 'board', name: '<img src=x onerror=alert(1)>', target: 900,
+               passed: false, firstToday: false, gap: 400 },
+    });
+    assert(gm.children.length >= 1, 'a chase row was added');
+    eq(gm.querySelectorAll('img').length, 0, 'no element was built from the name');
+    assert(gm.textContent.indexOf('<img') !== -1, 'the name is present as literal text');
+    freshStorage();
+  });
+
+  test('Chase: a zero-score run is not told how far away the target was', async () => {
+    await loadGameMarkup();
+    freshStorage();
+    const gm = document.getElementById('ge-missions');
+    L.UI.showGameOver({
+      score: 0, combo: 0, isBest: false, daily: true, best: 0,
+      shards: 0, totalShards: 0, missionsDone: [], achievements: [], dailyStreak: 0,
+      rank: 0, mode: 'classic', ranked: true, seconds: 2, motes: 0, nearMiss: 0,
+      flowSec: 0, comboAtDeath: 0, revived: false, prevBest: 0,
+      chase: { kind: 'pace', name: '', target: 900, passed: false, firstToday: false, gap: 900 },
+    });
+    eq(gm.children.length, 0, 'nothing was added on a zero-score death');
+    freshStorage();
+  });
+
+  test('Chase: the pace game-over line never reads like a person', async () => {
+    // "CAUGHT YOUR PACE" and "KENDİ TEMPON yakalandı" are sentences built out of
+    // a label. The pace case has its own strings for exactly this reason.
+    await loadGameMarkup();
+    freshStorage();
+    const gm = document.getElementById('ge-missions');
+    L.UI.showGameOver({
+      score: 1000, combo: 3, isBest: false, daily: true, best: 1000,
+      shards: 0, totalShards: 0, missionsDone: [], achievements: [], dailyStreak: 0,
+      rank: 0, mode: 'classic', ranked: true, seconds: 30, motes: 3, nearMiss: 0,
+      flowSec: 0, comboAtDeath: 3, revived: false, prevBest: 0,
+      chase: { kind: 'pace', name: '', target: 900, passed: true, firstToday: true, gap: 0 },
+    });
+    const txt = gm.textContent;
+    eq(txt.indexOf(L.t('chasePace')), -1, 'the HUD label leaked into a sentence: ' + txt);
+    assert(txt.indexOf(L.t('chaseCaughtPace')) !== -1, 'the pace sentence was used: ' + txt);
+    freshStorage();
+  });
+
+  test('Chase: the menu line escapes the rival name too', async () => {
+    await loadGameMarkup();
+    freshStorage();
+    const btn = document.getElementById('btn-daily');
+    assert(!!btn, 'the daily button is in the document');
+    L.Store.chase = { d: L.Daily.todayStr(), k: 'board', n: '<img src=x onerror=alert(1)>',
+                      s: 1234, w: 0, p: 0 };
+    L.UI.refreshMenu();
+    eq(btn.querySelectorAll('img').length, 0, 'no element was built from the name');
+    freshStorage();
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 

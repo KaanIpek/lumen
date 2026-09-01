@@ -640,6 +640,13 @@
       skill_aegis: 'Aegis', skilld_aegis: 'Cheaper revives — then start every run shielded.',
 
 
+      // THE CHASE
+      chasePace: 'YOUR PACE',
+      chasePassed: 'CAUGHT!',
+      chaseCaught: 'Caught {n}',
+      chaseCaughtPace: 'Beat your own pace',
+      chaseShort: '{d} short of {n}',
+      chaseShortPace: '{d} short of your pace',
     },
     tr: {
       tagline: 'çevir · geç · akış',
@@ -1271,6 +1278,13 @@
       skill_aegis: 'Kalkan', skilld_aegis: 'Ucuz devam — sonra her tura kalkanlı başla.',
 
 
+      // THE CHASE
+      chasePace: 'KENDİ TEMPON',
+      chasePassed: 'YAKALADIN!',
+      chaseCaught: '{n} yakalandı',
+      chaseCaughtPace: 'Kendi temponu geçtin',
+      chaseShort: '{n} için {d} eksik',
+      chaseShortPace: 'Kendi temponun {d} altında',
     },
     es: {
       tagline: "gira · cruza · fluye",
@@ -2023,6 +2037,13 @@
       coach_items_b: "Un objeto comprado aquí te acompaña en tu próxima partida. Toca su botón, pulsa 1-3 o di «escudo». Uno de cada y tres en total: nunca suficiente para facilitar la partida.",
       coach_skills_t: "Mejoras permanentes",
       coach_skills_b: "Las habilidades se compran una vez y se aplican a todas las partidas normales. El Reto Diario las ignora por completo, para que el recorrido común siga siendo justo.",
+      // THE CHASE
+      chasePace: 'TU RITMO',
+      chasePassed: '¡ALCANZADO!',
+      chaseCaught: 'Alcanzaste a {n}',
+      chaseCaughtPace: 'Superaste tu propio ritmo',
+      chaseShort: 'A {d} de {n}',
+      chaseShortPace: 'A {d} de tu ritmo',
     },
     zh: {
       tagline: "翻转 · 穿越 · 心流",
@@ -2775,6 +2796,13 @@
       coach_items_b: "在此购买的道具会带入下一局。点击屏幕按钮、按 1-3，或说“护盾”。每种 1 个、总共 3 个 — 绝不足以让一局变简单。",
       coach_skills_t: "永久强化",
       coach_skills_b: "技能购买一次即对所有普通游戏生效。每日挑战完全忽略技能，让共享赛道保持公平。",
+      // THE CHASE
+      chasePace: '你的节奏',
+      chasePassed: '追上了！',
+      chaseCaught: '已追上 {n}',
+      chaseCaughtPace: '超越了自己的节奏',
+      chaseShort: '距 {n} 还差 {d}',
+      chaseShortPace: '距你的节奏还差 {d}',
     },
   };
   const I18N = {

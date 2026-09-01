@@ -20,6 +20,13 @@
   const TAU = Math.PI * 2;
   const T = (k, v) => (LUMEN.t ? LUMEN.t(k, v) : k);
   const haptic = (pattern) => { try { if (LUMEN.Store && !LUMEN.Store.hapticsOn) return; if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {} };
+  // Shorten a display name to fit a fixed slot. Counts CODE POINTS, not UTF-16
+  // units, so a name made of astral characters is not cut through the middle of
+  // a surrogate pair — which produces a replacement glyph rather than a name.
+  const trimName = (s, max) => {
+    const cp = Array.from(String(s == null ? '' : s));
+    return cp.length <= max ? cp.join('') : cp.slice(0, Math.max(1, max - 1)).join('') + '…';
+  };
   // small deterministic PRNG for the daily seeded run
   function mulberry32(a) {
     return function () {
@@ -201,6 +208,16 @@
     set dailyStreak(v) { this._write('lumen_daily_streak', String(v)); },
     get dailyLastPlayed() { return this._read('lumen_daily_last', ''); },
     set dailyLastPlayed(v) { this._write('lumen_daily_last', v); },
+    // THE CHASE. `chase` is today's target record and `chasePace` is what the
+    // player typically scores, kept in RAW units so a day whose twist carries a
+    // 1.9x multiplier and a plain Classic day describe the same player.
+    // Both are PROGRESS, so neither belongs in SETTING_KEYS (which is the list
+    // RESET PROGRESS preserves). _obj coerces a crafted transfer code down to a
+    // plain object; chase.js coerces every field inside it.
+    get chase() { return this._obj('lumen_chase'); },
+    set chase(o) { this._write('lumen_chase', JSON.stringify(o || {})); },
+    get chasePace() { return parseInt(this._read('lumen_chase_pace', '0'), 10) || 0; },
+    set chasePace(v) { this._write('lumen_chase_pace', String(Math.max(0, Math.round(v) || 0))); },
     // missions (JSON blob)
     get missions() { try { return JSON.parse(this._read('lumen_missions', 'null')); } catch (e) { return null; } },
     set missions(o) { this._write('lumen_missions', JSON.stringify(o)); },
@@ -2829,6 +2846,13 @@
       // run for the rest of the session quietly had traps too, arriving at 14
       // seconds instead of 35. State a run owns has to die with the run.
       this.mutator = 'none';
+      // THE CHASE's run state, cleared here for the same reason as the mutator
+      // above: a target belongs to the run it was issued for. Cleared in reset()
+      // rather than in startDaily() so a Classic run that follows a daily cannot
+      // inherit a target and draw a rival's name over an unranked run.
+      this._chase = null;
+      this._chasePassed = false;
+      this._chaseBanner = 0;
       this.nearMissRun = 0;
       // The daily is one shared course — it always runs at Normal, or a player on
       // Easy would be posting scores against a different game.
@@ -3499,6 +3523,13 @@
         gap: { gapMul: this.mode ? (this.mode.gap || 1) : 1 },
       };
       this.planAhead(600);
+      // THE CHASE picks the run's target. Deliberately AFTER the whole course
+      // exists, so a fault in it can never stop a daily being playable, and
+      // wrapped because frame() swallows a throwing frame after one console
+      // line — an unguarded throw here would leave the rest of the session
+      // drawing nothing with no visible crash. Chase.begin() is synchronous and
+      // reads only the cache, so this costs the same with the network down.
+      try { this._chase = LUMEN.Chase ? LUMEN.Chase.begin() : null; } catch (e) { this._chase = null; }
       this.state = State.PLAY;
       Audio && (Audio.init(), Audio.unlock(), this._sfx('start'), Audio.music.start(), Audio.music.setIntensity(0), Audio.music.setLevel(0.5));
       LUMEN.UI && LUMEN.UI.showScreen(null);
@@ -3914,6 +3945,7 @@
       }
 
       let isBest;
+      let chaseRes = null;   // THE CHASE's result, only ever set on a ranked daily
       // The local top-10 and the headline BEST belong to Classic. Every other mode
       // keeps its own record instead, because a Sprint score and a Precision score
       // are answers to different questions and mixing them means nothing.
@@ -3930,6 +3962,15 @@
         : (LUMEN.Modes ? LUMEN.Modes.best(modeId) : 0);
       if (this.daily) {
         isBest = LUMEN.Daily ? LUMEN.Daily.recordRun(s, this.dailyDate) : false;
+        // Settle THE CHASE against the day the run STARTED, never a fresh
+        // todayStr() — a run begun at 23:59 belongs to the day it was played,
+        // the same rule recordRun above follows. Wrapped for the same reason
+        // begin() is: nothing here may cost a player their game-over screen.
+        try {
+          chaseRes = (ranked && LUMEN.Chase)
+            ? LUMEN.Chase.settle({ score: s, mul: this.scoreMul, chase: this._chase }, this.dailyDate)
+            : null;
+        } catch (e) { chaseRes = null; }
       } else if (isClassic) {
         isBest = s > Store.best;
         if (isBest) Store.best = s;
@@ -4009,7 +4050,7 @@
         // it rather than saying the same thing every time
         seconds: this.elapsed, motes: this.motesRun, nearMiss: this.nearMissRun,
         flowSec: this.flowSecRun, comboAtDeath: this.lastChain, revived: !!this.revived,
-        prevBest,
+        prevBest, chase: chaseRes,
       });
     }
 
@@ -4450,6 +4491,9 @@
       this.flash *= Math.pow(0.02, dt);
       this.damageFlash *= Math.pow(0.02, dt);
       if (this.tutBanner > 0) this.tutBanner = Math.max(0, this.tutBanner - dt * 2.2);
+      // Real dt, like its neighbours: the CAUGHT line should not stretch out
+      // because the catch happened during flow's slow-mo.
+      if (this._chaseBanner > 0) this._chaseBanner = Math.max(0, this._chaseBanner - dt * 1.4);
 
       if (this.state === State.PLAY) this.updatePlay(dt * this.timeScale, dt);
 
@@ -4835,6 +4879,43 @@
       // guard and its own thresholds — so it overrode the deliberately calm menu
       // bed, and it read the raw combo rather than the flow state, pinning the
       // level at 3 whenever flow ended with the chain still high.
+
+      this.checkChase();
+    }
+
+    // THE CHASE: the one moment the whole feature exists for.
+    //
+    // Lives at the tail of updatePlay, after every site that writes to score
+    // this frame, and in update() rather than a draw method because render() is
+    // throttled to ~24fps outside PLAY while update() runs every frame — a
+    // catch detected in a draw pass would fire late and sometimes not at all.
+    checkChase() {
+      const c = this._chase;
+      if (!this.daily || this.attract || this._chasePassed) return;
+      if (!c || !(c.s > 0)) return;
+      // `this.score` is RAW and the daily's mode multiplier is live (1.9x on a
+      // Blackout day) while the × chip is deliberately hidden. This is the exact
+      // expression finalizeRun records, so the catch fires on the number the
+      // player is shown and the number that is compared to the target.
+      if (Math.floor(this.score * this.scoreMul) < c.s) return;
+      this._chasePassed = true;
+      // The HUD number is an eased lerp at dt*12 and would otherwise sit ~80ms
+      // behind the word CAUGHT — snap it so the two agree.
+      this.displayScore = this.score * this.scoreMul;
+      this._chaseBanner = 1;
+      const col = this.moteColor();
+      this.texts.add(this.player.x, this.player.y - 46, T('chasePassed'), col, 26);
+      this.particles.burst(this.player.x, this.player.y, 18,
+        { color: col, spMin: 60, spMax: 200, lifeMin: 0.3, lifeMax: 0.7,
+          sizeMin: 1.5, sizeMax: 3.5, drag: 0.9, glow: true });
+      // Set unconditionally: the shipped accessibility gates already skip the
+      // shake under calmVisuals() and the flash in drawOverlays. One notch
+      // quieter than chainUp's FLOW! (12 / 0.5) so catching a target never
+      // outranks entering flow.
+      this.shake = Math.max(this.shake, 8);
+      this.flash = Math.max(this.flash, 0.28);
+      haptic([10, 6, 18]);
+      Audio && this._sfx('flow');
     }
 
     // Play one moment of the equipped signature — 'flip', 'flow' or 'death'.
@@ -6962,6 +7043,33 @@
       ctx.restore();
     }
 
+    // What THE CHASE puts in the small line under the score, or null to leave
+    // that line alone. Takes no ctx and touches no canvas state on purpose, so
+    // a test can read the exact string and colour without a render pass.
+    chaseHudLine() {
+      if (!this.daily || this.attract) return null;
+      const c = this._chase;
+      if (!c || !(c.s > 0)) return null;
+      // cleanName caps a display name at 16, and 16 characters beside a
+      // seven-digit target measures 364px on a 390px phone — wider than the 351px
+      // this line is allowed. Trim the NAME, never the number: the number is the
+      // thing being chased, and a name is still recognisable shortened. A fixed
+      // character cap rather than a measured one, so this stays free of the
+      // canvas and testable without a render pass; 10 fits in both a Latin and a
+      // CJK script at this size.
+      const label = c.k === 'board' ? trimName(c.n, 10) : T('chasePace');
+      // moteColor() is the reward gold already routed through cbPalette() and
+      // Store.highContrast, so colourblind and high-contrast players get a
+      // correct hue for free and no literal colour enters the HUD.
+      const gold = this.moteColor();
+      if (this._chaseBanner > 0) return { text: T('chasePassed'), color: gold };
+      if (this._chasePassed) {
+        const margin = Math.floor(this.score * this.scoreMul) - c.s;
+        return { text: '✓ ' + label + '  +' + margin.toLocaleString(), color: gold };
+      }
+      return { text: '▲ ' + label + '  ' + c.s.toLocaleString(), color: 'rgba(255,255,255,0.55)' };
+    }
+
     drawHUD(ctx) {
       const { W, H } = this;
       const score = Math.floor(this.displayScore);
@@ -6997,11 +7105,27 @@
         ctx.textAlign = 'center';
       }
 
-      // best (small) — for THIS mode, not for Classic
-      ctx.font = `600 ${clamp(H * 0.02, 12, 18)}px "Rajdhani", system-ui, sans-serif`;
+      // best (small) — for THIS mode, not for Classic.
+      //
+      // On a daily with a chase target this slot shows the TARGET instead, and
+      // never both. There is no room for a third row: playTop is
+      // safeTop + H*0.058, which is 107px on a 390x844 phone while this line
+      // already occupies 109-126px, so anything below it lands inside the gate
+      // corridor. Replacing costs the player nothing — the target is strictly
+      // greater than today's best by construction, and the game-over screen
+      // still shows the best.
+      const sm = clamp(H * 0.02, 12, 18);
       ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.fillText((this.daily ? T('dailyBest') : T('best')) + ' ' + this.bestHere, W / 2, top + big + 2);
+      const ch = this.chaseHudLine();
+      if (ch) {
+        ctx.font = `700 ${sm}px "Rajdhani", system-ui, sans-serif`;
+        ctx.fillStyle = ch.color;
+        ctx.fillText(ch.text, W / 2, top + big + 2);
+      } else {
+        ctx.font = `600 ${sm}px "Rajdhani", system-ui, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.fillText((this.daily ? T('dailyBest') : T('best')) + ' ' + this.bestHere, W / 2, top + big + 2);
+      }
 
       // combo (right side)
       if (this.combo > 1) {

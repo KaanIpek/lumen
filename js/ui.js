@@ -376,8 +376,21 @@
         // Name the day's twist on the button. A daily whose whole selling point
         // is "today is different" has to say what is different before you commit.
         const twist = D.twistName ? D.twistName() : '';
+        // THE CHASE, on the button, BEFORE the run: the target is the reason to
+        // press this rather than PLAY. warm() refreshes the board in the
+        // background for the next run and never blocks this one; menuLine()
+        // reads only what is already cached.
+        let chLine = '';
+        if (LUMEN.Chase) {
+          try { LUMEN.Chase.warm(); chLine = LUMEN.Chase.menuLine(); } catch (e) { chLine = ''; }
+        }
+        // esc() is not optional here. This is an innerHTML path carrying another
+        // player's chosen name, which is exactly the hole the leaderboard
+        // already shipped once. cleanName strips markup upstream; this is the
+        // second lock on the same door.
         $('btn-daily').innerHTML = '◈ ' + T('daily') + (st.streak > 0 ? ' · ' + st.streak + '🔥' : '')
-          + (twist ? '<small class="daily-twist">' + twist + '</small>' : '');
+          + (twist ? '<small class="daily-twist">' + twist + '</small>' : '')
+          + (chLine ? '<small class="daily-twist">' + esc(chLine) + '</small>' : '');
       }
       const d = Store.difficulty || 'normal';
       document.querySelectorAll('#diff-row .diffbtn').forEach((b) => {
@@ -2384,6 +2397,27 @@
 
       const gm = $('ge-missions');
       gm.innerHTML = '';
+      // THE CHASE leads, above the streak: it is the thing the run was about.
+      // Built with textContent, NOT innerHTML — this row carries another
+      // player's name and that is the whole reason it is constructed
+      // differently from the achievement rows below it. No esc() is needed and
+      // no markup can survive. Hidden entirely on a zero score: a run that
+      // ended at nothing does not need a reminder of how far away the target was.
+      if (data.daily && data.chase && data.score > 0) {
+        const c = data.chase;
+        const board = c.kind === 'board';
+        // Separate strings per case rather than feeding "YOUR PACE" in as the
+        // rival's name. Merging them saves two keys and produces "CAUGHT YOUR
+        // PACE" in English and "KENDİ TEMPON yakalandı" in Turkish — a sentence
+        // built out of a label, which reads wrong in all four languages.
+        const el = document.createElement('div');
+        el.className = 'ge-mission';
+        el.textContent = c.passed
+          ? '⚡ ' + (board ? T('chaseCaught', { n: c.name }) : T('chaseCaughtPace'))
+          : '▲ ' + (board ? T('chaseShort', { d: c.gap.toLocaleString(), n: c.name })
+                          : T('chaseShortPace', { d: c.gap.toLocaleString() }));
+        gm.appendChild(el);
+      }
       if (data.daily && data.dailyStreak > 0) {
         const st = document.createElement('div');
         st.className = 'ge-mission'; st.innerHTML = '🔥 ' + data.dailyStreak + ' ' + T('dayStreak');

@@ -284,7 +284,7 @@ determinism, leaderboard, collision, physics, revive, rendering, resize and audi
 python -m http.server 5178
 ```
 
-Then open `http://localhost:5178/tests/` — 118 tests, green means shippable.
+Then open `http://localhost:5178/tests/` — 307 tests, green means shippable.
 Results are also on `window.__RESULTS` if you want to wire it into CI.
 
 **Before deploying**, stamp the assets so returning players can't end up running a
