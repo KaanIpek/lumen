@@ -4308,15 +4308,28 @@
       const mx = ob.x + ob.w * 0.5;
       const drift = (this.world && this.world.tide) ? this.playH * this.world.tide.amp : 0;
       const swing = (ob.moveAmp || 0) + drift;
+      // ANCHOR THE RESERVATION TO THE CENTRE OF THE SWING, NOT TO THIS FRAME.
+      //
+      // A moving gate's opening oscillates around ob.baseGapY by ±moveAmp, and
+      // movePhase is random, so the gate is born anywhere in that swing —
+      // rarely at the middle. Centring a ±moveAmp band on g.y therefore covers
+      // the near half of the travel twice and the far end not at all: measured
+      // on Tidal, the reservation sat up to 29px off centre on a gate whose
+      // amplitude was 59px, leaving half its travel unguarded. That is how a
+      // mote still ended up parked in a mine after all three guards were in
+      // place — the guard was looking in the right shape at the wrong place.
+      // Only `moving` gates carry moveAmp and they are always single-gap, so
+      // baseGapY is this gap's centre.
+      const ry = ob.moveAmp ? ob.baseGapY : g.y;
       if (spec.power) {
         const r = this.baseR * 1.15;
-        if (!this.trapCovers(mx, g.y, r, swing)) {
+        if (!this.trapCovers(mx, ry, r, swing)) {
           this.powers.push({ x: mx, y: g.y, r, type: spec.power, pulse: spec.motePulse, ob, gap: g });
         }
       } else if (spec.mote) {
         // reward mote in a gap (biased toward the natural path)
         const r = this.baseR * (spec.bounty ? 1.05 : 0.85);
-        if (!this.trapCovers(mx, g.y, r, swing)) {
+        if (!this.trapCovers(mx, ry, r, swing)) {
           this.motes.push({ x: mx, y: g.y, r, taken: false, pulse: spec.motePulse, ob, gap: g, bounty: !!spec.bounty });
         }
       }
