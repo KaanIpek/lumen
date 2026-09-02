@@ -17,12 +17,23 @@
     },
     todayStr() { return this._str(new Date()); },
     yesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return this._str(d); },
-    todaySeed() {
-      const s = this.todayStr();
+    // The seed for ANY day, not just this one.
+    //
+    // It was only ever askable about today, which is fine while the only thing
+    // that plays a daily is a player sitting in front of it on the day. It stops
+    // being fine the moment a course has to be named to somebody else: todayStr
+    // is built from LOCAL date parts, so two friends either side of midnight —
+    // or either side of the world — are on different courses at the same moment,
+    // and a link that says "play today's" hands them different games. A date
+    // in, a seed out, and a shared course can be identified rather than assumed.
+    seedFor(dateStr) {
+      const s = String(dateStr || '');
+      if (!s) return 1;
       let h = 2166136261;
       for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
       return (h >>> 0) || 1;
     },
+    todaySeed() { return this.seedFor(this.todayStr()); },
     // ---- the day's twist ---------------------------------------------------
     // A daily that is always Classic-with-a-different-seed is really the same
     // run every day. Each day now also picks a MODE and a MUTATOR from the date
@@ -35,13 +46,17 @@
     MODES: ['classic', 'classic', 'vortex', 'mirror', 'blackout', 'precision'],
     MUTATORS: ['none', 'swarm', 'narrow', 'rush', 'bounty', 'sparse', 'traps'],
 
-    twist() {
-      const seed = this.todaySeed();
+    // Same reasoning as seedFor: a course you can name to a friend is a course
+    // whose twist you can ask about by date. twist() stays as the today-shaped
+    // wrapper, so every existing caller is untouched.
+    twistFor(dateStr) {
+      const seed = this.seedFor(dateStr);
       // two independent draws from the one seed
       const a = (seed >>> 3) % this.MODES.length;
       const b = ((seed >>> 11) ^ (seed >>> 19)) % this.MUTATORS.length;
       return { mode: this.MODES[a], mutator: this.MUTATORS[b] };
     },
+    twist() { return this.twistFor(this.todayStr()); },
     twistName() {
       const t = this.twist();
       const parts = [];

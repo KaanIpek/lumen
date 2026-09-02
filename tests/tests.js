@@ -7992,6 +7992,28 @@
     } finally { V._restarts = keep; }
   });
 
+
+  test('Daily: a course can be named by date, not only assumed to be today', () => {
+    // todayStr is built from LOCAL date parts, so two friends either side of
+    // midnight — or either side of the world — are on different courses at the
+    // same moment. A shared course therefore has to be identified by its DATE,
+    // not by the word "today", or an invite hands the two of them different
+    // games and neither can tell.
+    const D = L.Daily;
+    eq(D.seedFor('2026-09-02'), D.seedFor('2026-09-02'), 'the same date gives the same seed');
+    assert(D.seedFor('2026-09-02') !== D.seedFor('2026-09-03'), 'different dates differ');
+    eq(D.todaySeed(), D.seedFor(D.todayStr()), 'today is just one date among many');
+    const t = D.twistFor('2026-09-02');
+    eq(JSON.stringify(t), JSON.stringify(D.twistFor('2026-09-02')), 'the twist is stable per date');
+    eq(JSON.stringify(D.twist()), JSON.stringify(D.twistFor(D.todayStr())), "today's twist is that date's twist");
+    // and a junk date must not throw or produce NaN
+    const j = D.seedFor(null);
+    assert(isFinite(j) && j > 0, 'a missing date still yields a usable seed (' + j + ')');
+    const jt = D.twistFor('');
+    assert(jt && D.MODES.indexOf(jt.mode) >= 0 && D.MUTATORS.indexOf(jt.mutator) >= 0,
+      'a junk date still yields a real twist');
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 
