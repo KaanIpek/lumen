@@ -7786,6 +7786,43 @@
     eq(clipped.length, 0, clipped.join(' | '));
   });
 
+
+  test('Chase: a first run with no target still teaches the pace', () => {
+    // It did not. settle() returned at the "was there a target?" guard before
+    // it recorded the pace, so the one run that proves what a new player can do
+    // — the run the feature deliberately shows no target for — was thrown
+    // away. Their pace stayed 0, so the DAILY button had nothing on it before
+    // their next run, every day, for as long as they played once a day.
+    freshStorage();
+    withDay('2026-09-02', '2026-09-01', () => {
+      const rec = L.Chase.ensureToday(null);
+      eq(rec.k, 'none', 'a brand-new player is shown no target, as designed');
+      const res = L.Chase.settle({ score: 1300, mul: 1.3, chase: rec }, '2026-09-02');
+      eq(res, null, 'and there is no result to report');
+      eq(L.Store.chasePace, 1000, 'but the run was still recorded, raw: 1300 at 1.3x');
+    });
+    freshStorage();
+  });
+
+  test('Chase: playing one daily a day is enough to keep a target', () => {
+    // The whole retention claim rests on the target being on the menu BEFORE
+    // the run. One run a day has to be enough to sustain that.
+    freshStorage();
+    withDay('2026-09-02', '2026-09-01', () => {
+      const r1 = L.Chase.ensureToday(null);
+      L.Daily.recordRun(1300, '2026-09-02');
+      L.Chase.settle({ score: 1300, mul: 1.3, chase: r1 }, '2026-09-02');
+    });
+    withDay('2026-09-03', '2026-09-02', () => {
+      L.Store.chase = {};
+      const r2 = L.Chase.ensureToday(null);
+      assert(r2.s > 0, 'day two opens with a target already set (' + r2.k + '/' + r2.s + ')');
+      assert(L.Chase.menuLine().indexOf(r2.s.toLocaleString()) !== -1,
+        'and the menu says so before DAILY is pressed: ' + L.Chase.menuLine());
+    });
+    freshStorage();
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 

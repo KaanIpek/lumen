@@ -214,9 +214,30 @@
     // `dayStr` is the day the run STARTED, never a fresh todayStr(), so a run
     // begun at 23:59 settles into the day it was played.
     settle(run, dayStr) {
+      const score = num(run && run.score), mul = (run && run.mul) || 1;
+
+      // RECORD THE PACE FIRST, and unconditionally.
+      //
+      // This used to sit below the "was there a target?" guard, which threw the
+      // score away on exactly the runs that most needed it. A brand-new player
+      // gets no target on their first run by design — and that run, the only
+      // evidence of what they can do, was discarded. Their pace stayed 0, so
+      // the menu button had nothing to show before their next run, every day,
+      // for as long as they only played once a day. The pace is a fact about
+      // the PLAYER; whether there was something to chase is a fact about the
+      // DAY, and one must not gate the other.
+      //
+      // Stored RAW, divided by the multiplier the run actually used, so days
+      // with different twists describe the same player.
+      const raw = Math.round(score / mul);
+      if (raw > 0) {
+        Store.chasePace = Store.chasePace
+          ? Math.round(Store.chasePace * PACE_KEEP + raw * (1 - PACE_KEEP))
+          : raw;
+      }
+
       const c = run && run.chase;
       if (!c || !(c.s > 0)) return null;
-      const score = num(run.score), mul = run.mul || 1;
       const st = Store.chase || {};
       const passed = score >= c.s;
       let alreadyWon = false;
@@ -229,15 +250,6 @@
           p: Math.max(num(st.p), Math.min(999, Math.round(score / c.s * 100))),
         };
         Store.chase = rec;
-      }
-
-      // Stored RAW, divided by the multiplier the run actually used, so days
-      // with different twists describe the same player.
-      const raw = Math.round(score / mul);
-      if (raw > 0) {
-        Store.chasePace = Store.chasePace
-          ? Math.round(Store.chasePace * PACE_KEEP + raw * (1 - PACE_KEEP))
-          : raw;
       }
 
       return {
