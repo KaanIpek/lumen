@@ -162,10 +162,18 @@ public class LumenVoice extends Plugin {
         // player is still alive, not a second after the utterance is complete.
         intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-        // Silence windows kept short so the recogniser cycles quickly rather than
-        // sitting open for seconds after a one-word command.
-        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 900L);
-        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 900L);
+        // Silence windows kept LONG, which is the opposite of what they were.
+        //
+        // They were 900ms so the recogniser "cycles quickly rather than sitting
+        // open". That reasoning assumed a cycle is free. It is not: many OEM
+        // builds play a system tone on every startListening and every end, so
+        // fast cycling means a beep roughly every second for as long as the
+        // feature is on. Nothing is gained by it either — commands fire from
+        // PARTIAL results, which arrive while the player is still speaking, so
+        // the only thing these windows control is how soon a session ENDS and
+        // has to be started again.
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L);
     }
 
     private void buildRecognizer() {

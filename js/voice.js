@@ -123,12 +123,22 @@
     // matching, the debounce, the "your hand is empty" reply and the analytics
     // all live here once. Splitting them was how the native path would have
     // ended up with subtly different rules from the web one.
+    // Is there a run the player could actually be issuing a command to?
+    //
+    // The attract demo also lives in the PLAY state, so state alone is not the
+    // question — without the second half, a word said at the main menu while the
+    // demo is running would spend a real item out of the player's hand.
+    get runLive() {
+      const g = LUMEN.game;
+      return !!(g && g.state === 'play' && !g.attract);
+    },
+
     _heard(text) {
-      // Listening continues across pauses and menus so the permission prompt
+      // Listening may continue across pauses and menus so the permission prompt
       // only ever appears once — which is exactly why a command has to be
       // ignored unless a run is actually live.
+      if (!this.runLive) return;
       const g = LUMEN.game;
-      if (!g || g.state !== 'play') return;
       const type = this.match(text);
       if (!type) return;
       // debounce: one command per word burst. Partial results repeat the same
@@ -219,6 +229,13 @@
       rec.interimResults = true;
       rec.lang = this.langTag();
       rec.onresult = (e) => {
+        // A session that produced a result is a session that WORKED, so the
+        // failure budget below starts again. Without this the counter only ever
+        // climbed: 40 ordinary end-of-utterance restarts — a couple of minutes
+        // of normal use — and voice control switched itself off for the rest of
+        // the session with nothing on screen to say why. The cap is meant to
+        // catch a recogniser failing in a loop, not to ration success.
+        this._restarts = 0;
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const alt = e.results[i][0];
           if (alt) this._heard(alt.transcript);
@@ -325,21 +342,35 @@
       this.release();
     },
 
-    // Called when the setting changes, when a run starts, and on tab visibility.
+    // Called when the setting changes, when a run starts and ends, and on tab
+    // visibility.
     //
-    // Deliberately NOT tied to `state === 'play'`. Tearing recognition down at
-    // every pause and building it back up on resume is what made the browser ask
-    // for the microphone over and over. Now it comes up once, when the feature is
-    // switched on, and stays up for the page — `onresult` is what checks whether a
-    // run is actually live. The only things that stop it are turning the setting
-    // off, hiding the tab, or a refusal.
+    // ON THE WEB this is deliberately NOT tied to `state === 'play'`. Tearing
+    // recognition down at every pause and building it back up on resume is what
+    // made the browser ask for the microphone over and over, so on the web it
+    // comes up once when the feature is switched on and stays up for the page.
+    //
+    // ON NATIVE IT IS TIED TO A LIVE RUN, because that reasoning does not hold
+    // there and the cost of ignoring it is loud. The Android grant is permanent
+    // once given — _startNative never prompts — so stopping between runs is
+    // free. Leaving it running is not: SpeechRecognizer ends its session on
+    // every utterance and on ~900ms of silence, and many OEM builds play a
+    // system tone on each start and end. A player sitting on the MENU with the
+    // setting on therefore heard a beep every second or so, from the moment the
+    // app opened, forever. A tester reported exactly that ("it engages and
+    // disengages at the start of application; it makes loud sounds due to
+    // operative system"), and they were right: the sound is the OS, but the
+    // reason it fires is us holding a recogniser open for a run that does not
+    // exist. _heard already refuses every command outside a live run, so none
+    // of that listening could ever have done anything.
     sync() {
       if (!this.supported) return;
       const on = !!(LUMEN.Store && LUMEN.Store.voiceControl) && !this._denied;
       const visible = document.visibilityState !== 'hidden';
-      if (on && visible) { this._wantOn = true; if (!this.listening) this.start(); }
+      const want = on && visible && (!this.native || this.runLive);
+      if (want) { this._wantOn = true; if (!this.listening) this.start(); }
       else if (!on) this.stop();                       // switched off: hand the mic back
-      else if (this.listening || this._wantOn) this.idle();  // just hidden: stay granted
+      else if (this.listening || this._wantOn) this.idle();  // hidden or between runs
     },
   };
 

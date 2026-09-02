@@ -7823,6 +7823,175 @@
     freshStorage();
   });
 
+
+  // ---- the microphone between runs -----------------------------------------
+  //
+  // A closed tester reported: "if microphone option is active, it engages and
+  // disengages at the start of application; it makes loud sounds due to
+  // operative system". They were right, and the sound really is the OS —
+  // Android's SpeechRecognizer ends its session on every utterance and on a
+  // short silence, and many OEM builds play a tone on each start and end. The
+  // game's part was holding a recogniser open on the MENU, where _heard refuses
+  // every command anyway, so all of that listening could never have done
+  // anything except beep.
+
+  // Drive sync() with a fake native plugin, since the real one only exists
+  // inside the app shell. `native` is a getter over window.Capacitor.
+  function withFakeNative(g, fn) {
+    const V = L.Voice;
+    const realCap = window.Capacitor;
+    // sync() also requires a VISIBLE page, and the harness is routinely driven
+    // in a background tab where visibilityState is permanently 'hidden' — which
+    // makes every assertion here pass no matter what the code does. Pin it.
+    const realVis = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState');
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    // runLive reads the GLOBAL L.game and the test page never creates one, so
+    // without this every assertion below passes on a getter that is false no
+    // matter what the code does — which is how the first draft of these tests
+    // went green against the bug they were written for.
+    const realGame = L.game;
+    L.game = g;
+    const realOk = V._nativeOk, realGranted = V._micGranted;
+    const realListening = V.listening, realWant = V._wantOn, realDenied = V._denied;
+    const calls = { start: 0, stop: 0 };
+    window.Capacitor = { Plugins: { LumenVoice: {
+      start: () => { calls.start++; return Promise.resolve(); },
+      stop: () => { calls.stop++; return Promise.resolve(); },
+      addListener: () => {},
+    } } };
+    V._nativeOk = true; V._micGranted = true; V._denied = false;
+    V.listening = false; V._wantOn = false;
+    try { return fn(calls); } finally {
+      L.game = realGame;
+      delete document.visibilityState;
+      if (realVis) Object.defineProperty(Document.prototype, 'visibilityState', realVis);
+      window.Capacitor = realCap;
+      V._nativeOk = realOk; V._micGranted = realGranted;
+      V.listening = realListening; V._wantOn = realWant; V._denied = realDenied;
+    }
+  }
+
+  test('Voice: on native the microphone is not held open at the menu', () => {
+    freshStorage();
+    const V = L.Voice;
+    const g = newGame(390, 844);
+    L.Store.voiceControl = true;
+    withFakeNative(g, (calls) => {
+      g.toMenu();
+      // If any of these is wrong the "0 starts" below means nothing.
+      assert(V.native, 'the fake native plugin is in place');
+      assert(V.supported, 'voice reports itself supported');
+      eq(document.visibilityState, 'visible', 'the page counts as visible');
+      V.sync();
+      eq(calls.start, 0, 'the recogniser was started with no run in progress');
+      eq(V.listening, false, 'and nothing is listening');
+    });
+    L.Store.voiceControl = false;
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Voice: on native the microphone comes up for a run and goes down after', () => {
+    freshStorage();
+    const V = L.Voice;
+    const g = newGame(390, 844);
+    L.Store.voiceControl = true;
+    withFakeNative(g, (calls) => {
+      g.start();
+      V.sync();
+      eq(calls.start, 1, 'a live run brings the recogniser up');
+      assert(V.listening, 'and it is listening');
+      g.toMenu();
+      V.sync();
+      assert(calls.stop >= 1, 'leaving the run hands the microphone back');
+      eq(V.listening, false, 'and nothing is listening between runs');
+    });
+    L.Store.voiceControl = false;
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Voice: the attract demo is not a run, so it holds no microphone', () => {
+    // The menu demo also lives in the PLAY state. Without the attract half of
+    // the check, the mic would be held open on the menu after all — and a word
+    // said there would spend a real item out of the player's hand.
+    freshStorage();
+    const V = L.Voice;
+    const g = newGame(390, 844);
+    L.Store.voiceControl = true;
+    withFakeNative(g, (calls) => {
+      // g.start() legitimately brings the mic up, so measure the TRANSITION into
+      // the demo rather than the count from a clean slate.
+      g.start();
+      V.sync();
+      eq(calls.start, 1, 'a real run holds the microphone');
+      g.attract = true;
+      eq(V.runLive, false, 'the demo does not count as a live run');
+      V.sync();
+      assert(calls.stop >= 1, 'entering the demo hands the microphone back');
+      eq(V.listening, false, 'and nothing is listening over the demo');
+      eq(calls.start, 1, 'and it was never started again for it');
+      g.attract = false;
+    });
+    L.Store.voiceControl = false;
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Voice: a command said during the attract demo spends nothing', () => {
+    freshStorage();
+    const V = L.Voice;
+    const g = newGame(390, 844);
+    const realGame = L.game;
+    L.game = g;
+    g.start();
+    const words = (V.PHRASES && V.PHRASES.shield) || ['shield'];
+    let used = null, reached = 0;
+    const realUse = g.useItem.bind(g);
+    g.useItem = function (t) { used = t; reached++; return realUse(t); };
+    // A successful use toasts, and the toast needs DOM this page may not have.
+    const realToast = L.UI && L.UI.toast;
+    if (L.UI) L.UI.toast = function () {};
+    try {
+      // First prove the command PATH works on a real run, or the negative below
+      // is worthless: a _heard that never reaches useItem for any reason would
+      // look identical to the guard doing its job.
+      g.attract = false;
+      g.hand = Object.assign({}, g.hand, { shield: 1 });
+      for (const w of words) V._heard(w);
+      assert(reached > 0, 'the command path does not reach useItem at all (' + words.join('/') + ')');
+      // now the demo
+      used = null;
+      V._lastType = null; V._lastAt = 0;          // clear the repeat debounce
+      g.attract = true;
+      for (const w of words) V._heard(w);
+    } finally {
+      g.useItem = realUse; g.attract = false; L.game = realGame;
+      if (L.UI && realToast) L.UI.toast = realToast;
+    }
+    eq(used, null, 'the demo swallowed a command and spent an item: ' + used);
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Voice: a working session does not use up the failure budget', () => {
+    // The restart cap exists to catch a recogniser failing in a loop. It was
+    // never reset, so 40 ordinary end-of-utterance restarts — a couple of
+    // minutes of normal use — switched voice control off for the rest of the
+    // session, silently.
+    const V = L.Voice;
+    const keep = V._restarts;
+    try {
+      V._restarts = 39;
+      const built = V._build && V._build();
+      // Say so rather than passing quietly: a silent return here would report
+      // green on a browser that never ran the assertion.
+      assert(built && built.onresult, 'no Web Speech API in this browser — test not run');
+      built.onresult({ resultIndex: 0, results: [] });
+      eq(V._restarts, 0, 'a session that produced a result reset the budget');
+    } finally { V._restarts = keep; }
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 
