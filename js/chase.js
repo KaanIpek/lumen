@@ -247,14 +247,31 @@
       };
     },
 
-    // The line under the DAILY button on the menu. '' means draw nothing.
-    menuLine() {
+    // The line under the DAILY button on the menu, as two parts.
+    //
+    // TWO PARTS, NOT ONE STRING, because the slot is 127px and the whole line
+    // does not fit: "▲ YOUR PACE · 2,038" measures 135px and the Turkish
+    // "▲ KENDİ TEMPON · 2,038" measures 157px. As one string the CSS ellipsis
+    // eats the right-hand end, which is the TARGET — the only part of the line
+    // that carries information. Split, the caller can let the label shrink and
+    // pin the number. A shorter label is used here than in the HUD for the same
+    // reason: the HUD has a full screen width, this has half a button.
+    menuParts() {
       const LB = LUMEN.Leaderboard;
       let rec = null;
-      try { rec = this.ensureToday(LB && LB.enabled ? LB.cached('daily') : null); } catch (e) { return ''; }
-      if (!rec || !(rec.s > 0)) return '';
-      const label = rec.k === 'board' ? rec.n : (LUMEN.t ? LUMEN.t('chasePace') : 'YOUR PACE');
-      return '▲ ' + label + ' · ' + rec.s.toLocaleString();
+      try { rec = this.ensureToday(LB && LB.enabled ? LB.cached('daily') : null); } catch (e) { return null; }
+      if (!rec || !(rec.s > 0)) return null;
+      const t = (k, d) => (LUMEN.t ? LUMEN.t(k) : d);
+      return {
+        label: rec.k === 'board' ? rec.n : t('chasePaceShort', 'PACE'),
+        value: rec.s.toLocaleString(),
+      };
+    },
+
+    // Plain-text form of the same line, for anything that cannot render markup.
+    menuLine() {
+      const p = this.menuParts();
+      return p ? '▲ ' + p.label + ' · ' + p.value : '';
     },
   };
 

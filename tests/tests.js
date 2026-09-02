@@ -7625,8 +7625,8 @@
   });
 
   test('Chase: every chase string exists in all four languages and is translated', () => {
-    const keys = ['chasePace', 'chasePassed', 'chaseCaught', 'chaseCaughtPace',
-                  'chaseShort', 'chaseShortPace'];
+    const keys = ['chasePace', 'chasePaceShort', 'chasePassed', 'chaseCaught',
+                  'chaseCaughtPace', 'chaseShort', 'chaseShortPace'];
     const keep = L.i18n.lang;
     const missing = [], untranslated = [];
     try {
@@ -7749,6 +7749,41 @@
     L.UI.refreshMenu();
     eq(btn.querySelectorAll('img').length, 0, 'no element was built from the name');
     freshStorage();
+  });
+
+
+  test('Chase: the menu target survives, in every language', async () => {
+    // It did not. The whole line went into one <small> that inherits
+    // text-overflow:ellipsis, and the slot is ~127px: "▲ YOUR PACE · 2,038"
+    // measured 135px and the Turkish label 157px, so the ellipsis ate the
+    // NUMBER — the only part of the line that says anything. The label is
+    // allowed to shrink now; the value is not.
+    await loadGameMarkup();
+    freshStorage();
+    const btn = document.getElementById('btn-daily');
+    assert(!!btn, 'the daily button is in the document');
+    const keep = L.i18n.lang;
+    const clipped = [];
+    try {
+      for (const lang of ['en', 'tr', 'es', 'zh']) {
+        L.i18n.set(lang);
+        for (const rec of [{ k: 'pace', n: '' }, { k: 'board', n: 'Kestrel' },
+                           { k: 'board', n: 'MMMMMMMMMMMMMMMM' }]) {
+          L.Store.chase = { d: L.Daily.todayStr(), k: rec.k, n: rec.n, s: 1234567, w: 0, p: 0 };
+          L.UI.refreshMenu();
+          const v = btn.querySelector('.daily-chase .cv');
+          if (!v) { clipped.push(lang + '/' + rec.k + ': no value element'); continue; }
+          // scrollWidth > clientWidth is exactly what the ellipsis is hiding.
+          if (v.scrollWidth > v.clientWidth + 1) {
+            clipped.push(lang + '/' + rec.k + ' value clipped: ' + v.textContent);
+          }
+          if (v.textContent.indexOf('1,234,567') === -1 && v.textContent.indexOf('1234567') === -1) {
+            clipped.push(lang + '/' + rec.k + ' value is not the target: ' + v.textContent);
+          }
+        }
+      }
+    } finally { L.i18n.set(keep); freshStorage(); }
+    eq(clipped.length, 0, clipped.join(' | '));
   });
 
   // ---- report --------------------------------------------------------------

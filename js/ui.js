@@ -382,7 +382,14 @@
         // reads only what is already cached.
         let chLine = '';
         if (LUMEN.Chase) {
-          try { LUMEN.Chase.warm(); chLine = LUMEN.Chase.menuLine(); } catch (e) { chLine = ''; }
+          try {
+            LUMEN.Chase.warm();
+            const p = LUMEN.Chase.menuParts();
+            // The label shrinks and the NUMBER is pinned: see .daily-chase. As a
+            // single string the ellipsis ate the target instead of the label.
+            if (p) chLine = '<span class="cn">▲ ' + esc(p.label) + '</span>'
+                          + '<span class="cv">' + esc(p.value) + '</span>';
+          } catch (e) { chLine = ''; }
         }
         // esc() is not optional here. This is an innerHTML path carrying another
         // player's chosen name, which is exactly the hole the leaderboard
@@ -390,7 +397,7 @@
         // second lock on the same door.
         $('btn-daily').innerHTML = '◈ ' + T('daily') + (st.streak > 0 ? ' · ' + st.streak + '🔥' : '')
           + (twist ? '<small class="daily-twist">' + twist + '</small>' : '')
-          + (chLine ? '<small class="daily-twist">' + esc(chLine) + '</small>' : '');
+          + (chLine ? '<small class="daily-twist daily-chase">' + chLine + '</small>' : '');
       }
       const d = Store.difficulty || 'normal';
       document.querySelectorAll('#diff-row .diffbtn').forEach((b) => {

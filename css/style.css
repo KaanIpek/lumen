@@ -954,6 +954,15 @@ kbd {
   overflow: hidden; text-overflow: ellipsis;
 }
 
+/* THE CHASE, on the DAILY button. The slot is ~127px and the line does not fit
+   in every language: "▲ YOUR PACE · 2,038" is 135px and the Turkish
+   "▲ KENDİ TEMPON · 2,038" is 157px. Inherited from .daily-twist, one string
+   would be ellipsised from the right — eating the TARGET, the only part of the
+   line that says anything. So the label shrinks and the number never does. */
+.daily-chase { display: flex; gap: 4px; align-items: baseline; justify-content: center; }
+.daily-chase .cn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-chase .cv { flex: none; }
+
 /* Which build is running. Deliberately quiet — it is a diagnostic, not a feature. */
 .build-stamp {
   margin-top: 14px; text-align: center; font-size: 11px; letter-spacing: .12em;
