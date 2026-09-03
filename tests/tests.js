@@ -8014,6 +8014,118 @@
       'a junk date still yields a real twist');
   });
 
+
+  // ---- a transfer code carries progress, never identity ---------------------
+  //
+  // Save.snapshot() takes every localStorage key beginning with 'lumen', and
+  // 'lumen_session' is the Supabase session — an access_token and a
+  // refresh_token. So COPY MY CODE, a button whose whole purpose is to produce a
+  // string the player pastes somewhere, was handing out the player's account.
+  //
+  // The import side was worse: apply() wiped every lumen* key and wrote whatever
+  // the code held, so pasting a code that contained a session SIGNED YOU IN AS
+  // THE SENDER — and "paste the code from your old phone" is the advertised use.
+  //
+  // The token values below are obviously fake on purpose. A test that proves a
+  // secret is excluded must not be written by putting a real one in the repo.
+  const FAKE_SESSION = JSON.stringify({
+    access_token: 'not-a-real-token-aaa', refresh_token: 'not-a-real-token-bbb',
+    user: { id: 'u-0000' },
+  });
+
+  test('Save: a transfer code never carries the session', () => {
+    freshStorage();
+    try {
+      localStorage.setItem('lumen_session', FAKE_SESSION);
+      localStorage.setItem('lumen_best', '4242');
+      const code = L.Save.export();
+      assert(code.indexOf('lumen_session') === -1 || true, 'sanity');
+      // The code is base64; decode it the way parse() does rather than grepping.
+      const parsed = L.Save.parse(code);
+      eq(parsed.ok, true, 'the code is valid');
+      eq(parsed.data.lumen_session, undefined, 'the session is not in the code');
+      eq(parsed.data.lumen_best, '4242', 'but the progress is');
+      // and the raw string must not contain the token either, however encoded
+      const body = code.split('.')[2];
+      const raw = decodeURIComponent(escape(atob(body)));
+      eq(raw.indexOf('refresh_token'), -1, 'no refresh token anywhere in the payload');
+      eq(raw.indexOf('access_token'), -1, 'no access token anywhere in the payload');
+    } finally { freshStorage(); }
+  });
+
+  test('Save: a credential-shaped value is dropped even under a new key name', () => {
+    // The named list would otherwise have to be updated by whoever adds the next
+    // auth key, and they will not remember. This is the net under that.
+    freshStorage();
+    try {
+      localStorage.setItem('lumen_authv2', FAKE_SESSION);
+      localStorage.setItem('lumen_shards', '900');
+      const parsed = L.Save.parse(L.Save.export());
+      eq(parsed.ok, true, 'the code is valid');
+      eq(parsed.data.lumen_authv2, undefined, 'an unnamed credential key was dropped anyway');
+      eq(parsed.data.lumen_shards, '900', 'ordinary progress survives');
+    } finally { freshStorage(); }
+  });
+
+  test('Save: an OLD code that carries a session is stripped, not rejected', () => {
+    // Every code exported before this fix has a session in it, and those are the
+    // codes players are holding to move a real save to a new phone. Refusing
+    // them would destroy the progress this feature exists to rescue.
+    freshStorage();
+    try {
+      const payload = JSON.stringify({ lumen_session: FAKE_SESSION, lumen_best: '777' });
+      const b64 = btoa(unescape(encodeURIComponent(payload)));
+      let h = 2166136261;
+      for (let i = 0; i < b64.length; i++) { h ^= b64.charCodeAt(i); h = Math.imul(h, 16777619); }
+      const code = 'LUMEN1.' + ((h >>> 0).toString(36)) + '.' + b64;
+      const parsed = L.Save.parse(code);
+      eq(parsed.ok, true, 'the old code is still accepted');
+      eq(parsed.stripped, 1, 'and exactly one key was stripped from it');
+      eq(parsed.data.lumen_session, undefined, 'the session did not survive parsing');
+      eq(parsed.data.lumen_best, '777', 'the progress did');
+    } finally { freshStorage(); }
+  });
+
+  test('Save: importing progress does not sign you in as the sender', () => {
+    freshStorage();
+    try {
+      // this device is signed in as ME
+      localStorage.setItem('lumen_session', FAKE_SESSION);
+      localStorage.setItem('lumen_best', '10');
+      // a code from SOMEBODY ELSE, made the pre-fix way, carrying their session
+      const theirs = JSON.stringify({
+        lumen_session: JSON.stringify({ access_token: 'theirs-aaa', refresh_token: 'theirs-bbb' }),
+        lumen_best: '5000',
+      });
+      const b64 = btoa(unescape(encodeURIComponent(theirs)));
+      let h = 2166136261;
+      for (let i = 0; i < b64.length; i++) { h ^= b64.charCodeAt(i); h = Math.imul(h, 16777619); }
+      const code = 'LUMEN1.' + ((h >>> 0).toString(36)) + '.' + b64;
+
+      const res = L.Save.apply(code);
+      eq(res.ok, true, 'the code applied');
+      eq(localStorage.getItem('lumen_best'), '5000', 'their progress arrived');
+      eq(localStorage.getItem('lumen_session'), FAKE_SESSION,
+        'and I am still signed in as MYSELF, not as them');
+    } finally { freshStorage(); }
+  });
+
+  test('Save: restoring a save does not sign you out', () => {
+    // apply() used to remove every lumen* key including the session, so moving a
+    // save from an old phone silently logged the player out — and a signed-out
+    // player cannot post the scores they just restored.
+    freshStorage();
+    try {
+      localStorage.setItem('lumen_session', FAKE_SESSION);
+      localStorage.setItem('lumen_best', '10');
+      const code = L.Save.export();          // clean code, no session in it
+      localStorage.setItem('lumen_best', '20');
+      eq(L.Save.apply(code).ok, true, 'applied');
+      eq(localStorage.getItem('lumen_best'), '10', 'the save came back');
+      eq(localStorage.getItem('lumen_session'), FAKE_SESSION, 'and the session survived it');
+    } finally { freshStorage(); }
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 
