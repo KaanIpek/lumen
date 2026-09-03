@@ -534,6 +534,22 @@ jobs:
             || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
           /usr/libexec/PlistBuddy -c "Add :UIRequiresFullScreen bool true" Info.plist \
             || /usr/libexec/PlistBuddy -c "Set :UIRequiresFullScreen true" Info.plist
+          # CFBundleLocalizations is what the App Store reads for the "Languages"
+          # row on the product page. LUMEN's four languages live in js/i18n.js,
+          # which iOS cannot see -- so every storefront said "EN" only, including
+          # the Spanish one that was already serving a fully Spanish listing.
+          # A Spanish speaker was being told the game is English-only while
+          # reading Spanish copy about it.
+          #
+          # Declared only because it is true: en, tr, es and zh each switch the
+          # entire UI, not a handful of strings. Never list a locale the build
+          # does not actually carry.
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleLocalizations" Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleLocalizations array" Info.plist
+          for i in 0:en 1:tr 2:es 3:zh-Hans; do
+            /usr/libexec/PlistBuddy -c "Add :CFBundleLocalizations:${i%%:*} string ${i##*:}" Info.plist
+          done
+          /usr/libexec/PlistBuddy -c "Print :CFBundleLocalizations" Info.plist
           # iOS TERMINATES an app that reaches for the microphone with no usage
           # string, and review rejects it. Voice control is opt-in and off by
           # default, but "off by default" is not "absent": the moment a player
