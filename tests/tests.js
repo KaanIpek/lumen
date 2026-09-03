@@ -8126,6 +8126,122 @@
     } finally { freshStorage(); }
   });
 
+
+  // ---- the ghost you race ---------------------------------------------------
+  //
+  // The recording travels inside the invite link, so the two things that must
+  // be true are: it FITS, and a link that arrives damaged produces no ghost
+  // rather than a wrong one.
+
+  const ghostRun = (secs, hz) => {
+    const ys = [];
+    for (let i = 0; i < secs * (hz || 10); i++) ys.push(Math.round(128 + 120 * Math.sin(i / 9)));
+    return ys;
+  };
+  const SHARE_BASE = 'https://kaanipek.github.io/lumen/';
+
+  test('Ghost: a 70-second run fits in a link with room to spare', () => {
+    const G = L.Ghost;
+    const rec = { date: '2026-09-04', score: 12345, div: 1, name: 'Kestrel', ys: ghostRun(70) };
+    const enc = G.encode(rec);
+    const url = SHARE_BASE + '?g=' + enc;
+    assert(url.length < 1500, 'the whole URL is ' + url.length + ' characters');
+    const back = G.decode(enc);
+    assert(back, 'it decodes');
+    eq(back.date, rec.date, 'the date survives');
+    eq(back.score, rec.score, 'the score survives');
+    eq(back.name, rec.name, 'the name survives');
+    eq(back.ys.length, rec.ys.length, 'every sample survives');
+    let worst = 0;
+    for (let i = 0; i < rec.ys.length; i++) worst = Math.max(worst, Math.abs(back.ys[i] - rec.ys[i]));
+    eq(worst, 0, 'and none of them changed');
+  });
+
+  test('Ghost: the payload uses no character a query string would eat', () => {
+    // URLSearchParams.get() decodes '+' as a SPACE, because a query is
+    // form-encoded. Standard base64 emits '+' for about one byte in 42 of
+    // random data, so a plain-alphabet payload would be corrupted in almost
+    // every ghost — and corrupted into numbers that still look plausible.
+    const G = L.Ghost;
+    const ys = [];
+    for (let i = 0; i < 600; i++) ys.push(i % 256);        // hits every byte value
+    const enc = G.encode({ date: '2026-09-04', score: 7, div: 1, name: 'x', ys });
+    assert(!/[+/=]/.test(enc), 'no +, / or = in the payload');
+    // and prove it survives the parser the game actually uses
+    const q = new URLSearchParams('g=' + enc);
+    eq(q.get('g'), enc, 'URLSearchParams returns it unchanged');
+    const back = G.decode(q.get('g'));
+    assert(back, 'and it still decodes after the round trip');
+    eq(back.ys.join(','), ys.join(','), 'with every byte intact');
+  });
+
+  test('Ghost: a damaged link produces no ghost, never a wrong one', () => {
+    const G = L.Ghost;
+    const enc = G.encode({ date: '2026-09-04', score: 500, div: 1, name: 'A', ys: ghostRun(5) });
+    eq(G.decode(enc.slice(0, -6)), null, 'truncated by a chat app');
+    eq(G.decode(enc.slice(0, 30) + (enc[30] === 'A' ? 'B' : 'A') + enc.slice(31)), null, 'one flipped character');
+    eq(G.decode('hello world'), null, 'not a ghost at all');
+    eq(G.decode(''), null, 'empty');
+    eq(G.decode(null), null, 'missing');
+    eq(G.decode('!!!!'), null, 'characters outside the alphabet');
+  });
+
+  test('Ghost: a long run is sampled coarser, never truncated and never longer', () => {
+    // The link must be a link. A five-minute run may not produce a five-minute
+    // URL, and it may not silently lose its last four minutes either.
+    const G = L.Ghost;
+    const fake = { elapsed: 0, playTop: 100, playH: 600, player: { y: 0 } };
+    G.start(fake);
+    for (let f = 0; f < 300 * 60; f++) {
+      fake.elapsed += 1 / 60;
+      fake.player.y = 400 + 250 * Math.sin(fake.elapsed * 1.7);
+      G.sample(fake);
+    }
+    const r = fake._ghostRec;
+    assert(r.ys.length <= G.MAX_SAMPLES, 'inside the ceiling (' + r.ys.length + ')');
+    assert(r.div > 1, 'the rate was reduced (divisor ' + r.div + ')');
+    const enc = G.encode({ date: '2026-09-04', score: 99999, div: r.div, name: 'Kestrel', ys: r.ys });
+    assert((SHARE_BASE + '?g=' + enc).length < 1500, 'the URL stayed short');
+    const dec = G.decode(enc);
+    assert(G.duration(dec) > 280, 'and it still covers the whole run (' + G.duration(dec).toFixed(0) + 's)');
+  });
+
+  test('Ghost: the replay is interpolated and ends when the run ended', () => {
+    const G = L.Ghost;
+    const ys = [0, 255];                       // one second apart at 10Hz div 1... two samples
+    const dec = { date: '2026-09-04', score: 1, div: 1, name: '', ys };
+    eq(G.at(dec, 0), 0, 'starts where the run started');
+    const mid = G.at(dec, 0.05);
+    assert(mid > 0.4 && mid < 0.6, 'halfway between two samples is halfway up (' + mid + ')');
+    eq(G.at(dec, 9999), null, 'past the end there is no ghost');
+  });
+
+  test('Ghost: recording reads nothing seeded and stores a playfield FRACTION', () => {
+    // A pixel means something different on a notched phone and a desktop, and
+    // both playTop and playH can change mid-run. The recording has to survive
+    // the screen it is replayed on.
+    const G = L.Ghost;
+    const a = { elapsed: 0, playTop: 100, playH: 600, player: { y: 100 + 300 } };  // dead centre
+    const b = { elapsed: 0, playTop: 40, playH: 900, player: { y: 40 + 450 } };    // dead centre
+    G.start(a); G.start(b);
+    a.elapsed = 0; b.elapsed = 0;
+    G.sample(a); G.sample(b);
+    eq(a._ghostRec.ys[0], b._ghostRec.ys[0],
+      'the same place in the corridor records the same byte on two screens');
+    // and a real Game must not lose a seeded draw to any of this
+    freshStorage();
+    const g1 = newGame(390, 844); g1.startDaily();
+    const plan1 = JSON.stringify(g1.plan);
+    G.start(g1);
+    for (let i = 0; i < 120; i++) { g1.update(1 / 60); G.sample(g1); }
+    g1.toMenu();
+    const g2 = newGame(390, 844); g2.startDaily();
+    const plan2 = JSON.stringify(g2.plan);
+    g2.toMenu();
+    eq(plan1, plan2, 'sampling did not move the course');
+    freshStorage();
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 
