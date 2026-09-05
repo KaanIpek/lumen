@@ -2853,6 +2853,10 @@
       this._chase = null;
       this._chasePassed = false;
       this._chaseBanner = 0;
+      // The ghost buffer dies with its run too — a recording of a daily must
+      // never leak into the Classic run that follows it.
+      this._ghostRec = null;
+      this._ghostPlay = null;
       this.nearMissRun = 0;
       // The daily is one shared course — it always runs at Normal, or a player on
       // Easy would be posting scores against a different game.
@@ -3530,6 +3534,10 @@
       // drawing nothing with no visible crash. Chase.begin() is synchronous and
       // reads only the cache, so this costs the same with the network down.
       try { this._chase = LUMEN.Chase ? LUMEN.Chase.begin() : null; } catch (e) { this._chase = null; }
+      // Start a fresh ghost buffer for this run. Same placement and the same
+      // reasoning as the chase: after the course exists, wrapped, and reading
+      // nothing seeded.
+      try { LUMEN.Ghost && LUMEN.Ghost.start(this); } catch (e) { this._ghostRec = null; }
       this.state = State.PLAY;
       Audio && (Audio.init(), Audio.unlock(), this._sfx('start'), Audio.music.start(), Audio.music.setIntensity(0), Audio.music.setLevel(0.5));
       LUMEN.UI && LUMEN.UI.showScreen(null);
@@ -3946,6 +3954,7 @@
 
       let isBest;
       let chaseRes = null;   // THE CHASE's result, only ever set on a ranked daily
+      let ghostCode = '';    // the shareable recording of this run, daily only
       // The local top-10 and the headline BEST belong to Classic. Every other mode
       // keeps its own record instead, because a Sprint score and a Precision score
       // are answers to different questions and mixing them means nothing.
@@ -3971,6 +3980,17 @@
             ? LUMEN.Chase.settle({ score: s, mul: this.scoreMul, chase: this._chase }, this.dailyDate)
             : null;
         } catch (e) { chaseRes = null; }
+        // HARVEST THE GHOST HERE. toMenu() calls reset(), which rebuilds the
+        // player and drops the buffer, so after that the run is gone. finalizeRun
+        // is guarded by _finalized and is the one place all three death paths
+        // meet, which makes it the only spot that runs exactly once per run.
+        try {
+          const g = LUMEN.Ghost, rec = this._ghostRec;
+          ghostCode = (g && rec && rec.ys.length > 4)
+            ? g.encode({ date: this.dailyDate, score: s, div: rec.div, ys: rec.ys,
+                         name: (LUMEN.Leaderboard && LUMEN.Leaderboard.playerName) || '' })
+            : '';
+        } catch (e) { ghostCode = ''; }
       } else if (isClassic) {
         isBest = s > Store.best;
         if (isBest) Store.best = s;
@@ -4050,7 +4070,7 @@
         // it rather than saying the same thing every time
         seconds: this.elapsed, motes: this.motesRun, nearMiss: this.nearMissRun,
         flowSec: this.flowSecRun, comboAtDeath: this.lastChain, revived: !!this.revived,
-        prevBest, chase: chaseRes,
+        prevBest, chase: chaseRes, ghost: ghostCode,
       });
     }
 
@@ -4496,6 +4516,20 @@
       if (this._chaseBanner > 0) this._chaseBanner = Math.max(0, this._chaseBanner - dt * 1.4);
 
       if (this.state === State.PLAY) this.updatePlay(dt * this.timeScale, dt);
+
+      // Sample the run for a shareable ghost. HERE, and not at the tail of
+      // updatePlay, because that method has six early returns — traps, duck,
+      // the tutorial's soft fail, a broken shield and death itself — every one
+      // of which skips its last lines on a real gameplay frame, including the
+      // frame the player dies on. This point runs on every frame, after physics
+      // and the wall clamps have finished, and outside all of them.
+      //
+      // `!this.attract` because the menu demo also lives in State.PLAY, and
+      // recording it would ship a ghost of nobody. Guarded because a fault in
+      // recording must never cost somebody their run.
+      if (this.daily && !this.attract && this.state === State.PLAY && LUMEN.Ghost) {
+        try { LUMEN.Ghost.sample(this); } catch (e) { this._ghostRec = null; }
+      }
 
       // background + particles keep moving a touch even when idle
       const scroll = this.state === State.PLAY ? this.scrollSpeed : 40;

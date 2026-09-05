@@ -8242,6 +8242,74 @@
     freshStorage();
   });
 
+
+  test('Ghost: a real daily run records itself and survives to game over', () => {
+    // The buffer lives on the Game and toMenu() -> reset() drops it, so the
+    // harvest has to happen inside finalizeRun. If it moved anywhere later the
+    // recording would be gone and nothing would say so.
+    freshStorage();
+    const g = newGame(390, 844);
+    g.startDaily();
+    assert(g._ghostRec, 'a buffer was opened for the daily');
+    g.invuln = 9999;
+    for (let i = 0; i < 60 * 8; i++) g.update(1 / 60);
+    const n = g._ghostRec.ys.length;
+    assert(n > 60, 'about eight seconds of samples were taken (' + n + ')');
+    let payload = null;
+    const realShow = L.UI.showGameOver;
+    L.UI.showGameOver = function (d) { payload = d; };
+    // die() defers finalizeRun by 620ms so a revive can be offered first; the
+    // _finalized guard makes calling it directly safe and synchronous.
+    try { g.die(); g.finalizeRun(); } finally { L.UI.showGameOver = realShow; }
+    assert(payload, 'game over fired');
+    assert(payload.ghost && payload.ghost.length > 40, 'a ghost code reached the screen');
+    const back = L.Ghost.decode(payload.ghost);
+    assert(back, 'and it decodes');
+    eq(back.date, g.dailyDate, 'stamped with the day the run was played');
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Ghost: a Classic run records nothing', () => {
+    freshStorage();
+    const g = newGame(390, 844);
+    g.start();
+    g.invuln = 9999;
+    for (let i = 0; i < 120; i++) g.update(1 / 60);
+    eq(g._ghostRec, null, 'no buffer outside the daily');
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Ghost: the attract demo is never recorded', () => {
+    // startAttract sets state to PLAY with attract true. Without the guard the
+    // menu demo would be recorded and shipped as somebody's run.
+    freshStorage();
+    const g = newGame(390, 844);
+    g.startDaily();
+    const before = g._ghostRec.ys.length;
+    g.attract = true;
+    for (let i = 0; i < 120; i++) g.update(1 / 60);
+    eq(g._ghostRec.ys.length, before, 'the demo added no samples');
+    g.attract = false;
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Ghost: recording does not move the daily course', () => {
+    // The invariant the whole feature rests on. Two runs on one seed must plan
+    // byte-identical courses with the recorder running.
+    freshStorage();
+    const a = newGame(390, 844); a.startDaily();
+    a.invuln = 9999;
+    for (let i = 0; i < 300; i++) a.update(1 / 60);
+    const planA = JSON.stringify(a.plan); a.toMenu();
+    const b = newGame(390, 844); b.startDaily();
+    const planB = JSON.stringify(b.plan); b.toMenu();
+    eq(planA, planB, 'the course moved while a ghost was being recorded');
+    freshStorage();
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 
