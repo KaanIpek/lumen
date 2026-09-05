@@ -14,7 +14,22 @@
     try { q = new URLSearchParams(location.search); } catch (e) { return; }
     const want = (q.get('mode') || '').toLowerCase();
     if (!want) return;
-    if (want === 'daily') { game.startDaily(); return; }
+    if (want === 'daily') {
+      // A ghost rides in `g`. It decides WHICH day is played, because the
+      // sender's local date is the only thing that makes the two courses the
+      // same one — todayStr differs across midnight and across the world.
+      // Everything here degrades to an ordinary daily: a corrupt, truncated or
+      // foreign link decodes to null and nothing else changes.
+      let ghost = null;
+      try { ghost = LUMEN.Ghost ? LUMEN.Ghost.decode(q.get('g') || '') : null; } catch (e) { ghost = null; }
+      game.startDaily(ghost ? ghost.date : undefined);
+      if (ghost) {
+        game._ghostPlay = { rec: ghost };
+        LUMEN.UI && LUMEN.UI.toast && LUMEN.UI.toast(
+          (LUMEN.t ? LUMEN.t('ghostRacing', { n: ghost.name || '?' }) : 'Racing ' + (ghost.name || '?')));
+      }
+      return;
+    }
     if (want === 'tutorial') { game.startTutorial(); return; }
     if (LUMEN.Modes && LUMEN.Modes.def(want).id === want) {
       LUMEN.Modes.setCurrent(want);

@@ -642,6 +642,8 @@
 
       // THE CHASE
       chasePace: 'YOUR PACE',
+      ghostRacing: 'Racing {n}',
+      ghostChallenge: 'Send this run as a challenge',
       chasePaceShort: 'PACE',
       chasePassed: 'CAUGHT!',
       chaseCaught: 'Caught {n}',
@@ -1281,6 +1283,8 @@
 
       // THE CHASE
       chasePace: 'KENDİ TEMPON',
+      ghostRacing: '{n} ile yarışıyorsun',
+      ghostChallenge: 'Bu koşuyu meydan okuma olarak gönder',
       chasePaceShort: 'TEMPO',
       chasePassed: 'YAKALADIN!',
       chaseCaught: '{n} yakalandı',
@@ -2041,6 +2045,8 @@
       coach_skills_b: "Las habilidades se compran una vez y se aplican a todas las partidas normales. El Reto Diario las ignora por completo, para que el recorrido común siga siendo justo.",
       // THE CHASE
       chasePace: 'TU RITMO',
+      ghostRacing: 'Compitiendo con {n}',
+      ghostChallenge: 'Envía esta partida como reto',
       chasePaceShort: 'RITMO',
       chasePassed: '¡ALCANZADO!',
       chaseCaught: 'Alcanzaste a {n}',
@@ -2801,6 +2807,8 @@
       coach_skills_b: "技能购买一次即对所有普通游戏生效。每日挑战完全忽略技能，让共享赛道保持公平。",
       // THE CHASE
       chasePace: '你的节奏',
+      ghostRacing: '正在追赶 {n}',
+      ghostChallenge: '把这一局作为挑战发出去',
       chasePaceShort: '节奏',
       chasePassed: '追上了！',
       chaseCaught: '已追上 {n}',

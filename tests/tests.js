@@ -8310,6 +8310,133 @@
     freshStorage();
   });
 
+
+  test('Ghost: an invite plays the SENDER day, not the receiver day', () => {
+    // The whole point. todayStr is built from local date parts, so two friends
+    // either side of midnight are on different courses at the same moment. If
+    // the link did not carry the date they would race ghosts through different
+    // corridors and nothing would look wrong.
+    freshStorage();
+    const D = L.Daily, rt = D.todayStr;
+    try {
+      D.todayStr = () => '2026-09-05';
+      const mine = newGame(390, 844); mine.startDaily();
+      const todayPlan = JSON.stringify(mine.plan); mine.toMenu();
+      const theirs = newGame(390, 844); theirs.startDaily('2026-09-03');
+      eq(theirs.dailyDate, '2026-09-03', 'the run is stamped with the sender day');
+      assert(JSON.stringify(theirs.plan) !== todayPlan, 'and it is a different course');
+      // …and the same day gives the same course, which is the other half
+      const again = newGame(390, 844); again.startDaily('2026-09-03');
+      eq(JSON.stringify(again.plan), JSON.stringify(theirs.plan), 'one day, one course');
+      theirs.toMenu(); again.toMenu();
+    } finally { D.todayStr = rt; freshStorage(); }
+  });
+
+  test('Ghost: the day decides the MODE too, not just the gates', () => {
+    // resolveMode picks the day's mode and that mode shapes the planned gaps.
+    // Read from today while the course came from another date, a ghost link
+    // would plan one day's corridor and run another day's rules.
+    freshStorage();
+    const D = L.Daily, rt = D.todayStr;
+    try {
+      D.todayStr = () => '2026-09-05';
+      const g = newGame(390, 844);
+      g.startDaily('2026-09-03');
+      eq(g.mode.id, D.twistFor('2026-09-03').mode, 'the mode is that day mode');
+      eq(g.mutator, D.twistFor('2026-09-03').mutator, 'and so is the mutator');
+      g.toMenu();
+    } finally { D.todayStr = rt; freshStorage(); }
+  });
+
+  test('Ghost: the challenge link round-trips through a real share URL', () => {
+    freshStorage();
+    const G = L.Ghost;
+    const ys = []; for (let i = 0; i < 300; i++) ys.push(Math.round(128 + 110 * Math.sin(i / 7)));
+    const code = G.encode({ date: '2026-09-04', score: 4321, div: 1, name: 'Kestrel', ys });
+    const keep = L.CONFIG;
+    L.CONFIG = Object.assign({}, L.CONFIG || {}, { shareUrl: 'https://kaanipek.github.io/lumen/' });
+    try {
+      const url = L.UI.shareLink(true, code);
+      assert(url.indexOf('mode=daily') > 0, 'it is still a daily link');
+      assert(url.indexOf('&g=') > 0, 'and it carries the ghost');
+      assert(url.length < 1500, 'and it is a usable length (' + url.length + ')');
+      // parse it the way the game does
+      const q = new URLSearchParams(url.slice(url.indexOf('?')));
+      const back = G.decode(q.get('g'));
+      assert(back, 'the ghost survived the URL');
+      eq(back.date, '2026-09-04', 'with the sender date');
+      eq(back.name, 'Kestrel', 'and the sender name');
+      eq(back.ys.length, ys.length, 'and every sample');
+      // a base that already has a query must not lose the parameters
+      L.CONFIG = Object.assign({}, L.CONFIG, { shareUrl: 'https://example.com/lumen?ref=x' });
+      const u2 = L.UI.shareLink(true, code);
+      assert(u2.indexOf('?ref=x&mode=daily&g=') > 0, 'a base with its own query is appended to, not ignored: ' + u2.slice(0, 60));
+    } finally { L.CONFIG = keep; freshStorage(); }
+  });
+
+  test('Ghost: it is drawn beside the player, never on top of them', () => {
+    // The orb's x is pinned at 30% of the play column and never animates, so a
+    // ghost replayed at its recorded position would sit exactly underneath the
+    // live one and be invisible.
+    freshStorage();
+    const g = newGame(390, 844);
+    g.startDaily();
+    g._ghostPlay = { rec: { date: g.dailyDate, score: 1, div: 1, name: 'K', ys: [10, 200, 90] } };
+    const ctx = g.ctx;
+    const arcs = [];
+    const realArc = ctx.arc.bind(ctx);
+    ctx.arc = function (x, y, r) { arcs.push({ x, y, r }); return realArc.apply(ctx, arguments); };
+    try { g.drawGhost(ctx); } finally { ctx.arc = realArc; }
+    assert(arcs.length > 0, 'the ghost drew something');
+    const dx = Math.abs(arcs[0].x - g.player.x);
+    assert(dx > g.player.r, 'it is offset from the live orb by ' + Math.round(dx) + 'px');
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Ghost: nothing is drawn once the sender run has ended', () => {
+    freshStorage();
+    const g = newGame(390, 844);
+    g.startDaily();
+    g._ghostPlay = { rec: { date: g.dailyDate, score: 1, div: 1, name: 'K', ys: [10, 200] } };
+    g.elapsed = 9999;
+    const ctx = g.ctx;
+    let drew = 0;
+    const realArc = ctx.arc.bind(ctx);
+    ctx.arc = function () { drew++; return realArc.apply(ctx, arguments); };
+    try { g.drawGhost(ctx); } finally { ctx.arc = realArc; }
+    eq(drew, 0, 'a finished ghost draws nothing');
+    g.toMenu();
+    freshStorage();
+  });
+
+  test('Ghost: every ghost string exists in all four languages', () => {
+    const keys = ['ghostRacing', 'ghostChallenge'];
+    const keep = L.i18n.lang;
+    const missing = [], same = [];
+    try {
+      const en = {};
+      L.i18n.set('en');
+      for (const k of keys) { en[k] = L.t(k); if (en[k] === k) missing.push('en/' + k); }
+      for (const lang of ['tr', 'es', 'zh']) {
+        L.i18n.set(lang);
+        for (const k of keys) {
+          const v = L.t(k);
+          if (v === k) missing.push(lang + '/' + k);
+          else if (v === en[k]) same.push(lang + '/' + k);
+        }
+      }
+      // and the interpolation really substitutes
+      for (const lang of ['en', 'tr', 'es', 'zh']) {
+        L.i18n.set(lang);
+        const v = L.t('ghostRacing', { n: 'KESTREL' });
+        assert(v.indexOf('KESTREL') >= 0 && v.indexOf('{') === -1, lang + ' did not substitute: ' + v);
+      }
+    } finally { L.i18n.set(keep); }
+    eq(missing.length, 0, 'missing: ' + missing.join(', '));
+    eq(same.length, 0, 'identical to English: ' + same.join(', '));
+  });
+
   // ---- report --------------------------------------------------------------
   runDeferred().then(report);
 

@@ -2911,7 +2911,7 @@
       // The DAILY gets the day's own mode — everybody plays the same unusual
       // thing, which is the point of a shared challenge.
       this.mode = this.tutorial ? LUMEN.Modes.def(this.tutTeachingMode ? this.tutMode : 'classic')
-        : this.daily ? LUMEN.Modes.def((LUMEN.Daily ? LUMEN.Daily.twist().mode : 'classic'))
+        : this.daily ? LUMEN.Modes.def((LUMEN.Daily ? LUMEN.Daily.twistFor(this.dailyDate || LUMEN.Daily.todayStr()).mode : 'classic'))
         : LUMEN.Modes.current();
       // Sprint refuses to give you a gentle opening: it starts where a Classic
       // run would already be twenty seconds in.
@@ -3479,15 +3479,29 @@
     }
 
     // Deterministic run for everyone on the same calendar day.
-    startDaily() {
+    //
+    // `dateStr` names WHICH day, and defaults to this device's today. It exists
+    // because todayStr is built from LOCAL date parts: two friends either side
+    // of midnight — or either side of the world — are on different courses at
+    // the same moment, so an invite that said "play today's daily" would hand
+    // them different games and neither could tell. A ghost link carries the
+    // sender's date and the receiver runs THAT course.
+    startDaily(dateStr) {
       this.reset();
       this.daily = true;
+      const D = LUMEN.Daily;
+      const day = String(dateStr || (D ? D.todayStr() : '')) || (D ? D.todayStr() : '');
+      // Set BEFORE resolveMode(), which picks the day's MODE and shapes the
+      // planned gaps with it. Left until later, a ghost link for another date
+      // would plan that date's course while running today's mode — the exact
+      // class of mismatch the records were retired over.
+      this.dailyDate = day;
       // The daily is one shared course — it always runs at Normal, or a player on
       // Easy would be posting scores against a different game.
       this.diff = DIFFICULTY[this.daily ? 'normal' : (Store.difficulty || 'normal')] || DIFFICULTY.normal;
       this.resolveMode(); // …and the mode, for the same reason
       this.applyMods();   // re-resolve now that we know this is a daily run
-      const seed = LUMEN.Daily ? LUMEN.Daily.todaySeed() : 1;
+      const seed = D ? D.seedFor(day) : 1;
       this.rng = mulberry32(seed);
       // reset() ran BEFORE this and drew these from Math.random, so two players
       // on the same date got different mote positions from about fifteen seconds
@@ -3499,11 +3513,10 @@
       // simulated clock rather than the live one) means frame rate, screen size and
       // how much time a player spends in slow-mo flow can't shift the layout.
       this.plan = [];
-      this.dailyDate = LUMEN.Daily ? LUMEN.Daily.todayStr() : '';
       // The day's mutator reshapes the planned course. It is applied to the PLAN,
       // not to the live run, so it stays identical for everyone regardless of
       // frame rate or screen — the same rule the seed itself follows.
-      this.mutator = LUMEN.Daily ? LUMEN.Daily.twist().mutator : 'none';
+      this.mutator = D ? D.twistFor(day).mutator : 'none';
       const planRng = mulberry32(seed ^ 0x9e3779b9);
       let e = 1.1, c = 0.5;
       const mut = this.mutator;
@@ -5677,6 +5690,11 @@
       this.drawScout(ctx);
       this.drawMotes(ctx);
       this.drawPowers(ctx);
+      // The ghost goes UNDER the live player and over everything else. Inside
+      // this save/restore block on purpose: Vortex and Mirror are camera
+      // transforms applied here, so a ghost drawn outside it would sit
+      // un-rotated and un-mirrored on exactly the days those twists come up.
+      this.drawGhost(ctx);
       if (this.state !== State.MENU) this.drawPlayer(ctx);
       this.rings.draw(ctx);
       this.particles.draw(ctx);
@@ -6786,6 +6804,44 @@
           const rr = size * 1.9;
           ctx.drawImage(spr, t.x - rr, t.y - rr, rr * 2, rr * 2);
         }
+      }
+      ctx.restore();
+    }
+
+    // The friend you are racing.
+    //
+    // Drawn, never simulated: no collision, no motes, no physics, no seeded
+    // draw. It cannot touch the course, which is the one thing this feature
+    // could not survive getting wrong.
+    //
+    // Offset in x because the player's own orb is pinned at 30% of the play
+    // column and never moves horizontally — a ghost replayed at its recorded
+    // position would sit exactly underneath the live orb and be invisible.
+    drawGhost(ctx) {
+      const g = this._ghostPlay;
+      if (!g || !this.daily || this.attract || this.state === State.MENU) return;
+      const G = LUMEN.Ghost;
+      if (!G) return;
+      const f = G.at(g.rec, this.elapsed);
+      if (f == null) return;                       // their run ended; nothing to draw
+
+      const y = this.playTop + f * this.playH;
+      const x = this.player.x - this.player.r * 2.6;
+      const r = this.player.r * 0.92;
+      const col = this.moteColor();
+
+      ctx.save();
+      // Quiet on purpose. A second bright orb beside yours competes with the
+      // thing you are actually steering, and the corridor is already the most
+      // expensive thing on screen at Q.low.
+      ctx.globalAlpha = LUMEN.Q && LUMEN.Q.particles < 1 ? 0.30 : 0.42;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = Math.max(1.5, r * 0.22);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
+      // A short wake, so the eye reads it as moving rather than as a sticker.
+      if (!(LUMEN.Q && LUMEN.Q.particles < 1)) {
+        ctx.globalAlpha = 0.16;
+        ctx.beginPath(); ctx.arc(x - r * 1.5, y, r * 0.55, 0, TAU); ctx.stroke();
       }
       ctx.restore();
     }

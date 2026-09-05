@@ -2487,6 +2487,8 @@
         ? ((this.game && this.game.dailyDate) || (D ? D.todayStr() : '')) : '';
       this._lastDailyTwist = this._lastDaily && D ? (D.twistName() || '') : '';
       this._lastDailyStreak = this._lastDaily && D ? (D.status().streak || 0) : 0;
+      // The recording of the run that just ended, for the challenge link.
+      this._lastGhost = this._lastDaily ? String(data.ghost || '') : '';
       this.showScreen('gameover');
 
       // Ask for a rating on a GOOD run only, and never on the frame that just
@@ -2535,11 +2537,15 @@
     // played — the difference between "look what I scored" and "here, try it".
     // Appended only when the configured URL has no query of its own, so pointing
     // shareUrl at a store page cannot produce a malformed link.
-    shareLink(daily) {
+    shareLink(daily, ghost) {
       const base = (LUMEN.CONFIG && LUMEN.CONFIG.shareUrl) || '';
       if (!base) return '';
       if (!daily) return base;
-      return base.indexOf('?') >= 0 ? base : base + '?mode=daily';
+      // This had one suffix rule and it was an if/else, not a query builder: a
+      // base that already carried a '?' got nothing appended at all. A second
+      // parameter means the separator has to be chosen rather than assumed.
+      const sep = base.indexOf('?') >= 0 ? '&' : '?';
+      return base + sep + 'mode=daily' + (ghost ? '&g=' + ghost : '');
     },
 
     share() {
@@ -2548,6 +2554,11 @@
       const c = this._lastCombo || 0;
       const daily = !!this._lastDaily;
       const url = this.shareLink(daily);
+      // The CARD keeps the short link. Share.render sizes a plate to
+      // measureText(data.url) with no clamp, so a ~1000-character challenge
+      // URL would paint a plate several times wider than the 1200px card and
+      // destroy it. The long one goes in the share TEXT, where length is free.
+      const challengeUrl = this.shareLink(daily, this._lastGhost || '');
       // twistName() is already localised and already returns '' on a day whose
       // draw is classic + none, so an untwisted day draws no twist line rather
       // than an empty one.
@@ -2563,7 +2574,7 @@
       // is a sentence with nothing after the colon, so fall back to the ordinary
       // text rather than posting a dangling invitation.
       const text = daily && url
-        ? T('shareTextDaily', { s: s, c: c, d: data.dailyDate, u: url })
+        ? T('shareTextDaily', { s: s, c: c, d: data.dailyDate, u: challengeUrl || url })
         : T('shareText', { s: s, c: c });
       // A generated image travels far better than a line of text.
       if (LUMEN.Share) {
