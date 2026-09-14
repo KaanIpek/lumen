@@ -45,3 +45,18 @@ review/
 # nothing a build needs — and this repository is public.
 work/
 build-out/
+
+# Signing material, by extension as well as by folder. signing-out/ above already
+# covers today's layout, but this repo is PUBLIC: one key moved to a new path and
+# a single `git add -A` publishes it. Belt and braces.
+*.p8
+*.p12
+*.pem
+*.key
+*.cer
+*.keystore
+*.jks
+*.mobileprovision
+SECRETS.txt
+.env
+.env.*

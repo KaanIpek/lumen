@@ -31,19 +31,75 @@ under the Gemma Terms of Use:
 
 The full Community License text is at https://stability.ai/community-license.
 
-What that licence means for this game, in plain terms:
+What that licence actually says. Every clause below was read out of the copy
+that shipped with the weights, not paraphrased from a blog post:
 
-  - The audio files themselves are OURS. Section IV(c)(iii) of the Community
-    License assigns ownership of a model's outputs to the person who generated
-    them, so shipping and selling these tracks is ours to do.
-  - The attribution above is required whenever the game is distributed, which is
-    why "Powered by Stability AI" is also on the Settings screen and in the
-    README, not only in this file.
-  - Commercial use is free while annual revenue stays under USD $1,000,000, but
-    it requires REGISTERING at https://stability.ai/community-license. LUMEN
-    sells cosmetics, so it is a commercial use. Register before you take money.
-  - Above $1M in annual revenue the grant terminates and an enterprise licence
-    is required. That is a good problem to have; it is not a silent one.
+  - THE AUDIO IS OURS. The definition of "Derivative Work" in Section V ends
+    "...but do not include the output of any Model", so a generated track is
+    not a derivative of the model. Shipping and selling these is ours to do.
+
+  - ATTRIBUTION IS SATISFIED IN ONE PLACE, NOT EVERYWHERE. Section IV(a) asks
+    for "Powered by Stability AI" on "a related website, user interface,
+    blogpost, about page, or product documentation" - any ONE of them. The
+    Settings credits screen already carries it, so it is covered. (An earlier
+    version of this file said the line was required "whenever the game is
+    distributed", which read as "in every store listing and every video
+    description". That was stricter than the text.)
+
+  - THE GAME IS NOT "DISTRIBUTING THE MATERIALS". Section V's Derivative Work
+    definition ends "...but do not include the output of any Model", so an .mp3
+    is neither Stability AI Materials nor a derivative of them. Shipping LUMEN
+    therefore does not trigger the "distributing" half of Section III at all,
+    and a player who installs the game is not a party to this agreement. What
+    remains is the "using" half: running the model here to make music for a
+    product that takes money.
+
+  - REGISTRATION IS A CONDITION OF THE COMMERCIAL GRANT, and it is not done yet.
+    Section III, verbatim: "If You are using or distributing the Stability AI
+    Materials for a Commercial Purpose, You must register with Stability AI at
+    (https://stability.ai/community-license)." LUMEN sells cosmetics, so this
+    applies. Be precise about how binding it is: the commercial licence in
+    Section III is granted "Subject to the terms of this Agreement (including
+    the remainder of this Section III)" - and the registration sentence is in
+    that remainder, so it is a condition of the grant, not a side promise.
+    (An earlier version of this file called it "a covenant, not a precondition".
+    That was too comfortable.) What softens it is only the remedy: Section IV(f)
+    says Stability "MAY terminate this Agreement if You are in breach" -
+    discretionary, unlike the $1M ceiling and the patent-litigation clause,
+    which both say "SHALL terminate". And already-generated audio survives
+    termination: it is ours under Section IV(c)(iii) and is not a derivative
+    work, which matches Stability's own published promise - "Stability AI will
+    never ask you to delete resulting images, fine-tunes or other derived
+    products - even if you never pay Stability AI."
+
+  - HAVING NO COMPANY DOES NOT EXEMPT ANYONE, and "hobbyist" does not either.
+    "Commercial Purpose" turns on money, not on incorporation: clause (i) is
+    "creating, modifying, or distributing Your product or service", with no
+    business qualifier; only clause (ii) mentions a business, and it sits behind
+    "including but not limited to". The Non-Commercial definition does contain
+    the word - "such as personal use (i.e., hobbyist) or evaluation and testing"
+    - but "such as" makes it an example of not-primarily-for-money, not an
+    exemption for anyone who calls themselves a hobbyist.
+
+  - THE $1M CEILING IS TOTAL REVENUE, NOT GAME REVENUE. Section III terminates
+    the grant once annual revenue passes USD $1,000,000 "regardless of whether
+    that revenue is generated directly or indirectly from the Stability AI
+    Materials". That termination is automatic - "shall terminate" - unlike the
+    registration breach above. "Annual revenue" is nowhere defined.
+
+  - IT APPLIES TO A PERSON, NOT ONLY A COMPANY. Section I: the agreement binds
+    "any individual person or entity". Having no legal entity changes nothing
+    about who the licensee is. It only means there are no Affiliates to
+    aggregate revenue across, since "Affiliate" is written around entities and
+    over-50% voting control.
+
+  - DO NOT CALL IT HUMAN-MADE. The Acceptable Use Policy names "misleading end
+    users about the nature of outputs from Stability AI Technology (such as
+    pretending it was made by a human)". Crediting a composer would breach it;
+    this file and the credits screen say where the music came from.
+
+  - DO NOT TRAIN ON THE OUTPUT. Section IV(b) forbids using these tracks to
+    train another audio model.
 
 Everything else you hear — every sound effect, and the adaptive layers that come
 and go with your combo — is synthesised at runtime by the Web Audio API and is
