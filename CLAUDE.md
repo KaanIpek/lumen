@@ -38,7 +38,12 @@ Play URL is a 404 and the only Android players are testers, who are offered 97.
    404 to 200 (`curl -s -o /dev/null -w "%{http_code}"` on the Play URL).
 2. **Once production is live:** link the Play listing in AdMob. That is what
    lifts LUMEN Android out of *Limited ad serving*, and it cannot be done while
-   the listing is not public.
+   the listing is not public — tried 15 Sep: AdMob's Play search answers "Can't
+   find your app?" for `com.rldgames.lumen`. The path is Apps → **LUMEN
+   (Android, `~7519300859`)** → *Add store*. Do **not** use *Apps to confirm →
+   Finish setup*: that is `/apps/create`, a second AdMob app with a new id that
+   the binary does not use, so the real one would stay limited. LUMEN iOS
+   (`~9285134085`) is already Ready and linked.
 3. **AdMob payout** — identity verification and bank details are both incomplete,
    and there is a $10 threshold. This one is the owner's to do, not ours.
 4. **Play promotional video** — blocked twice over: the field takes a YouTube URL
@@ -80,7 +85,11 @@ be silently corrupted into plausible-looking numbers.
 **Ads are rewarded and opt-in only, by design.** No banners, no interstitials —
 it is a selling point in the store copy. Low ad revenue is therefore a *volume*
 problem, not a setup problem: match rate is 100% and eCPM is $3.17, so mediation
-would change nothing.
+would change nothing. Read AdMob *requests* as sessions: `Ads.preload()` fires
+on boot, on every foreground and after every ad, so a week of 1 request is a
+week of about one launch, not a broken SDK. (Checked 15 Sep when requests fell
+from 72 to 2 a week across both platforms: ads code unchanged since 26 Aug, and
+build 97's CI log lists the ads plugin on both.)
 
 **A transfer code carries progress, never identity.** `lumen_session` holds
 Supabase access + refresh tokens; `export()` filters them out and `parse()` strips
@@ -152,7 +161,9 @@ pending, including another session's half-finished work. Read every row first.
 **`/u/N` is not stable.** The account index shifts; if the console 404s or shows
 a terms page, try `/u/1`. On 15 Sep the console was `/u/1` (developer
 `8639829071472741025`); `/u/0` is `rldgameslumen@outlook.com`, which has no
-developer account and lands on a "create a developer account" page.
+developer account and lands on a "create a developer account" page. AdMob is
+the same: `?authuser=1`. Without it AdMob opens a **sign-up form with terms to
+accept** — a new, empty account. Never fill it in.
 
 **Promoting to production** is Alpha → *Promote release* → Production → Next →
 Save → publishing overview → Submit. Production has its **own** country list
