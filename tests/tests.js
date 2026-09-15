@@ -3878,23 +3878,25 @@
     freshStorage();
   });
 
-  test('Traps: a moving gate reserves the CENTRE of its swing, not this frame', () => {
+  test('Traps: a gate reserves the CENTRE of its travel, not this frame', () => {
     // The test below this one looks for the symptom — a mote sitting in a mine —
     // and it needs a mine to happen to be at the wrong height to see anything.
     // It found the bug roughly one run in five and passed the other four, which
     // is the same as not having it. This one checks the MECHANISM instead.
     //
-    // A moving gate's opening swings around ob.baseGapY by ±moveAmp with a
-    // random phase, so it is born anywhere in that travel. The reservation is a
-    // band of ±(moveAmp + drift); centring it on the gap's CURRENT y therefore
-    // leaves up to moveAmp of the far side unguarded. Anchored to baseGapY the
-    // offset is exactly zero, every time, and this fails deterministically the
-    // moment someone re-centres it on g.y.
+    // An opening travels around its RESTING height: ±moveAmp of swing, ±drift
+    // of tide. The reservation is a band of ±(moveAmp + drift), so it guards
+    // that travel only when it is centred on the resting height — and at birth
+    // g.y already carries the tide's current offset, up to the whole drift on
+    // Tidal. This used to be checked for moving gates alone, which is how the
+    // still ones kept the hole after the moving ones were fixed. Anchored at
+    // rest the offset is exactly zero, every time, for both kinds, so this fails
+    // deterministically the moment either is re-centred on g.y.
     freshStorage();
     L.Modes.setCurrent('classic');
     L.Cosmetics.grant('tidal'); L.Cosmetics.equip('tidal');
     const G = L.Game.prototype, real = G.trapCovers;
-    let moving = 0, worst = 0;
+    let moving = 0, still = 0, worstMoving = 0, worstStill = 0;
     // Three call sites pass a band and only one of them is the gate's reward.
     // Filtering on the arguments picked up the other two and reported a 350px
     // offset against an obstacle they have nothing to do with, so filter on the
@@ -3905,9 +3907,16 @@
       const stack = (new Error()).stack || '';
       if (stack) sawStack = true;
       const ob = this.obstacles[this.obstacles.length - 1];
-      if (ob && /spawnObstacle/.test(stack) && (ob.moveAmp || 0) > 0.01) {
-        moving++;
-        worst = Math.max(worst, Math.abs(y - ob.baseGapY));
+      if (ob && /spawnObstacle/.test(stack)) {
+        if ((ob.moveAmp || 0) > 0.01) {
+          moving++;
+          worstMoving = Math.max(worstMoving, Math.abs(y - ob.baseGapY));
+        } else {
+          // a double gate's reward rides one of its two openings, not the middle
+          const gap = ob.gaps.length > 1 ? ob.gaps[ob.spec.moteGap] : ob.gaps[0];
+          still++;
+          worstStill = Math.max(worstStill, Math.abs(y - gap.baseY));
+        }
       }
       return real.call(this, x, y, r, yBand);
     };
@@ -3922,11 +3931,15 @@
       G.trapCovers = real;
       L.Cosmetics.equip('deepfield');
     }
-    // a run that never spawned a moving gate would pass while checking nothing
+    // a run that never reserved for one of the two kinds would pass that half
+    // while checking nothing
     assert(sawStack, 'no stack traces available — this test cannot tell the callers apart');
     assert(moving >= 8, 'moving gates actually reserved a band (' + moving + ')');
-    assert(worst < 0.51, 'reservation was centred ' + worst.toFixed(1)
-      + 'px off the swing centre — that much of the travel is unguarded');
+    assert(still >= 8, 'still gates actually reserved a band (' + still + ')');
+    assert(worstMoving < 0.51, 'a moving gate reserved ' + worstMoving.toFixed(1)
+      + 'px off the centre of its travel — that much of it is unguarded');
+    assert(worstStill < 0.51, 'a still gate reserved ' + worstStill.toFixed(1)
+      + 'px off the centre of its travel — that much of it is unguarded');
     freshStorage();
   });
 

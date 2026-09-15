@@ -4382,19 +4382,27 @@
       const mx = ob.x + ob.w * 0.5;
       const drift = (this.world && this.world.tide) ? this.playH * this.world.tide.amp : 0;
       const swing = (ob.moveAmp || 0) + drift;
-      // ANCHOR THE RESERVATION TO THE CENTRE OF THE SWING, NOT TO THIS FRAME.
+      // ANCHOR THE RESERVATION TO WHERE THE OPENING RESTS, NOT TO THIS FRAME.
       //
-      // A moving gate's opening oscillates around ob.baseGapY by ±moveAmp, and
-      // movePhase is random, so the gate is born anywhere in that swing —
-      // rarely at the middle. Centring a ±moveAmp band on g.y therefore covers
-      // the near half of the travel twice and the far end not at all: measured
-      // on Tidal, the reservation sat up to 29px off centre on a gate whose
-      // amplitude was 59px, leaving half its travel unguarded. That is how a
-      // mote still ended up parked in a mine after all three guards were in
-      // place — the guard was looking in the right shape at the wrong place.
+      // `swing` is the opening's whole travel — ±moveAmp of swing plus ±drift of
+      // tide — and a band that size only guards that travel if it is centred on
+      // the middle of it. g.y is not the middle. Nothing has swung a moving gate
+      // yet at birth (on Deepfield g.y equals its resting height exactly, 1020
+      // gates of 1020), but applyTide HAS run, so on Tidal every gate is born
+      // displaced by the tide's current offset: up to 29.2px against a 29.3px
+      // drift, and exactly 0 once the tide is subtracted, moving or not.
+      // Centred on g.y, the band covers the near side of the travel twice and
+      // leaves that much of the far side unguarded.
+      //
+      // The first fix anchored MOVING gates to baseGapY and read those 29px as
+      // swing phase. It was the tide, so normal, pulsing and double gates kept
+      // the same hole: in 400 Tidal runs, 2 rewards were placed where the tide
+      // alone would carry them into a trap (a pulsing gate's mote beside a mine,
+      // a double gate's beside spikes). Anchored at rest, 0 of 400.
       // Only `moving` gates carry moveAmp and they are always single-gap, so
-      // baseGapY is this gap's centre.
-      const ry = ob.moveAmp ? ob.baseGapY : g.y;
+      // baseGapY is that gap's resting centre; a double gate's reward rides one
+      // of its two openings, so for everything else it is the gap's own baseY.
+      const ry = ob.moveAmp ? ob.baseGapY : g.baseY;
       if (spec.power) {
         const r = this.baseR * 1.15;
         if (!this.trapCovers(mx, ry, r, swing)) {
