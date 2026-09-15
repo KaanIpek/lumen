@@ -5,9 +5,9 @@ dependencies**, PWA, wrapped for iOS/Android with Capacitor.
 
 - Live web build: <https://kaanipek.github.io/lumen/> (GitHub Pages deploys on every push to `main`)
 - Repo: `KaanIpek/lumen` — **public**, deliberately (free Pages hosting + free macOS CI runner)
-- Package: `com.rldgames.lumen` · Play app `4973199188286450484` · ASC app `6797276640`
+- Package: `com.rldgames.lumen` (Android) / bundle `com.lumen.game` (iOS) · Play app `4973199188286450484` · ASC app `6797276640`
 
-State below was measured on **2026-09-14**, not assumed. Anything marked
+State below was measured on **2026-09-15**, not assumed. Anything marked
 *last known* was not re-checked; verify before acting on it. **This file records
 a state, and state expires.**
 
@@ -18,37 +18,34 @@ a state, and state expires.**
 | | |
 |---|---|
 | Web | 1.0.6 live, includes ghost racing |
-| App Store | **1.0.6 (build 97) READY_FOR_DISTRIBUTION** — verified today |
-| Play closed testing | 97 (1.0.6) — *last known* live on the Alpha track |
-| Play production access | Applied **2026-09-06 21:47**. Google said ≤7 days. **Decision is due — check first.** |
+| App Store | **1.0.6 (build 97) READY_FOR_SALE** — ASC API, 15 Sep |
+| Play closed testing | 97 (1.0.6) on Alpha, full rollout, 177/177 countries — console, 15 Sep |
+| Play production | Access **GRANTED** (dashboard, seen 15 Sep). 97 (1.0.6) promoted with 177 countries and **in review since 15 Sep** (quick checks passed). Managed publishing is off, so approval = live. |
+| Play internal testing | 85 (1.0.1) plus an empty Draft. Stale, nobody's work, harmless |
 | Tests | 337, all green |
 | Content | 13 modes, 23 worlds, 16 signatures (derive these, never quote from memory) |
 
-`release.json` currently reads `version 1.0.6, build 92, iosBuild 96, androidBuild 92`.
+`release.json` reads `version 1.0.6, build 97, iosBuild 97, androidBuild 97`
+(`c24d4a2`, confirmed live on Pages). Until production is approved the public
+Play URL is a 404 and the only Android players are testers, who are offered 97.
 
 ---
 
 ## Next tasks, in order
 
-1. **Check the Play production decision.** Applied 6 Sep, ≤7 days promised, so it
-   has landed one way or the other. Console → Dashboard → Production.
-2. **`release.json` iosBuild 96 → 97.** iOS 1.0.6 is live on build 97, so 96 now
-   understates it. Do the same for `androidBuild` **only after confirming** what
-   Play actually serves. The rule below is not optional.
-3. **If production access is granted:** promote to production, then link the Play
-   listing in AdMob. That is what lifts LUMEN Android out of *Limited ad serving*.
-4. **AdMob payout** — identity verification and bank details are both incomplete,
+1. **Watch the production review.** "Reviews are typically completed within 7
+   days." Publishing overview shows it; so does the public listing going from
+   404 to 200 (`curl -s -o /dev/null -w "%{http_code}"` on the Play URL).
+2. **Once production is live:** link the Play listing in AdMob. That is what
+   lifts LUMEN Android out of *Limited ad serving*, and it cannot be done while
+   the listing is not public.
+3. **AdMob payout** — identity verification and bank details are both incomplete,
    and there is a $10 threshold. This one is the owner's to do, not ours.
-5. **Play promotional video** — blocked twice over: the field takes a YouTube URL
+4. **Play promotional video** — blocked twice over: the field takes a YouTube URL
    only, the owning Google account's Studio access is blocked by a channel-appeal
    interstitial, and all four videos we have are **vertical** (1080×1920 /
    886×1920) while Play's frame is landscape. Needs a landscape cut and a working
    channel.
-6. **Intermittent trap bug** — 'Traps: nothing collectable is ever parked inside a
-   lethal trap' still fails roughly one run in five on `tidal`, reported as
-   "mote/mine on-gate". Commit `eeb4956` fixed one cause; it was not the only one.
-   Look at the gate-arrives-beside-an-existing-trap path, not the reservation
-   band again.
 
 ---
 
@@ -118,7 +115,9 @@ name are 30. Every one of these has been hit.
 
 **Run the suite in a real viewport.** `node tools/serve.js 5178` then
 `http://localhost:5178/tests/` in a window wider than 200px — the layout test
-refuses to measure a zero-width window and reports itself as failed.
+refuses to measure a zero-width window and reports itself as failed. The
+desktop app's own Browser pane reports `innerWidth` 0 while it is hidden, which
+gives exactly that "1 of 337 FAILED"; emulate a 1280×900 viewport first.
 
 ---
 
@@ -141,7 +140,9 @@ version/build/notes/submission are all doable through the ASC API
 (`tools/asc.js`, `tools/asc-preview.js`).
 
 **Play Console paths that work** (the obvious guesses 404):
-- track: `/app/<id>/tracks/4698973344213237434`
+- closed testing (Alpha): `/app/<id>/tracks/4698973344213237434`
+- production: `/app/<id>/tracks/production` (track id `4697841224391315890`)
+- all tracks at a glance: `/app/<id>/releases/overview`
 - bundle library: `/app/<id>/bundle-explorer-selector`
 - publishing overview: `/app/<id>/publishing`
 
@@ -149,7 +150,16 @@ version/build/notes/submission are all doable through the ASC API
 pending, including another session's half-finished work. Read every row first.
 
 **`/u/N` is not stable.** The account index shifts; if the console 404s or shows
-a terms page, try `/u/1`.
+a terms page, try `/u/1`. On 15 Sep the console was `/u/1` (developer
+`8639829071472741025`); `/u/0` is `rldgameslumen@outlook.com`, which has no
+developer account and lands on a "create a developer account" page.
+
+**Promoting to production** is Alpha → *Promote release* → Production → Next →
+Save → publishing overview → Submit. Production has its **own** country list
+and starts empty; adding countries there is flagged "affects other tracks"
+because Open testing shares production's targeting. The one warning on 97 —
+"no deobfuscation file" — is expected (the game is JS in a WebView, there is
+no R8 mapping) and does not block.
 
 **The console lies about geometry.** Menu items report `height: 0` and buttons
 report coordinates tens of pixels off. When a click does nothing, screenshot and
@@ -162,9 +172,17 @@ click what you can see.
 `git clone` gets almost everything, including `config.js`. What does **not**
 travel:
 
-- **The Apple ASC key** — `AuthKey_HM6QQBPLWW.p8`, currently outside the repo in
-  `Documents/Apple Developer Keys/`. Never commit it; the ASC tools take the
+- **The Apple ASC key** — `AuthKey_HM6QQBPLWW.p8`, outside the repo. On the
+  current machine it is `D:\cowork\_secrets\home\Documents\Apple Developer Keys\`,
+  **not** the profile's Documents. Never commit it; the ASC tools take the
   *path*. Key id `HM6QQBPLWW`, issuer `4ed2d86a-7565-4cb4-8095-8d40ec6b60b9`.
+- **Folder ownership.** D: came across with the old machine's owner SID, so git
+  refuses the repo as "dubious ownership". `git -c safe.directory=D:/cowork/Lumen
+  <cmd>` works per command without touching global config.
+- **Browsers.** The Claude desktop Browser pane is not signed in to Google. Play
+  Console work goes through Claude in Chrome; three extension instances are
+  connected with generic names, and on 15 Sep the signed-in one was "Browser 1"
+  (`6f55b314-ef4f-4698-b147-9334b618f4da`).
 - `work/`, `build-out/`, `review/`, `docs/LAUNCH.md`, `docs/STORE_LISTING.md` —
   gitignored on purpose (scratch, binaries, recordings, commercial notes).
 - `node_modules/`, `dist/`, `mobile/www/`, `mobile/android|ios/` — all regenerated
