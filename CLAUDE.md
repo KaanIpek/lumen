@@ -7,7 +7,7 @@ dependencies**, PWA, wrapped for iOS/Android with Capacitor.
 - Repo: `KaanIpek/lumen` — **public**, deliberately (free Pages hosting + free macOS CI runner)
 - Package: `com.rldgames.lumen` (Android) / bundle `com.lumen.game` (iOS) · Play app `4973199188286450484` · ASC app `6797276640`
 
-State below was measured on **2026-09-15**, not assumed. Anything marked
+State below was measured on **2026-09-30**, not assumed. Anything marked
 *last known* was not re-checked; verify before acting on it. **This file records
 a state, and state expires.**
 
@@ -17,36 +17,40 @@ a state, and state expires.**
 
 | | |
 |---|---|
-| Web | 1.0.6 live, includes ghost racing |
-| App Store | **1.0.6 (build 97) READY_FOR_SALE** — ASC API, 15 Sep |
-| Play closed testing | 97 (1.0.6) on Alpha, full rollout, 177/177 countries — console, 15 Sep |
-| Play production | Access **GRANTED** (dashboard, seen 15 Sep). 97 (1.0.6) promoted with 177 countries and **in review since 15 Sep** (quick checks passed). Managed publishing is off, so approval = live. |
-| Play internal testing | 85 (1.0.1) plus an empty Draft. Stale, nobody's work, harmless |
-| Tests | 337, all green |
-| Content | 13 modes, 23 worlds, 16 signatures (derive these, never quote from memory) |
+| Web | **1.0.7** live — PACER, the vote fix, the 2026-10 ballot (`4834e24`, Pages 30 Sep) |
+| App Store | 1.0.6 (build 97) READY_FOR_SALE. **1.0.7 (build 98) WAITING_FOR_REVIEW**, submitted 30 Sep, release type AFTER_APPROVAL |
+| Play production | **Live** — 97 (1.0.6), full rollout, 178 countries; the listing says "Updated on Sep 15". **1.0.7 (98) is not uploaded yet**: the .aab waits in `build-out/107-98/` for the owner |
+| Play closed testing | 97 (1.0.6) on Alpha |
+| AdMob | Android **linked to the Play listing on 30 Sep** ("Getting ready", a 2–3 day review, then the limit lifts). iOS Ready |
+| Players | ~15 monthly active Android devices, 4 production installs, 13 leaderboard rows ever (the last on 7 Sep). Earnings ≈ $0 |
+| Vote | 2026-10 ballot open until **31 Oct**: Mirrorworld / Aurora set / Duet. Votes reach the database now |
+| Tests | 346, all green |
+| Content | 14 modes, 23 worlds, 16 signatures (derive these, never quote from memory) |
 
-`release.json` reads `version 1.0.6, build 97, iosBuild 97, androidBuild 97`
-(`c24d4a2`, confirmed live on Pages). Until production is approved the public
-Play URL is a 404 and the only Android players are testers, who are offered 97.
+`release.json` reads `version 1.0.7, build 97, iosBuild 97, androidBuild 97`.
+Each platform's number moves to 98 only once that store actually serves 98.
 
 ---
 
 ## Next tasks, in order
 
-1. **Watch the production review.** "Reviews are typically completed within 7
-   days." Publishing overview shows it; so does the public listing going from
-   404 to 200 (`curl -s -o /dev/null -w "%{http_code}"` on the Play URL).
-2. **Once production is live:** link the Play listing in AdMob. That is what
-   lifts LUMEN Android out of *Limited ad serving*, and it cannot be done while
-   the listing is not public — tried 15 Sep: AdMob's Play search answers "Can't
-   find your app?" for `com.rldgames.lumen`. The path is Apps → **LUMEN
-   (Android, `~7519300859`)** → *Add store*. Do **not** use *Apps to confirm →
-   Finish setup*: that is `/apps/create`, a second AdMob app with a new id that
-   the binary does not use, so the real one would stay limited. LUMEN iOS
-   (`~9285134085`) is already Ready and linked.
-3. **AdMob payout** — identity verification and bank details are both incomplete,
-   and there is a $10 threshold. This one is the owner's to do, not ours.
-4. **Play promotional video** — blocked twice over: the field takes a YouTube URL
+1. **Finish the Android 1.0.7 release.** The owner uploads
+   `build-out/107-98/bundle/release/app-release.aab` (16 MB — over the 10 MB
+   browser-upload cap) in Production → Create new release. Then: release notes
+   from `work/notes-1.0.7.json` (en, tr, es, zh-Hans, zh-Hant; all measured under
+   500), the store listing's "13" → "14" modes in every language's short AND
+   full description (en "13 modes", tr "13 mod" / "13 OYUN MODU", es and es-419
+   "13 modos", zh-CN "13 种模式", zh-TW "13 種遊戲模式" / "13種模式"), then the
+   publishing overview — read every row — and submit.
+2. **When each store serves 98:** raise that platform's number in release.json
+   (`iosBuild` / `androidBuild`, and `build` as the lower of the two), push.
+3. **When the 2026-10 ballot closes (31 Oct):** read
+   `poll_tally?poll_id=eq.2026-10`, build the winner, open the next ballot and set
+   its `last`. A ballot left to expire tells every player "The winner is being
+   built" — that is how September carried a false promise for ten days.
+4. **AdMob payout** — identity verification and bank details only open at $10.
+   This one is the owner's to do, not ours.
+5. **Play promotional video** — blocked twice over: the field takes a YouTube URL
    only, the owning Google account's Studio access is blocked by a channel-appeal
    interstitial, and all four videos we have are **vertical** (1080×1920 /
    886×1920) while Play's frame is landscape. Needs a landscape cut and a working
@@ -121,6 +125,13 @@ landed.
 **Measure store copy before pasting it.** Play release notes are 500 characters
 *per language*; the Play production form is 300 per answer; Apple's subtitle and
 name are 30. Every one of these has been hit.
+
+**A failure that is caught and reported as success cannot be seen.** js/poll.js
+swallowed every refused vote as `offline` and told the voter "Voted" for a whole
+month while the tally sat at zero — and the zero was then read as "nobody cares".
+When a feature "works" but its numbers stay at nothing, test the write path
+against the real backend, not a stub that fails on purpose. (The probe votes
+from 30 Sep sit under `poll_id = 'probe-2026-09-30'`; no client shows that id.)
 
 **Run the suite in a real viewport.** `node tools/serve.js 5178` then
 `http://localhost:5178/tests/` in a window wider than 200px — the layout test
