@@ -19,7 +19,7 @@ a state, and state expires.**
 |---|---|
 | Web | **1.0.7** live — PACER, the vote fix, the 2026-10 ballot (`4834e24`, Pages 30 Sep) |
 | App Store | 1.0.6 (build 97) READY_FOR_SALE. **1.0.7 (build 98) WAITING_FOR_REVIEW**, submitted 30 Sep, release type AFTER_APPROVAL |
-| Play production | **Live** — 97 (1.0.6), full rollout, 178 countries; the listing says "Updated on Sep 15". **1.0.7 (98) is not uploaded yet**: the .aab waits in `build-out/107-98/` for the owner |
+| Play production | **Live** — 97 (1.0.6), full rollout, 178 countries. **98 (1.0.7) sent for review 1 Oct**, together with the listing's "14 modes" in all six languages (en-US, tr-TR, es-419, es-ES, es-US, zh-CN; short and full description). Managed publishing off, so approval = live |
 | Play closed testing | 97 (1.0.6) on Alpha |
 | AdMob | Android **linked to the Play listing on 30 Sep** ("Getting ready", a 2–3 day review, then the limit lifts). iOS Ready |
 | Players | ~15 monthly active Android devices, 4 production installs, 13 leaderboard rows ever (the last on 7 Sep). Earnings ≈ $0 |
@@ -34,14 +34,9 @@ Each platform's number moves to 98 only once that store actually serves 98.
 
 ## Next tasks, in order
 
-1. **Finish the Android 1.0.7 release.** The owner uploads
-   `build-out/107-98/bundle/release/app-release.aab` (16 MB — over the 10 MB
-   browser-upload cap) in Production → Create new release. Then: release notes
-   from `work/notes-1.0.7.json` (en, tr, es, zh-Hans, zh-Hant; all measured under
-   500), the store listing's "13" → "14" modes in every language's short AND
-   full description (en "13 modes", tr "13 mod" / "13 OYUN MODU", es and es-419
-   "13 modos", zh-CN "13 种模式", zh-TW "13 種遊戲模式" / "13種模式"), then the
-   publishing overview — read every row — and submit.
+1. **Watch both reviews.** iOS 1.0.7 (build 98) has waited since 30 Sep, Play
+   98 since 1 Oct. Both release on approval. ASC: `appStoreVersions/6bd0f746-c98e-42ae-bb16-46dcdea848d3`;
+   Play: publishing overview, or the listing's version line reading 1.0.7.
 2. **When each store serves 98:** raise that platform's number in release.json
    (`iosBuild` / `androidBuild`, and `build` as the lower of the two), push.
 3. **When the 2026-10 ballot closes (31 Oct):** read
