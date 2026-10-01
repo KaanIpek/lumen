@@ -7,7 +7,7 @@ dependencies**, PWA, wrapped for iOS/Android with Capacitor.
 - Repo: `KaanIpek/lumen` — **public**, deliberately (free Pages hosting + free macOS CI runner)
 - Package: `com.rldgames.lumen` (Android) / bundle `com.lumen.game` (iOS) · Play app `4973199188286450484` · ASC app `6797276640`
 
-State below was measured on **2026-09-30**, not assumed. Anything marked
+State below was measured on **2026-10-01**, not assumed. Anything marked
 *last known* was not re-checked; verify before acting on it. **This file records
 a state, and state expires.**
 
@@ -18,8 +18,8 @@ a state, and state expires.**
 | | |
 |---|---|
 | Web | **1.0.7** live — PACER, the vote fix, the 2026-10 ballot (`4834e24`, Pages 30 Sep) |
-| App Store | 1.0.6 (build 97) READY_FOR_SALE. **1.0.7 (build 98) WAITING_FOR_REVIEW**, submitted 30 Sep, release type AFTER_APPROVAL |
-| Play production | **Live** — 97 (1.0.6), full rollout, 178 countries. **98 (1.0.7) sent for review 1 Oct**, together with the listing's "14 modes" in all six languages (en-US, tr-TR, es-419, es-ES, es-US, zh-CN; short and full description). Managed publishing off, so approval = live |
+| App Store | **1.0.7 (build 98) READY_FOR_SALE** — ASC API and the public lookup (US, TR, GB, DE), released 1 Oct 18:56 UTC |
+| Play production | **1.0.7 (98) live** — the public listing reads 1.0.7, "Updated on Oct 1", and "14 modes" (the listing change went through with the release). Full rollout, 178 countries |
 | Play closed testing | 97 (1.0.6) on Alpha |
 | AdMob | Android **linked to the Play listing on 30 Sep** ("Getting ready", a 2–3 day review, then the limit lifts). iOS Ready |
 | Players | ~15 monthly active Android devices, 4 production installs, 13 leaderboard rows ever (the last on 7 Sep). Earnings ≈ $0 |
@@ -27,25 +27,20 @@ a state, and state expires.**
 | Tests | 346, all green |
 | Content | 14 modes, 23 worlds, 16 signatures (derive these, never quote from memory) |
 
-`release.json` reads `version 1.0.7, build 97, iosBuild 97, androidBuild 97`.
-Each platform's number moves to 98 only once that store actually serves 98.
+`release.json` reads `version 1.0.7, build 98, iosBuild 98, androidBuild 98`, raised on
+1 Oct once both stores were seen serving 98.
 
 ---
 
 ## Next tasks, in order
 
-1. **Watch both reviews.** iOS 1.0.7 (build 98) has waited since 30 Sep, Play
-   98 since 1 Oct. Both release on approval. ASC: `appStoreVersions/6bd0f746-c98e-42ae-bb16-46dcdea848d3`;
-   Play: publishing overview, or the listing's version line reading 1.0.7.
-2. **When each store serves 98:** raise that platform's number in release.json
-   (`iosBuild` / `androidBuild`, and `build` as the lower of the two), push.
-3. **When the 2026-10 ballot closes (31 Oct):** read
+1. **When the 2026-10 ballot closes (31 Oct):** read
    `poll_tally?poll_id=eq.2026-10`, build the winner, open the next ballot and set
    its `last`. A ballot left to expire tells every player "The winner is being
    built" — that is how September carried a false promise for ten days.
-4. **AdMob payout** — identity verification and bank details only open at $10.
+2. **AdMob payout** — identity verification and bank details only open at $10.
    This one is the owner's to do, not ours.
-5. **Play promotional video** — blocked twice over: the field takes a YouTube URL
+3. **Play promotional video** — blocked twice over: the field takes a YouTube URL
    only, the owning Google account's Studio access is blocked by a channel-appeal
    interstitial, and all four videos we have are **vertical** (1080×1920 /
    886×1920) while Play's frame is landscape. Needs a landscape cut and a working
