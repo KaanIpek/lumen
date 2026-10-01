@@ -16,6 +16,7 @@ const ASSETS = [
   './js/leaderboard.js?v=260905010607',
   './js/chase.js?v=260905010607',
   './js/ghost.js?v=260905010607',
+  './js/pacer.js?v=260905010607',
   './js/auth.js?v=260905010607',
   './js/perks.js?v=260905010607',
   './js/ads.js?v=260905010607',

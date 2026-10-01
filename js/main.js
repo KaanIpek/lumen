@@ -117,6 +117,9 @@
       LUMEN.Poll.configure(c.supabaseUrl, c.supabaseAnonKey);
       if (c.poll && c.poll.id && (c.poll.options || []).length) LUMEN.Poll.current = c.poll;
       LUMEN.UI.refreshPoll && LUMEN.UI.refreshPoll();
+      // A ballot an earlier launch could not deliver goes in now. Fire and
+      // forget: a vote is never worth holding up the menu for.
+      LUMEN.Poll.flushPending && LUMEN.Poll.flushPending().catch(() => {});
     }
     // The daily-reward button appears for the same reason and at the same
     // moment: js/perks.js reads the board's project, so it only knows there is

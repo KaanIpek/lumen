@@ -577,6 +577,7 @@ kbd {
 .poll-opt.mine .po-bar i { background: var(--gold); }
 .poll-opt.mine .po-pct { color: var(--gold); }
 .poll-foot { margin-top: 16px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.poll-last { margin: -6px 0 14px; font-size: 12px; line-height: 1.5; color: var(--gold); }
 
 /* The CUSTOMIZE category filter. Sticky to the top of the scrolling panel so it
    is reachable from anywhere in a long list — having to scroll back up to change

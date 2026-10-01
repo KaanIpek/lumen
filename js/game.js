@@ -132,6 +132,9 @@
     set voterId(v) { this._write('lumen_voter', String(v || '')); },
     get pollSeen() { return this._read('lumen_pollseen', ''); },
     set pollSeen(v) { this._write('lumen_pollseen', String(v || '')); },
+    // A ballot that has not reached the server yet, "<pollId>:<optionId>".
+    get pollPending() { return this._read('lumen_pollpend', ''); },
+    set pollPending(v) { this._write('lumen_pollpend', String(v || '')); },
     get pollVote() { return this._read('lumen_pollvote', ''); },
     set pollVote(v) { this._write('lumen_pollvote', String(v || '')); },
     // "YYYY-MM-DD:n" — a stamp that is not today's IS a fresh day, so a clock
@@ -188,6 +191,10 @@
     set mode(v) { this._write('lumen_mode', String(v || 'classic')); },
     get modeBests() { return this._obj('lumen_mode_bests'); },
     set modeBests(o) { this._write('lumen_mode_bests', JSON.stringify(o)); },
+    // PACER's mark for the week, { week, score, code }. `code` is the run as a
+    // Ghost.encode() string, so it costs ~1KB at most. See js/pacer.js.
+    get pacer() { return this._obj('lumen_pacer'); },
+    set pacer(o) { this._write('lumen_pacer', JSON.stringify(o || {})); },
     // the orbiting shards at high chain — on by default, one toggle to undo
     get chargeFx() { return this._bool('lumen_charge', true); },
     set chargeFx(v) { this._write('lumen_charge', v ? '1' : '0'); },
@@ -2782,8 +2789,10 @@
     }
 
     reset() {
-      this.rng = Math.random;     // swapped for a seeded PRNG in daily mode
+      this.rng = Math.random;     // swapped for a seeded PRNG in daily and pacer runs
       this.daily = false;
+      this.pacer = false;         // PACER's week course — only startPacer() sets it
+      this.pacerWeek = '';
       this.attract = false;       // callers that want the demo re-arm it after
       // The seasonal preview belongs to the menu demo and nothing else. Clearing
       // it here covers every path at once — a real run, the daily, leaving the
@@ -2919,7 +2928,9 @@
       // The world's own rules, resolved here for the same reason the mode is:
       // `daily` is not set yet when reset() runs. The Daily always flies Deep
       // Field, so a shared course can never depend on what somebody owns.
-      this.world = (LUMEN.Cosmetics && !this.daily) ? LUMEN.Cosmetics.mapDef() : null;
+      // PACER likewise: a course that must be the same corridor every run of
+      // the week cannot depend on which world happens to be equipped today.
+      this.world = (LUMEN.Cosmetics && !this.daily && !this.pacer) ? LUMEN.Cosmetics.mapDef() : null;
       // BRITTLE's two meters are per-RUN state, and this is the one function
       // that runs after every path has decided which mode this is — reset,
       // startDaily, startTutorial, tutAdvance and startAttract all reach it.
@@ -3345,6 +3356,9 @@
 
     // ---- lifecycle -------------------------------------------------------
     start() {
+      // PACER is not multipliers on a fresh random corridor: it is one seeded
+      // course for the week, so it starts the way the daily starts.
+      if (LUMEN.Pacer && LUMEN.Modes && LUMEN.Modes.current().pacer) { this.startPacer(); return; }
       this.reset();
       if (this.mod && this.mod.startShield) this.shield = true;   // Aegis III
       // Consumables are shop power, so they stay out of the daily like skills do.
@@ -3474,7 +3488,7 @@
     // there silently handed daily runs every upgrade the player owned.
     applyMods() {
       this.mod = LUMEN.Progression
-        ? LUMEN.Progression.modifiers(!!this.daily)
+        ? LUMEN.Progression.modifiers(!!(this.daily || this.pacer))
         : { magnetFrac: 0, flowAt: 16, comboTimeMul: 1, closeWindow: 2.0, closeBonus: 8, startShield: false, reviveCost: 60, skillsActive: false };
     }
 
@@ -3555,6 +3569,52 @@
       Audio && (Audio.init(), Audio.unlock(), this._sfx('start'), Audio.music.start(), Audio.music.setIntensity(0), Audio.music.setLevel(0.5));
       LUMEN.UI && LUMEN.UI.showScreen(null);
     }
+    // PACER: this week's course, with the best run flown on it beside you.
+    //
+    // Built from the daily's parts because they are exactly "a course that is
+    // identical every time": a seeded generator, a pre-planned course extended
+    // on demand, and a ghost recorded against `elapsed`. None of the daily's
+    // social half comes along — no board, no streak, no twist, no CHASE — and
+    // none of the player's kit either: Normal, no world, no skills and no
+    // loadout, so the ghost from Tuesday was flown in the same game as this
+    // run. See js/pacer.js.
+    startPacer() {
+      this.reset();
+      this.pacer = true;
+      const P = LUMEN.Pacer;
+      const week = P ? P.weekKey() : '';
+      this.pacerWeek = week;
+      this.diff = DIFFICULTY.normal;
+      this.resolveMode();   // after the flag, so the world is dropped
+      this.applyMods();     // ...and the skills read as zero
+      const seed = P ? P.seedFor(week) : 1;
+      this.rng = mulberry32(seed);
+      // reset() drew these from Math.random; redraw them from the seed, exactly
+      // as startDaily does, or two runs of the same week would part company
+      // about fifteen seconds in.
+      this.bountyTimer = this.rrand(12, 20);
+      this.trapTimer = (this.world && this.world.traps) ? this.rrand(1.5, 3.5) : this.rrand(14, 22);
+      this.plan = [];
+      this.mutator = 'none';
+      this._plan = {
+        rng: mulberry32(seed ^ 0x9e3779b9), e: 1.1, c: 0.5, mut: 'none',
+        gap: { gapMul: this.mode ? (this.mode.gap || 1) : 1 },
+      };
+      this.planAhead(600);
+      // Record this run, and race the week's best. After the course exists and
+      // wrapped, for the daily's reasons: a ghost is decoration, a fault in it
+      // must never cost anybody the run, and neither of these touches this.rng.
+      try { LUMEN.Ghost && LUMEN.Ghost.start(this); } catch (e) { this._ghostRec = null; }
+      try {
+        const rec = P ? P.ghost(week) : null;
+        this._ghostPlay = rec ? { rec } : null;
+      } catch (e) { this._ghostPlay = null; }
+      this.state = State.PLAY;
+      Audio && (Audio.init(), Audio.unlock(), this._sfx('start'), Audio.music.start(), Audio.music.setIntensity(0), Audio.music.setLevel(0.5));
+      LUMEN.Voice && LUMEN.Voice.sync();
+      LUMEN.UI && LUMEN.UI.showScreen(null);
+    }
+
     // Append `n` more gates to the daily course, continuing the seeded sequence
     // exactly where it left off. Called once for the opening 600 and again
     // whenever a run outlives them, so the layout is the same for everyone at
@@ -3740,6 +3800,8 @@
       // from a course nobody is playing, and it collapsed the moment the run
       // ended. Daily.status() is the one that checks the date.
       if (this.daily) return (LUMEN.Daily ? LUMEN.Daily.status().bestToday : 0) || 0;
+      // PACER: this week's mark. Last week's was set on another corridor.
+      if (this.pacer) return LUMEN.Pacer ? LUMEN.Pacer.weekBest(this.pacerWeek) : 0;
       const id = this.mode ? this.mode.id : 'classic';
       if (id === 'classic') return Store.best;
       return LUMEN.Modes ? LUMEN.Modes.best(id) : 0;
@@ -3747,7 +3809,9 @@
 
     get reviveCost() { return this.mod ? this.mod.reviveCost : 60; }
     canRevive() {
-      return !this.revived && !this.daily && Math.floor(this.score) > 0 && Store.shards >= this.reviveCost;
+      // Not in PACER either: a ghost is a run that ended, and racing it with a
+      // second life makes the mark a measure of how many shards you had.
+      return !this.revived && !this.daily && !this.pacer && Math.floor(this.score) > 0 && Store.shards >= this.reviveCost;
     }
 
     // Whether the CONTINUE? panel opens at all — deliberately NOT canRevive().
@@ -3758,7 +3822,7 @@
     // was never offered anything at all. On iOS this panel is the only place a
     // rewarded revive can be reached.
     canOfferRevive() {
-      if (this.revived || this.daily || Math.floor(this.score) <= 0) return false;
+      if (this.revived || this.daily || this.pacer || Math.floor(this.score) <= 0) return false;
       if (Store.shards >= this.reviveCost) return true;
       return !!(LUMEN.Ads && LUMEN.Ads.available && !this.adRevived);
     }
@@ -3980,6 +4044,7 @@
       // against the all-time Classic record instead of the day's.
       const prevBest = this.daily
         ? ((LUMEN.Daily ? LUMEN.Daily.status().bestToday : 0) || 0)
+        : this.pacer ? (LUMEN.Pacer ? LUMEN.Pacer.weekBest(this.pacerWeek) : 0)
         : isClassic ? Store.best
         : (LUMEN.Modes ? LUMEN.Modes.best(modeId) : 0);
       if (this.daily) {
@@ -4004,6 +4069,21 @@
                          name: (LUMEN.Leaderboard && LUMEN.Leaderboard.playerName) || '' })
             : '';
         } catch (e) { ghostCode = ''; }
+      } else if (this.pacer) {
+        // PACER answers to the WEEK. The all-time number still goes into
+        // modeBests for the stats, but "best" here — on the panel, on the HUD
+        // and for the ghost — is this week's mark, because last week's was set
+        // on another corridor. Harvested here for the daily's reason: toMenu()
+        // resets the run, and the recording goes with it.
+        if (ranked && LUMEN.Modes) LUMEN.Modes.recordBest(modeId, s);
+        let code = '';
+        try {
+          const g = LUMEN.Ghost, rec = this._ghostRec;
+          code = (g && rec && rec.ys.length > 4)
+            ? g.encode({ date: this.pacerWeek, score: s, div: rec.div, ys: rec.ys, name: '' })
+            : '';
+        } catch (e) { code = ''; }
+        isBest = !!(ranked && LUMEN.Pacer && LUMEN.Pacer.remember(this.pacerWeek, s, code));
       } else if (isClassic) {
         isBest = s > Store.best;
         if (isBest) Store.best = s;
@@ -4074,8 +4154,10 @@
       const rank = this.daily || !isClassic || !LUMEN.Scores ? 0 : rankBefore;
       if (isBest && s > 0) Audio && this._sfx('best');
       LUMEN.UI && LUMEN.UI.showGameOver({
-        score: s, combo: this.bestComboRun, isBest, daily: this.daily,
-        best: this.daily ? ((LUMEN.Daily ? LUMEN.Daily.status().bestToday : 0) || 0) : (isClassic ? Store.best : (LUMEN.Modes ? LUMEN.Modes.best(modeId) : 0)),
+        score: s, combo: this.bestComboRun, isBest, daily: this.daily, pacer: !!this.pacer,
+        best: this.daily ? ((LUMEN.Daily ? LUMEN.Daily.status().bestToday : 0) || 0)
+          : this.pacer ? (LUMEN.Pacer ? LUMEN.Pacer.weekBest(this.pacerWeek) : 0)
+          : (isClassic ? Store.best : (LUMEN.Modes ? LUMEN.Modes.best(modeId) : 0)),
         shards: shardsEarned, totalShards: Store.shards,
         missionsDone, achievements, dailyStreak: LUMEN.Daily ? LUMEN.Daily.status().streak : 0,
         rank, mode: modeId, ranked,
@@ -4349,11 +4431,13 @@
     }
 
     spawnObstacle() {
-      // daily runs consume a pre-planned queue so every player gets the same course
+      // daily runs consume a pre-planned queue so every player gets the same course,
+      // and pacer runs consume the week's, so every run of the week does. Only
+      // startDaily and startPacer ever set a plan; reset() clears it for the rest.
       // Outlived the planned course? Extend it from the same seeded generator
       // rather than repeating the final gate forever.
-      if (this.daily && this.plan && this.spawnIndex >= this.plan.length - 1) this.planAhead(300);
-      const spec = this.daily && this.plan
+      if (this.plan && this.spawnIndex >= this.plan.length - 1) this.planAhead(300);
+      const spec = this.plan
         ? this.plan[Math.min(this.spawnIndex++, this.plan.length - 1)]
         // minGap is deliberately NOT passed on the daily path above: it depends
         // on playH and on baseR's 10px floor, so it is screen-dependent, and a
@@ -4548,7 +4632,7 @@
       // `!this.attract` because the menu demo also lives in State.PLAY, and
       // recording it would ship a ghost of nobody. Guarded because a fault in
       // recording must never cost somebody their run.
-      if (this.daily && !this.attract && this.state === State.PLAY && LUMEN.Ghost) {
+      if ((this.daily || this.pacer) && !this.attract && this.state === State.PLAY && LUMEN.Ghost) {
         try { LUMEN.Ghost.sample(this); } catch (e) { this._ghostRec = null; }
       }
 
@@ -5440,7 +5524,7 @@
     // Returns false when there was nowhere safe to put it, so the caller can try
     // again shortly instead of writing the whole 18-30s wait off.
     spawnBounty() {
-      if (this.daily) return true;                 // the shared course stays identical
+      if (this.daily || this.pacer) return true;   // a seeded course stays identical
       const r = this.player.r * 1.0;
       const mid = this.playTop + this.playH * 0.5;
       // Sit strictly LEFT of the line every gate is born on (W + obstacleW), for
@@ -6827,7 +6911,7 @@
     // position would sit exactly underneath the live orb and be invisible.
     drawGhost(ctx) {
       const g = this._ghostPlay;
-      if (!g || !this.daily || this.attract || this.state === State.MENU) return;
+      if (!g || !(this.daily || this.pacer) || this.attract || this.state === State.MENU) return;
       const G = LUMEN.Ghost;
       if (!G) return;
       const f = G.at(g.rec, this.elapsed);
@@ -7222,7 +7306,7 @@
       } else {
         ctx.font = `600 ${sm}px "Rajdhani", system-ui, sans-serif`;
         ctx.fillStyle = 'rgba(255,255,255,0.55)';
-        ctx.fillText((this.daily ? T('dailyBest') : T('best')) + ' ' + this.bestHere, W / 2, top + big + 2);
+        ctx.fillText((this.daily ? T('dailyBest') : this.pacer ? T('pacerBest') : T('best')) + ' ' + this.bestHere, W / 2, top + big + 2);
       }
 
       // combo (right side)

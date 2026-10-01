@@ -115,27 +115,38 @@
     },
 
     poll: {
-      id: '2026-09',                // any string; changing it opens a fresh vote for everybody
-      closes: '2026-09-20',          // YYYY-MM-DD, in the player's own day
+      id: '2026-10',                // any string; changing it opens a fresh vote for everybody
+      closes: '2026-10-31',          // YYYY-MM-DD, in the player's own day
+      // What came of the last ballot, shown on the vote screen. The 2026-09
+      // votes never reached the server (js/poll.js has the story), so there was
+      // no winner to honour: PACER was picked from that ballot by hand, and the
+      // screen says "from the last ballot", never "the winner".
+      last: { name: { en: 'Pacer', tr: 'Tempo', es: 'Liebre', zh: '配速' } },
       options: [
         // name/desc take a plain string, or a { en, tr, es, zh } map.
         // kind is one of: mode | map | cosmetic
         {
           id: 'mirrorworld', kind: 'map',
-          name: { en: 'Mirrorworld', tr: 'Ayna Dünya' },
+          name: { en: 'Mirrorworld', tr: 'Ayna Dünya', es: 'Mundo Espejo', zh: '镜像世界' },
           desc: {
             en: 'A world that reflects the corridor back at you.',
             tr: 'Koridoru sana geri yansıtan bir dünya.',
+            es: 'Un mundo que te devuelve el reflejo del pasillo.',
+            zh: '一个把走廊倒映给你看的世界。',
           },
         },
-        { id: 'pacer', kind: 'mode',
-          name: { en: 'Pacer', tr: 'Tempo' },
-          desc: { en: 'A ghost of your best run flies beside you.',
-                  tr: 'En iyi koşunun hayaleti yanında uçar.' } },
         { id: 'aurora_set', kind: 'cosmetic',
-          name: { en: 'Aurora set', tr: 'Aurora seti' },
+          name: { en: 'Aurora set', tr: 'Aurora seti', es: 'Conjunto Aurora', zh: '极光套装' },
           desc: { en: 'Orb, trail and signature in one northern-light look.',
-                  tr: 'Kutup ışığı temalı orb, iz ve imza.' } },
+                  tr: 'Kutup ışığı temalı orb, iz ve imza.',
+                  es: 'Esfera, estela y firma con un mismo aire de aurora boreal.',
+                  zh: '光球、拖尾与签名，统一的北极光造型。' } },
+        { id: 'duet', kind: 'mode',
+          name: { en: 'Duet', tr: 'Düet', es: 'Dúo', zh: '双子' },
+          desc: { en: 'Two orbs, one tap. They always flip in opposite directions.',
+                  tr: 'İki top, tek dokunuş. Her zaman ters yönlere dönerler.',
+                  es: 'Dos esferas, un toque. Siempre giran en sentidos opuestos.',
+                  zh: '两颗光球，一次点击。它们总是朝相反方向翻转。' } },
       ],
     },
 

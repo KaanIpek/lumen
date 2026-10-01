@@ -257,6 +257,25 @@
       accent: 152,
       hold: true,
     },
+    {
+      // PACER (js/pacer.js): one seeded course for the whole week, and the best
+      // run you have flown on it replayed beside you as a ghost. Classic's
+      // numbers on purpose: what changes is the COURSE, not the knobs, which
+      // makes this the second mode after MIRROR that is allowed to match
+      // Classic in "each one actually changes the game".
+      //
+      // `pacer: true` is read by Game.start(), which hands the run to
+      // startPacer(), and by the mode card, which shows this week's mark.
+      id: 'pacer',
+      gap: 1, speed: 1, spawn: 1, ramp: 1,
+      // A course you can learn by heart gets easier every day of the week, so it
+      // must not become the best place to farm shards — the same brake HOLD
+      // carries for being easier. Score stays at 1: a pacer mark is only ever
+      // compared with another pacer mark, on the same course.
+      scoreMul: 1, shardMul: 0.8, ranked: true, lethal: true,
+      accent: 122,                   // 27 off rubber's 95, 28 off mirror's 150
+      pacer: true,
+    },
   ];
 
   const byId = {};

@@ -1464,10 +1464,11 @@
     }
     L.Modes.setCurrent('classic');
     const c = seen.classic;
-    // Mirror is a camera mode on purpose — same numbers, different to read — so
-    // it is the one mode allowed to match Classic here.
+    // Mirror is a camera mode on purpose — same numbers, different to read — and
+    // PACER changes the COURSE rather than the knobs: one seeded corridor all
+    // week, which the PACER tests prove directly. Those two may match Classic.
     for (const id of Object.keys(seen)) {
-      if (id === 'classic' || id === 'mirror') continue;
+      if (id === 'classic' || id === 'mirror' || id === 'pacer') continue;
       const s = seen[id];
       assert(s.gap !== c.gap || s.speed !== c.speed, id + ' differs from Classic');
     }
@@ -3319,6 +3320,82 @@
     }
   });
 
+  test('Next-update vote: the request is one the database actually accepts', async () => {
+    // Every vote of the 2026-09 poll was refused by the database, and every
+    // voter was told "Voted". The request carried Prefer: resolution=
+    // ignore-duplicates, which makes the insert an ON CONFLICT, which RLS
+    // refuses on a table nobody may read. The test above could never see it:
+    // its backend fails on purpose, so it only ever exercised "offline". This
+    // one pins the request itself and the three answers a server can give.
+    freshStorage();
+    const P = L.Poll;
+    const keepSb = P._sb, keepCur = P.current, keepRes = P._results, keepFetch = window.fetch;
+    const sent = [];
+    let answer = 201;
+    window.fetch = (url, opts) => {
+      sent.push({ url, opts });
+      if (answer === 'down') return Promise.reject(new TypeError('Failed to fetch'));
+      return Promise.resolve(new Response(answer === 201 ? '' : '{}', { status: answer }));
+    };
+    P._sb = { url: 'https://example.invalid', key: 'k' };
+    P.current = { id: 'rls-1', closes: '2999-01-01',
+      options: [{ id: 'a', kind: 'mode', name: 'A', desc: 'a' }, { id: 'b', kind: 'map', name: 'B', desc: 'b' }] };
+    try {
+      // the shape of the request
+      const r = await P.vote('a');
+      eq(sent.length, 1, 'one request');
+      const req = sent[0];
+      assert(/\/rest\/v1\/poll_votes$/.test(req.url), 'it goes to poll_votes: ' + req.url);
+      eq(req.opts.method, 'POST', 'as an insert');
+      const prefer = String((req.opts.headers || {}).Prefer || '');
+      assert(!/resolution=/.test(prefer), 'and NOT as an ON CONFLICT upsert, which RLS refuses: ' + prefer);
+      const body = JSON.parse(req.opts.body);
+      eq(body[0].poll_id, 'rls-1', 'it names the poll');
+      eq(body[0].option_id, 'a', 'and the option');
+      eq(body[0].voter, L.Store.voterId, 'and the voter');
+      // 201: stored
+      assert(r.ok && !r.offline, 'a 201 is a stored vote');
+      eq(L.Store.pollPending, '', 'and nothing is left pending');
+
+      // 409: the ballot is already in the box — counted, not an error
+      freshStorage(); sent.length = 0; answer = 409;
+      const dup = await P.vote('b');
+      assert(dup.ok && !dup.offline, 'a 409 means already counted');
+      eq(L.Store.pollPending, '', 'and is not retried');
+
+      // no network: told "voted", kept pending, delivered on a later try
+      freshStorage(); sent.length = 0; answer = 'down';
+      const lost = await P.vote('b');
+      assert(lost.ok && lost.offline, 'a lost vote still reads as cast');
+      eq(L.Store.pollPending, 'rls-1:b', 'but is kept pending');
+      answer = 500;
+      eq(await P.flushPending(), false, 'a server error leaves it pending');
+      eq(L.Store.pollPending, 'rls-1:b', 'so it is still pending');
+      answer = 201; sent.length = 0;
+      eq(await P.flushPending(), true, 'delivered once the server answers');
+      eq(sent.length, 1, 'with exactly one request');
+      eq(JSON.parse(sent[0].opts.body)[0].option_id, 'b', 'carrying the original choice');
+      eq(L.Store.pollPending, '', 'and nothing is pending after');
+      eq(await P.flushPending(), false, 'a second flush sends nothing');
+
+      // a pending ballot for a poll that has been replaced is dropped
+      L.Store.pollPending = 'old-poll:a'; sent.length = 0;
+      eq(await P.flushPending(), false, 'a ballot for another poll is not sent');
+      eq(sent.length, 0, 'no request at all');
+      eq(L.Store.pollPending, '', 'and it is cleared');
+
+      // ...and a closed poll takes no late ballots
+      L.Store.pollPending = 'rls-1:a';
+      P.current = Object.assign({}, P.current, { closes: '2000-01-01' });
+      eq(await P.flushPending(), false, 'a closed poll takes no late ballots');
+      eq(sent.length, 0, 'and asks nobody');
+    } finally {
+      window.fetch = keepFetch;
+      P._sb = keepSb; P.current = keepCur; P._results = keepRes;
+      freshStorage();
+    }
+  });
+
   test('Next-update vote: offered by itself, exactly once', () => {
     // A menu button most people never press is not participation. The ballot
     // comes to them — but not before they have played enough to have an
@@ -3390,6 +3467,61 @@
       eq(P.text({ name: { en: 'Only English' } }, 'name'), 'Only English', 'missing language falls back');
       eq(P.text({}, 'name'), '', 'a missing field is empty, not "undefined"');
     } finally { L.i18n.set(keep); }
+  });
+
+  test('Next-update vote: the screen says what came of the last ballot', async () => {
+    // "The winner is being built" is a promise. When the next ballot opens,
+    // the screen says what came of the last one, in the player's language,
+    // and says nothing at all when the config has nothing to say.
+    await loadGameMarkup();
+    freshStorage();
+    const P = L.Poll;
+    const keepSb = P._sb, keepCur = P.current, keepRes = P._results, keepLang = L.i18n.lang;
+    P._sb = { url: 'https://example.invalid', key: 'x' };
+    try {
+      P.current = { id: 'l-1', closes: '2999-01-01', last: { name: { en: 'Pacer', tr: 'Tempo' } },
+        options: [{ id: 'a', kind: 'mode', name: 'A', desc: 'a' }] };
+      L.i18n.set('tr');
+      L.UI.renderPoll();
+      const el = document.getElementById('poll-last');
+      assert(el, 'the line exists in the markup');
+      assert(!el.classList.contains('hidden'), 'it is shown when the ballot names the last one');
+      assert(el.textContent.indexOf('Tempo') >= 0, 'in the player language: ' + el.textContent);
+      assert(el.textContent.indexOf('{') < 0, 'with the name substituted');
+      P.current = Object.assign({}, P.current, { last: null });
+      L.UI.renderPoll();
+      assert(el.classList.contains('hidden'), 'and hidden when it says nothing');
+    } finally {
+      L.i18n.set(keepLang);
+      P._sb = keepSb; P.current = keepCur; P._results = keepRes;
+      freshStorage();
+    }
+  });
+
+  test('Next-update vote: the live ballot is written out in all four languages', async () => {
+    // The 2026-09 ballot carried English and Turkish only, so es and zh players
+    // voted on English text. Read the shipped config.js itself, in a sandbox,
+    // rather than trusting a copy of it here.
+    const src = await fetch('../config.js?t=' + Date.now()).then((r) => r.text());
+    const box = {};
+    new Function('window', src)(box);
+    const poll = box.LUMEN && box.LUMEN.CONFIG && box.LUMEN.CONFIG.poll;
+    assert(poll && poll.id && poll.options && poll.options.length >= 2, 'a ballot is configured');
+    assert(/^\d{4}-\d{2}-\d{2}$/.test(poll.closes), 'with a closing date: ' + poll.closes);
+    const kinds = { mode: 1, map: 1, cosmetic: 1 };
+    const ids = new Set();
+    for (const o of poll.options) {
+      assert(kinds[o.kind], o.id + ' is a mode, a map or a cosmetic');
+      assert(!ids.has(o.id), o.id + ' appears once'); ids.add(o.id);
+      for (const f of ['name', 'desc']) {
+        for (const lang of ['en', 'tr', 'es', 'zh']) {
+          assert(o[f] && typeof o[f] === 'object' && o[f][lang], o.id + ' ' + f + ' in ' + lang);
+        }
+      }
+    }
+    if (poll.last) {
+      for (const lang of ['en', 'tr', 'es', 'zh']) assert(poll.last.name && poll.last.name[lang], 'the last ballot named in ' + lang);
+    }
   });
 
   test('`.hidden` actually hides, on anything', async () => {
@@ -8444,6 +8576,219 @@
         L.i18n.set(lang);
         const v = L.t('ghostRacing', { n: 'KESTREL' });
         assert(v.indexOf('KESTREL') >= 0 && v.indexOf('{') === -1, lang + ' did not substitute: ' + v);
+      }
+    } finally { L.i18n.set(keep); }
+    eq(missing.length, 0, 'missing: ' + missing.join(', '));
+    eq(same.length, 0, 'identical to English: ' + same.join(', '));
+  });
+
+  // ---- PACER: one course for the week, and your best run beside you --------
+  const pacerCourse = (g) => g.plan.slice(0, 40)
+    .map((s) => [s.kind, s.c.toFixed(4), s.gapH.toFixed(4), s.mote ? 1 : 0].join(':')).join('|');
+
+  test('PACER: every run of the week flies the same corridor, and next week another', () => {
+    // A ghost is a recorded LINE, and a line only means something on a course
+    // you fly again. Two runs of one week must be the same corridor gate for
+    // gate — planned and on screen — and a new week must not be.
+    freshStorage();
+    const P = L.Pacer, realWeek = P.weekKey;
+    L.Modes.setCurrent('pacer');
+    const fly = () => {
+      const g = newGame(390, 844);
+      g.start();
+      eq(g.pacer, true, 'PLAY in PACER starts a pacer run');
+      const planned = pacerCourse(g);
+      for (let i = 0; i < 60 * 20; i++) { g.invuln = 999; g.update(1 / 60); }
+      const live = g.obstacles.map((o) => o.spec.c.toFixed(4)).join(',')
+        + ' / ' + g.motes.map((m) => Math.round(m.y)).join(',');
+      g.toMenu();
+      return { planned, live };
+    };
+    try {
+      P.weekKey = () => '2026-09-28';
+      const a = fly(), b = fly();
+      eq(a.planned, b.planned, 'two runs of one week are planned gate for gate alike');
+      eq(a.live, b.live, 'and twenty seconds in, the same gates and motes are on screen');
+      P.weekKey = () => '2026-10-05';
+      assert(fly().planned !== a.planned, 'a new week is a new corridor');
+      const d = newGame(390, 844);
+      d.startDaily('2026-09-28');
+      assert(pacerCourse(d) !== a.planned, 'and the week is never the Monday daily');
+      d.toMenu();
+    } finally {
+      P.weekKey = realWeek;
+      L.Modes.setCurrent('classic');
+      freshStorage();
+    }
+  });
+
+  test('PACER: the week turns over on Monday, local time', () => {
+    const P = L.Pacer;
+    // 2026-09-28 is a Monday; local-time constructors, the rule todayStr uses
+    eq(P.weekKey(new Date(2026, 8, 28, 0, 5)), '2026-09-28', 'Monday just after midnight starts the week');
+    eq(P.weekKey(new Date(2026, 9, 4, 23, 55)), '2026-09-28', 'Sunday night is still that week');
+    eq(P.weekKey(new Date(2026, 9, 5, 0, 1)), '2026-10-05', 'and the next Monday starts a new one');
+    eq(P.weekKey(new Date(2026, 11, 31, 12)), '2026-12-28', 'a week that crosses New Year keeps its Monday');
+    assert(P.seedFor('2026-09-28') !== L.Daily.seedFor('2026-09-28'), 'the week seed is salted away from the daily');
+  });
+
+  test('PACER: flown at Normal with nothing of yours, and no second life', () => {
+    // Tuesday's ghost has to have been flown in the same game as this run, so
+    // the difficulty you picked, the world you own, your skills and your shop
+    // stock all stay at the door, exactly as they do for the daily. And a run
+    // you race as a ghost is a run that ENDED — no revive, paid or watched.
+    freshStorage();
+    const item = L.Progression.ITEMS[0].id;
+    L.Store.difficulty = 'easy';
+    L.Cosmetics.grant('tidal'); L.Cosmetics.equip('tidal');
+    L.Store.items = { [item]: 1 };   // the shop holds one of each (MAX_PER_TYPE)
+    L.Store.shards = 99999;
+    try {
+      // the control: the very same save in Classic brings all of it along
+      L.Modes.setCurrent('classic');
+      const c = newGame(390, 844); c.start();
+      assert(c.world && c.world.id === 'tidal', 'control: Classic flies the equipped world');
+      eq(c.hand[item], 1, 'control: and brings the shop stock');
+      c.toMenu();
+
+      L.Modes.setCurrent('pacer');
+      const g = newGame(390, 844); g.start();
+      const d = newGame(390, 844); d.startDaily();
+      eq(g.diff, d.diff, 'Normal, whatever the setting says');
+      d.toMenu();
+      eq(g.world, null, 'no equipped world');
+      eq(g.mod.skillsActive, false, 'no skills');
+      eq(g.hand[item] | 0, 0, 'no loadout');
+      g.score = 500;
+      eq(g.canRevive(), false, 'no paid revive');
+      eq(g.canOfferRevive(), false, 'and no revive panel at all');
+      const motes = g.motes.length;
+      eq(g.spawnBounty(), true, 'a bounty reports success without spawning, as on the daily');
+      eq(g.motes.length, motes, 'and nothing was added to the course');
+      g.toMenu();
+    } finally {
+      L.Modes.setCurrent('classic');
+      L.Cosmetics.equip('deepfield');
+      freshStorage();
+    }
+  });
+
+  test('PACER: beat the week and you become the ghost; a worse run changes nothing', () => {
+    freshStorage();
+    const P = L.Pacer, realWeek = P.weekKey;
+    const realShow = L.UI.showGameOver;
+    const LB = L.Leaderboard, realQ = LB.submitQuietly, realH = LB.hold;
+    let shown = null, posted = 0;
+    L.UI.showGameOver = (d) => { shown = d; };
+    LB.submitQuietly = () => { posted++; };
+    LB.hold = () => { posted++; };
+    L.Modes.setCurrent('pacer');
+    // die() defers finalizeRun so a revive can be offered; the _finalized guard
+    // makes calling it directly safe and synchronous, as the ghost tests do.
+    const run = (seconds, score) => {
+      const g = newGame(390, 844);
+      g.start();
+      const raced = g._ghostPlay;
+      for (let i = 0; i < 60 * seconds; i++) { g.invuln = 999; g.update(1 / 60); }
+      g.score = score / g.scoreMul;
+      g.die(); g.finalizeRun();
+      g.toMenu();
+      return raced;
+    };
+    try {
+      P.weekKey = () => '2026-09-28';
+      eq(run(6, 500), null, 'the first run of the week races nobody');
+      assert(shown && shown.pacer, 'game over knows it was a pacer run');
+      eq(shown.isBest, true, 'the first mark is a best');
+      eq(shown.best, 500, 'and the panel shows the week mark');
+      const mark = L.Store.pacer;
+      eq(mark.week, '2026-09-28', 'the mark belongs to this week');
+      eq(mark.score, 500, 'with its score');
+      const ghost = L.Ghost.decode(mark.code);
+      assert(ghost && ghost.ys.length > 30, 'and the run itself, as a ghost');
+
+      const raced = run(4, 200);
+      assert(raced && raced.rec && raced.rec.score === 500, 'the next run races the 500');
+      eq(shown.isBest, false, 'a worse run is not a best');
+      eq(L.Store.pacer.score, 500, 'and does not touch the mark');
+      eq(L.Store.pacer.code, mark.code, 'or the ghost');
+
+      run(5, 900);
+      eq(shown.isBest, true, 'a better run is');
+      eq(L.Store.pacer.score, 900, 'and replaces the mark');
+      assert(L.Store.pacer.code !== mark.code, 'and the ghost');
+      eq(L.Modes.best('pacer'), 900, 'the all-time number is kept for the stats');
+
+      P.weekKey = () => '2026-10-05';
+      const g = newGame(390, 844); g.start();
+      eq(g._ghostPlay, null, 'a new week races nobody: last week was another corridor');
+      eq(g.bestHere, 0, 'and its mark starts from zero');
+      g.toMenu();
+      eq(posted, 0, 'nothing was ever sent to the online board');
+    } finally {
+      P.weekKey = realWeek;
+      L.UI.showGameOver = realShow; LB.submitQuietly = realQ; LB.hold = realH;
+      L.Modes.setCurrent('classic');
+      freshStorage();
+    }
+  });
+
+  test('PACER: racing a ghost never moves the course', () => {
+    // The invariant the mode rests on, as it is for the daily: the ghost is
+    // drawn, never simulated. A run with a ghost beside it and a run without
+    // must fly an identical course and leave the seeded generator in the same
+    // place — drawn frames included, not just recorded ones.
+    freshStorage();
+    const P = L.Pacer, realWeek = P.weekKey;
+    L.Modes.setCurrent('pacer');
+    const fly = () => {
+      const g = newGame(390, 844); g.start();
+      const had = !!g._ghostPlay;
+      for (let i = 0; i < 60 * 12; i++) {
+        g.invuln = 999; g.update(1 / 60);
+        if (i % 6 === 0) g.render();
+      }
+      const out = {
+        had, plan: JSON.stringify(g.plan),
+        field: g.obstacles.length + ':' + g.motes.map((m) => m.y.toFixed(2)).join(','),
+        next: g.rng(),
+      };
+      g.toMenu();
+      return out;
+    };
+    try {
+      P.weekKey = () => '2026-09-28';
+      const alone = fly();
+      eq(alone.had, false, 'control: the first run has no ghost');
+      const ys = Array.from({ length: 200 }, (_, i) => (i * 37) % 255);
+      P.remember('2026-09-28', 1000, L.Ghost.encode({ date: '2026-09-28', score: 1000, div: 1, ys, name: '' }));
+      const raced = fly();
+      eq(raced.had, true, 'the second run races a ghost');
+      eq(raced.plan, alone.plan, 'the planned course did not move');
+      eq(raced.field, alone.field, 'the gates and motes on screen did not move');
+      eq(raced.next, alone.next, 'and the seeded generator is exactly where it was');
+    } finally {
+      P.weekKey = realWeek;
+      L.Modes.setCurrent('classic');
+      freshStorage();
+    }
+  });
+
+  test('PACER: its strings exist in all four languages', () => {
+    const keys = ['mode_pacer', 'modet_pacer', 'moded_pacer', 'pacerBest'];
+    const keep = L.i18n.lang;
+    const missing = [], same = [];
+    try {
+      const en = {};
+      L.i18n.set('en');
+      for (const k of keys) { en[k] = L.t(k); if (en[k] === k) missing.push('en/' + k); }
+      for (const lang of ['tr', 'es', 'zh']) {
+        L.i18n.set(lang);
+        for (const k of keys) {
+          const v = L.t(k);
+          if (v === k) missing.push(lang + '/' + k);
+          else if (v === en[k]) same.push(lang + '/' + k);
+        }
       }
     } finally { L.i18n.set(keep); }
     eq(missing.length, 0, 'missing: ' + missing.join(', '));

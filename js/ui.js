@@ -835,6 +835,16 @@
       const res = P._results;
       const total = res ? res.total : 0;
 
+      // What came of the last ballot. "The winner is being built" is a promise,
+      // and this is where a voter can see it was kept. Optional, from config,
+      // so it changes with the ballot and never needs a release.
+      const last = $('poll-last');
+      if (last) {
+        const l = P.current.last;
+        last.textContent = l ? T('pollLast', { n: P.text(l, 'name') }) : '';
+        last.classList.toggle('hidden', !l);
+      }
+
       for (const opt of P.current.options) {
         const row = document.createElement('button');
         row.type = 'button';
@@ -916,7 +926,11 @@
       if (!P || !P.enabled) return;
       this.showScreen('poll');
       this.renderPoll();                        // paint immediately from cache
-      P.results().then(() => this.renderPoll()); // then again with live tallies
+      // A ballot lost to a bad network goes in first, so the tally that is
+      // about to be shown already counts it.
+      P.flushPending().catch(() => false)
+        .then((sent) => P.results(!!sent))
+        .then(() => this.renderPoll());         // then again with live tallies
     },
 
     // The menu only advertises a daily reward there is a server to ask about.
@@ -1334,7 +1348,9 @@
       const cur = Store.mode || 'classic';
       for (const m of M.MODES) {
         const on = m.id === cur;
-        const best = m.id === 'classic' ? Store.best : M.best(m.id);
+        // PACER shows this week's mark: last week's was flown on another course.
+        const best = m.pacer && LUMEN.Pacer ? LUMEN.Pacer.weekBest()
+          : m.id === 'classic' ? Store.best : M.best(m.id);
         const el = document.createElement('div');
         el.className = 'mode-card' + (on ? ' on' : '');
         el.style.setProperty('--mc', 'hsl(' + m.accent + ' 90% 62%)');
@@ -1358,7 +1374,7 @@
           '</div>' +
           '<div class="mc-desc">' + M.desc(m.id) + '</div>' +
           '<div class="mc-foot">' +
-            '<span class="mc-best">' + T('best') + ' <b>' + best.toLocaleString() + '</b></span>' +
+            '<span class="mc-best">' + (m.pacer ? T('pacerBest') : T('best')) + ' <b>' + best.toLocaleString() + '</b></span>' +
             (facts.length ? '<span class="mc-facts">' + facts.join(' · ') + '</span>' : '') +
           '</div>';
         el.setAttribute('data-mode', m.id);
@@ -2386,7 +2402,7 @@
       $('final-score').textContent = data.score;
       $('final-best').textContent = data.best;
       $('final-combo').textContent = data.combo;
-      $('final-best-label').textContent = data.daily ? T('dailyBest') : T('best');
+      $('final-best-label').textContent = data.daily ? T('dailyBest') : data.pacer ? T('pacerBest') : T('best');
       $('over-title').textContent = data.daily ? (data.isBest ? T('dailyRecord') : T('dailyRun')) : (data.isBest ? T('newRecord') : T('runOver'));
       $('best-badge').classList.toggle('hidden', !data.isBest);
       // show the leaderboard placing only when it isn't already the headline "NEW BEST"

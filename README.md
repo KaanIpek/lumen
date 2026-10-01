@@ -90,16 +90,21 @@ stories. Stories create shares.
   **flavour line** with its own dry sense of humour, and the shop previews
   **animate** — trails stream, beat and ripple the way they really do, and
   colour-cycling skins actually cycle instead of sitting there as a flat swatch.
-- 🎮 **Seven game modes**, each testing a different part of the same skill —
+- 🎮 **Fourteen game modes**, each testing a different part of the same skill —
   **Classic** (the baseline everything is measured against), **Vortex** (the world
   leans and turns as you fly), **Mirror** (everything runs the other way),
   **Sprint** (full speed from the first frame), **Blackout** (light arrives in
   pulses; between them you fly on memory), **Precision** (slow, with gaps barely
-  wider than you are) and **Zen** (nothing can kill you — and nothing is
-  recorded). Each keeps **its own record**, because a Sprint score and a Precision
-  score answer different questions. Harder modes pay more shards; Zen pays none,
-  since a mode with no failure state would otherwise be an infinite faucet. The
-  Daily Challenge and the tutorial are always Classic.
+  wider than you are), **Zen** (nothing can kill you — and nothing is
+  recorded), **Abandon Hope** (you only see a gate when it is nearly on you),
+  **Glutton** (every mote makes you bigger), **Rubber** (the walls throw you
+  back), **Brittle** (smash the fault beside each gap), **Aloft** (altitude is
+  the throttle), **Hold** (slide a finger and steer by hand) and **Pacer** (one
+  course all week, with your best run on it flying beside you as a ghost). Each
+  keeps **its own record**, because a Sprint score and a Precision score answer
+  different questions. Harder modes pay more shards; Zen pays none, since a mode
+  with no failure state would otherwise be an infinite faucet. The tutorial
+  teaches under Classic; the Daily Challenge draws its own mode from the date.
 - 🛒 **One shop, four tabs** — Customize (sets, orbs, trails, signatures), Maps,
   Items and Skills
   all live behind a single SHOP button, each with a one-time explainer the first
@@ -214,7 +219,7 @@ Lumen/
 │   ├── iap.js          # real-money provider seam (no SDK ships)
 │   ├── voice.js        # one-word speech commands
 │   ├── cheats.js       # dev-only cheats (inert on a public origin)
-│   ├── modes.js        # the ten game modes
+│   ├── modes.js        # the fourteen game modes
 │   ├── missions.js     # rotating missions + daily challenge logic
 │   ├── scores.js       # local top-10 leaderboard
 │   ├── leaderboard.js  # optional online board client

@@ -129,7 +129,7 @@
         signal: ctl ? ctl.signal : undefined,
       }).then((r) => {
         clearTimeout(t);
-        if (!r.ok) throw new Error('http ' + r.status);
+        if (!r.ok) { const e = new Error('http ' + r.status); e.status = r.status; throw e; }
         // PostgREST answers an insert with 201 and an empty body unless asked
         // otherwise — parsing unconditionally would read success as failure.
         return r.text().then((txt) => (txt ? JSON.parse(txt) : null));
@@ -160,6 +160,18 @@
 
     // Returns { ok } — and records the choice locally either way, because a
     // player who votes on a flaky train should not be asked again forever.
+    //
+    // NO `Prefer: resolution=ignore-duplicates`. That header turns the insert
+    // into INSERT ... ON CONFLICT DO NOTHING, and poll_votes is deliberately
+    // unreadable (no SELECT policy: ballots are private), so Postgres refuses
+    // every such row — 401, "new row violates row-level security policy".
+    // Measured on 30 Sep: the request exactly as this file used to send it was
+    // refused, and the same body without the header was stored and counted.
+    // Every vote of the 2026-09 poll died that way, and because the failure was
+    // caught and reported as `offline`, everybody who voted was told "Voted"
+    // while the tally sat at zero. A plain insert needs only the insert policy;
+    // a second vote from the same install hits the primary key and comes back
+    // 409, which means the ballot is already in the box — as good as a 201.
     vote(optionId) {
       if (!this.enabled || this.closed) return Promise.resolve({ ok: false, reason: 'closed' });
       if (this.hasVoted()) return Promise.resolve({ ok: false, reason: 'already' });
@@ -168,11 +180,33 @@
       if (Store) Store.pollVote = this.current.id + ':' + optionId;
       this._results = null; this._fetchedAt = 0;
       LUMEN.Analytics && LUMEN.Analytics.track('poll_vote', { poll: this.current.id, option: optionId });
+      return this._send(this.current.id, optionId);
+    },
+
+    // One attempt to put a ballot in the box. A failure is no longer swallowed
+    // into "fine": the ballot stays PENDING, and flushPending() delivers it the
+    // next time the game starts or the vote is opened.
+    _send(pollId, optionId) {
+      if (Store) Store.pollPending = pollId + ':' + optionId;
       return this._fetch('/poll_votes', {
         method: 'POST',
-        headers: { Prefer: 'resolution=ignore-duplicates' },
-        body: [{ poll_id: this.current.id, option_id: optionId, voter: this.voterId() }],
-      }).then(() => ({ ok: true })).catch(() => ({ ok: true, offline: true }));
+        body: [{ poll_id: pollId, option_id: optionId, voter: this.voterId() }],
+      }).then(() => true, (e) => !!(e && e.status === 409))
+        .then((stored) => {
+          if (stored && Store) Store.pollPending = '';
+          return stored ? { ok: true } : { ok: true, offline: true };
+        });
+    },
+
+    // A ballot cast while the network was away, delivered now. Only for the
+    // poll that is still open: a ballot for a closed poll is history, and one
+    // for a poll that has since been replaced is simply dropped.
+    flushPending() {
+      const p = Store ? Store.pollPending : '';
+      if (!p || !this.enabled || this.closed) return Promise.resolve(false);
+      const id = this.current.id;
+      if (p.indexOf(id + ':') !== 0) { if (Store) Store.pollPending = ''; return Promise.resolve(false); }
+      return this._send(id, p.slice(id.length + 1)).then((r) => !r.offline);
     },
 
     // An option's own words. These live in config.js, NOT in i18n.js, because
